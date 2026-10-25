@@ -11,6 +11,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Peters-Development/herdbook/releases/latest"><img src="https://img.shields.io/github/v/release/Peters-Development/herdbook" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License: AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/PHP-8.5-777bb4" alt="PHP 8.5">
   <img src="https://img.shields.io/badge/Laravel-13-ff2d20" alt="Laravel 13">
