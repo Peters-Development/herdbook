@@ -95,6 +95,7 @@ Each round weighs correctness, fit with the existing patterns, maintainability, 
 ## Commit conventions
 
 - **No `Co-Authored-By` trailer.**
+- **Sign off every commit** (`git commit -s`): the DCO app checks every pull request for a `Signed-off-by` line (see CONTRIBUTING.md).
 - **One subject per commit.** Split unrelated changes.
 - Format: short imperative subject, optionally `type(scope): subject`, in English.
 - **Don't auto-commit.** Only commit when asked.
