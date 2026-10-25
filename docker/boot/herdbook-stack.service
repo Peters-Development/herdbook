@@ -1,0 +1,18 @@
+[Unit]
+Description=Bring the herdbook stack up in a known-good state after boot
+# Docker restarts the containers by itself, in no particular order. web and
+# vaultwarden can end up in a dead network namespace when their Tailscale
+# sidecar starts after them; docker/up.sh recreates them (see that script).
+# Caddy (profile lan) cannot bind LAN_IP before the network is up: Docker
+# then leaves it stopped, and this `up`, after network-online, starts it.
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/srv/herdbook/docker/up.sh
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

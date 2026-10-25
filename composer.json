@@ -1,0 +1,81 @@
+{
+    "$schema": "https://getcomposer.org/schema.json",
+    "name": "peters-development/herdbook",
+    "type": "project",
+    "description": "A self-hosted logbook of the applications, servers and domains you look after: uptime checks, incidents, runbooks, renewals and costs in one place.",
+    "keywords": [
+        "laravel",
+        "filament",
+        "self-hosted",
+        "monitoring",
+        "uptime",
+        "inventory",
+        "incidents",
+        "runbooks"
+    ],
+    "homepage": "https://github.com/Peters-Development/herdbook",
+    "license": "AGPL-3.0-or-later",
+    "support": {
+        "issues": "https://github.com/Peters-Development/herdbook/issues",
+        "source": "https://github.com/Peters-Development/herdbook",
+        "docs": "https://github.com/Peters-Development/herdbook/tree/main/docs"
+    },
+    "require": {
+        "php": "^8.5",
+        "ext-bcmath": "*",
+        "filament/filament": "^5.0",
+        "laravel/framework": "^13.17",
+        "laravel/tinker": "^3.0",
+        "spatie/laravel-activitylog": "^5.1"
+    },
+    "require-dev": {
+        "fakerphp/faker": "^1.23",
+        "laravel/pail": "^1.2.5",
+        "laravel/pao": "^1.0.6",
+        "laravel/pint": "^1.27",
+        "mockery/mockery": "^1.6",
+        "nunomaduro/collision": "^8.6",
+        "phpunit/phpunit": "^12.5.12"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": [
+            "@php artisan config:clear --ansi @no_additional_args",
+            "@php artisan test"
+        ],
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi",
+            "@php artisan filament:upgrade"
+        ],
+        "post-update-cmd": [
+            "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
+        ],
+        "pre-package-uninstall": [
+            "Illuminate\\Foundation\\ComposerScripts::prePackageUninstall"
+        ]
+    },
+    "extra": {
+        "laravel": {
+            "dont-discover": []
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

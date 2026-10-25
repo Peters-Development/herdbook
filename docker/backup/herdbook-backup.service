@@ -1,0 +1,17 @@
+[Unit]
+Description=Nightly restic backup of the herdbook host
+# A failed run says so on the phone, not only in the journal.
+OnFailure=herdbook-backup-failed.service
+Wants=network-online.target
+After=network-online.target docker.service tailscaled.service herdbook-stack.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/herdbook/backup.env
+# Without User= systemd leaves HOME unset, and restic then runs without its cache.
+Environment=HOME=/root
+ExecStart=/srv/herdbook/docker/backup/backup.sh
+# A hung connection to a remote repository must not block every later run.
+TimeoutStartSec=3h
+Nice=10
+IOSchedulingClass=idle

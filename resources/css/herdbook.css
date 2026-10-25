@@ -1,0 +1,1803 @@
+/*
+ * Herdbook's own look on top of Filament's stylesheet. Plain CSS, no build
+ * step: AdminPanelProvider registers it with ->assets(), and `filament:assets`
+ * (run by `filament:upgrade` after every composer install) publishes it to
+ * public/css/app/. In development, run `php artisan filament:assets` after a
+ * change.
+ *
+ * Colours, the fonts and the logo are set in AdminPanelProvider; this file
+ * only does what the panel API cannot.
+ */
+
+:root {
+    --hb-ink: #17181b;
+    --hb-tag: #fdc700;
+}
+
+/*
+ * The frame (topbar and sidebar) follows the theme: light in the light theme,
+ * dark in the dark one (the default, AdminPanelProvider). Filament leaves the
+ * desktop sidebar transparent; it is part of the frame, as the topbar is.
+ */
+.fi-sidebar {
+    background-color: var(--color-white);
+}
+
+.dark .fi-sidebar {
+    background-color: var(--gray-900);
+}
+
+/* The current page: a strong label, a yellow icon and a tag-yellow mark on the edge. */
+.fi-sidebar-item.fi-active > .fi-sidebar-item-btn > .fi-sidebar-item-label {
+    color: var(--gray-950);
+}
+
+.dark .fi-sidebar-item.fi-active > .fi-sidebar-item-btn > .fi-sidebar-item-label {
+    color: #ffffff;
+}
+
+/* The tag yellow itself is too light on white: a darker step of it there. */
+.fi-sidebar-item.fi-active > .fi-sidebar-item-btn > .fi-icon {
+    color: var(--primary-600);
+}
+
+.dark .fi-sidebar-item.fi-active > .fi-sidebar-item-btn > .fi-icon {
+    color: var(--hb-tag);
+}
+
+.fi-sidebar-item.fi-active > .fi-sidebar-item-btn::before {
+    content: '';
+    position: absolute;
+    inset-block: 0.5rem;
+    inset-inline-start: -1rem;
+    width: 3px;
+    border-start-end-radius: 3px;
+    border-end-end-radius: 3px;
+    background-color: var(--hb-tag);
+}
+
+/*
+ * Primary buttons are the tag itself, with ink text, in both themes. Filament
+ * would pick a darker mustard in the dark theme, which reads as orange: the
+ * colour of warnings.
+ */
+.fi-btn.fi-color-primary:not(.fi-outlined) {
+    --bg: var(--primary-400);
+    --hover-bg: var(--primary-300);
+    --dark-bg: var(--primary-400);
+    --dark-hover-bg: var(--primary-300);
+    --text: var(--hb-ink);
+    --hover-text: var(--hb-ink);
+    --dark-text: var(--hb-ink);
+    --dark-hover-text: var(--hb-ink);
+}
+
+/* The logo (resources/views/filament/brand.blade.php). */
+.hb-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    height: 100%;
+}
+
+.hb-brand-mark {
+    height: 100%;
+    width: auto;
+    flex: none;
+}
+
+.hb-brand-name {
+    font-family: 'IBM Plex Sans Condensed', var(--font-family), ui-sans-serif, sans-serif;
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+/*
+ * Status tones, shared by the dashboard and the map: a HealthState
+ * (.hb-state-*) or the share of good results in an hour (.hb-tone-*).
+ */
+.hb-state-down,
+.hb-tone-bad {
+    --hb-tone: var(--danger-500);
+}
+
+.hb-state-degraded,
+.hb-tone-warn {
+    --hb-tone: var(--warning-500);
+}
+
+.hb-state-up,
+.hb-tone-ok {
+    --hb-tone: var(--success-500);
+}
+
+.hb-state-unknown,
+.hb-state-paused,
+.hb-state-unwatched,
+.hb-state-unmonitored,
+.hb-tone-none {
+    --hb-tone: var(--gray-300);
+}
+
+.dark :is(.hb-state-unknown, .hb-state-paused, .hb-state-unwatched, .hb-state-unmonitored, .hb-tone-none) {
+    --hb-tone: var(--gray-600);
+}
+
+.hb-dot {
+    display: inline-block;
+    flex: none;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background-color: var(--hb-tone);
+}
+
+/* Hour bars (resources/views/components/hour-bars.blade.php). */
+.hb-bars {
+    display: flex;
+    gap: 2px;
+    height: 1.25rem;
+}
+
+.hb-bar {
+    flex: 1 1 0;
+    min-width: 2px;
+    border-radius: 2px;
+    background-color: var(--hb-tone);
+}
+
+/* Project tiles on the dashboard (ProjectBoard). */
+.hb-board {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: 1rem;
+}
+
+.hb-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.875rem 1rem 0.875rem 1.125rem;
+    border: 1px solid var(--gray-200);
+    border-inline-start: 4px solid var(--hb-tone);
+    border-radius: 0.5rem;
+    background-color: var(--color-white);
+    transition: border-color 75ms, box-shadow 75ms;
+}
+
+.dark .hb-tile {
+    border-color: var(--gray-700);
+    border-inline-start-color: var(--hb-tone);
+    background-color: var(--gray-900);
+}
+
+.hb-tile:hover,
+.hb-tile:focus-visible {
+    border-color: var(--gray-400);
+    border-inline-start-color: var(--hb-tone);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
+}
+
+.hb-tile.hb-state-down {
+    background-color: color-mix(in oklab, var(--danger-500) 6%, var(--color-white));
+}
+
+.dark .hb-tile.hb-state-down {
+    background-color: color-mix(in oklab, var(--danger-500) 12%, var(--gray-900));
+}
+
+.hb-tile-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.hb-tile-name {
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--gray-950);
+}
+
+.dark .hb-tile-name {
+    color: #ffffff;
+}
+
+.hb-tile-sub,
+.hb-tile-servers,
+.hb-tile-foot {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: var(--gray-500);
+}
+
+.dark :is(.hb-tile-sub, .hb-tile-servers, .hb-tile-foot, .hb-tile-since, .hb-cal-date, .hb-node-sub, .hb-map-hint, .hb-map-impact-path, .hb-map-heading, .hb-status-stat-label, .hb-status-stat-sub, .hb-status-muted, .hb-timeline-axis, .hb-timeline-legend, .hb-rt-scale, .hb-lane-type, .hb-feed-when, .hb-feed-detail, .hb-failure-times, .hb-costs-month-total, .hb-costs-month-year, .hb-costs-legend, .hb-costs-table th, .hb-costs-provider, .hb-costs-detail, .hb-costs-group-link, .hb-costs-shared-label) {
+    color: var(--gray-400);
+}
+
+.hb-tile-servers {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* What production depends on through its servers: there, but one step back. */
+.hb-tile-upstream {
+    opacity: 0.6;
+}
+
+.hb-tile-problem {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+}
+
+/* Text in the tone, a step darker (light) or lighter (dark) for contrast. */
+.hb-state-down .hb-tile-problem {
+    color: var(--danger-600);
+}
+
+.hb-state-degraded .hb-tile-problem {
+    color: var(--warning-700);
+}
+
+.dark .hb-state-down .hb-tile-problem {
+    color: var(--danger-400);
+}
+
+.dark .hb-state-degraded .hb-tile-problem {
+    color: var(--warning-400);
+}
+
+.hb-tile-problem > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.hb-tile-since {
+    font-size: 0.75rem;
+    color: var(--gray-500);
+}
+
+.hb-tile-envs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    color: var(--gray-700);
+}
+
+.dark .hb-tile-envs {
+    color: var(--gray-300);
+}
+
+.hb-env {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.hb-tile-bars {
+    margin-top: auto;
+}
+
+.hb-tile-foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+}
+
+.hb-tile-incidents {
+    color: var(--danger-600);
+    font-weight: 500;
+}
+
+.dark .hb-tile-incidents {
+    color: var(--danger-400);
+}
+
+/* The status band at the top of the dashboard (StatusOverview): five in a row. */
+.fi-wi-stats-overview-stat-value {
+    font-size: 1.5rem;
+    line-height: 2rem;
+}
+
+/* The renewal calendar (RenewalCalendar): markers on a time line. */
+.hb-cal {
+    position: relative;
+    padding-top: 0.25rem;
+}
+
+.hb-cal-track {
+    position: relative;
+    height: calc(var(--hb-cal-rows) * 1.75rem + 0.5rem);
+    border-bottom: 1px solid var(--gray-300);
+}
+
+.dark .hb-cal-track {
+    border-bottom-color: var(--gray-700);
+}
+
+.hb-cal-today {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 2px;
+    background-color: var(--hb-tag);
+}
+
+.hb-cal-marker {
+    position: absolute;
+    top: calc(var(--hb-cal-row) * 1.75rem + 0.25rem);
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    max-width: var(--hb-cal-marker-width);
+    height: 1.5rem;
+    padding-inline: 0.25rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--gray-700);
+    white-space: nowrap;
+    transform: translateX(-0.5rem);
+}
+
+.dark .hb-cal-marker {
+    color: var(--gray-300);
+}
+
+.hb-cal-marker-flip {
+    flex-direction: row-reverse;
+    transform: translateX(0.5rem);
+}
+
+.hb-cal-marker:hover,
+.hb-cal-marker:focus-visible,
+.hb-cal-chip:hover,
+.hb-cal-chip:focus-visible {
+    background-color: var(--gray-100);
+    color: var(--gray-950);
+}
+
+.dark :is(.hb-cal-marker, .hb-cal-chip):is(:hover, :focus-visible) {
+    background-color: var(--gray-800);
+    color: #ffffff;
+}
+
+.hb-cal-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hb-cal-icon {
+    flex: none;
+    width: 0.875rem;
+    height: 0.875rem;
+    color: var(--gray-400);
+}
+
+.hb-cal-axis {
+    position: relative;
+    height: 1.5rem;
+    font-size: 0.6875rem;
+    color: var(--gray-500);
+}
+
+.hb-cal-tick {
+    position: absolute;
+    top: 0;
+    padding-top: 0.375rem;
+    white-space: nowrap;
+    transform: translateX(-50%);
+}
+
+.hb-cal-tick:first-child {
+    transform: none;
+}
+
+.hb-cal-tick::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 1px;
+    height: 0.25rem;
+    background-color: var(--gray-300);
+}
+
+.hb-cal-tick:first-child::before {
+    left: 0;
+}
+
+.dark .hb-cal-tick::before {
+    background-color: var(--gray-700);
+}
+
+.hb-cal-expired {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.75rem;
+}
+
+.hb-cal-expired-label {
+    font-weight: 600;
+    color: var(--danger-600);
+}
+
+.dark .hb-cal-expired-label {
+    color: var(--danger-400);
+}
+
+.hb-cal-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.125rem 0.5rem;
+    border: 1px solid var(--hb-tone);
+    border-radius: 9999px;
+    color: var(--gray-700);
+}
+
+.dark .hb-cal-chip {
+    color: var(--gray-300);
+}
+
+.hb-cal-date {
+    color: var(--gray-500);
+}
+
+.hb-cal-empty {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--gray-500);
+}
+
+/* The map (Pages\Map, resources/js/herdbook-map.js). */
+.hb-map-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+}
+
+.hb-map-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.hb-map-select {
+    min-width: 12rem;
+}
+
+.hb-map-hint {
+    font-size: 0.8125rem;
+    color: var(--gray-500);
+}
+
+.hb-map-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--gray-200);
+    border-radius: 0.75rem;
+    background-color: var(--color-white);
+}
+
+.dark .hb-map-scroll {
+    border-color: var(--gray-800);
+    background-color: var(--gray-900);
+}
+
+.hb-map-canvas {
+    position: relative;
+    min-width: 60rem;
+    padding: 1rem 1rem 1.5rem;
+}
+
+.hb-map-lines {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: visible;
+}
+
+.hb-map-columns {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(7rem, 0.75fr) repeat(4, minmax(9rem, 1fr));
+    gap: 3rem;
+    align-items: start;
+}
+
+.hb-map-column {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    min-width: 0;
+}
+
+/* Room left of the servers for the dependency arcs and their labels. */
+.hb-map-column[data-column='servers'] {
+    margin-inline-start: 2.5rem;
+}
+
+.hb-map-heading {
+    margin-bottom: 0.25rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--gray-500);
+}
+
+.hb-map-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 0.375rem;
+}
+
+.hb-map-group-head {
+    display: flex;
+    flex-direction: column;
+    padding-inline: 0.125rem;
+    font-size: 0.8125rem;
+    line-height: 1.2;
+}
+
+.hb-map-group-name {
+    font-weight: 600;
+    color: var(--gray-950);
+}
+
+.dark .hb-map-group-name {
+    color: #ffffff;
+}
+
+.hb-map-group-head:hover .hb-map-group-name {
+    text-decoration: underline;
+}
+
+.hb-node {
+    position: relative;
+    display: block;
+    width: 100%;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 0.375rem;
+    background-color: var(--color-white);
+    text-align: start;
+    font-size: 0.8125rem;
+    line-height: 1.2;
+    transition: opacity 120ms, box-shadow 120ms, border-color 120ms;
+}
+
+.dark .hb-node {
+    border-color: var(--gray-700);
+    background-color: var(--gray-900);
+}
+
+.hb-node:hover,
+.hb-node:focus-visible {
+    border-color: var(--gray-400);
+}
+
+button.hb-node {
+    cursor: pointer;
+}
+
+.hb-node-body {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.hb-node-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.hb-node-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--gray-950);
+}
+
+.dark .hb-node-label {
+    color: #ffffff;
+}
+
+.hb-node-sub {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.6875rem;
+    color: var(--gray-500);
+}
+
+.hb-map-empty {
+    font-size: 0.8125rem;
+    color: var(--gray-400);
+}
+
+/*
+ * Not by colour alone: a ring for no state worth a colour, a diamond for
+ * a warning, a square for an outage, a dot for good.
+ */
+.hb-dot[data-color='warning'] {
+    border-radius: 1px;
+    transform: rotate(45deg) scale(0.85);
+}
+
+.hb-dot[data-color='danger'] {
+    border-radius: 1px;
+}
+
+.hb-dot[data-color='info'] {
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--hb-tone) 35%, transparent);
+}
+
+.hb-dot[data-color='gray'] {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--hb-tone);
+}
+
+@keyframes hb-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--hb-tone) 60%, transparent); }
+    50% { box-shadow: 0 0 0 0.3rem transparent; }
+}
+
+.hb-dot-pulse {
+    animation: hb-pulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hb-dot-pulse {
+        animation: none;
+    }
+}
+
+/* Lines: CSS variables, so the dark theme needs no new drawing. */
+.hb-edge {
+    fill: none;
+    stroke: var(--gray-300);
+    stroke-width: 1.25;
+    transition: opacity 120ms, stroke 120ms;
+}
+
+.dark .hb-edge {
+    stroke: var(--gray-600);
+}
+
+.hb-edge-depends {
+    stroke-dasharray: 4 3;
+}
+
+.hb-edge-label {
+    font-size: 0.625rem;
+    font-weight: 600;
+    fill: var(--gray-500);
+}
+
+.dark .hb-edge-label {
+    fill: var(--gray-400);
+}
+
+/* Hovering: what hangs together stays, the rest steps back. */
+.hb-map-focus .hb-node:not(.hb-lit) {
+    opacity: 0.3;
+}
+
+.hb-map-focus :is(.hb-edge, .hb-edge-label):not(.hb-lit) {
+    opacity: 0.12;
+}
+
+.hb-map-focus .hb-map-group:not(:has(.hb-lit)) .hb-map-group-head {
+    opacity: 0.3;
+}
+
+.hb-map-focus .hb-edge.hb-lit {
+    stroke: var(--gray-600);
+    stroke-width: 2;
+}
+
+.dark .hb-map-focus .hb-edge.hb-lit {
+    stroke: var(--gray-300);
+}
+
+/*
+ * The impact view (click a server on the map) is a simulation, not a state:
+ * the brand's selection colour, not red (a real outage is red already).
+ */
+.hb-map-impact-mode .hb-node.hb-lit {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary-400) 45%, transparent);
+}
+
+.hb-map-impact-mode .hb-node.hb-selected {
+    border-color: var(--hb-ink);
+    box-shadow: 0 0 0 3px var(--primary-400);
+}
+
+.dark .hb-map-impact-mode .hb-node.hb-selected {
+    border-color: #ffffff;
+}
+
+.hb-map-impact-mode .hb-edge.hb-lit,
+.dark .hb-map-impact-mode .hb-edge.hb-lit {
+    stroke: var(--primary-500);
+}
+
+/* Floats over the map (nothing jumps) and stays in view while scrolling. */
+.hb-map-impact-region {
+    position: sticky;
+    top: 4.5rem;
+    z-index: 10;
+    height: 0;
+}
+
+.hb-map-impact {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: min(30rem, calc(100% - 1rem));
+    padding: 0.875rem 1rem;
+    border: 1px solid var(--primary-400);
+    border-inline-start-width: 4px;
+    border-radius: 0.5rem;
+    background-color: color-mix(in oklab, var(--primary-400) 10%, var(--color-white));
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+    font-size: 0.875rem;
+}
+
+.dark .hb-map-impact {
+    background-color: color-mix(in oklab, var(--primary-400) 8%, var(--gray-900));
+}
+
+.hb-map-impact-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+}
+
+.hb-map-impact-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.hb-map-impact-link {
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.hb-map-impact-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+}
+
+.hb-map-impact-list a {
+    font-weight: 500;
+}
+
+.hb-map-impact-path {
+    margin-inline-start: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--gray-500);
+}
+
+/*
+ * A project's status page (Projects\Pages\ViewProjectHealth): the numbers on
+ * top, then one time line with the bars, maintenance and incidents above
+ * them, the response time, a strip per check, and what happened.
+ */
+.hb-status {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.hb-status-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 1rem;
+}
+
+.hb-status-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.375rem;
+    min-width: 0;
+    padding: 1rem;
+    border-radius: 0.75rem;
+    background-color: var(--color-white);
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.05), 0 1px 2px rgb(0 0 0 / 0.05);
+}
+
+.dark .hb-status-stat {
+    background-color: var(--gray-900);
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1);
+}
+
+.hb-status-stat-link:hover,
+.hb-status-stat-link:focus-visible {
+    box-shadow: 0 0 0 2px var(--hb-tag);
+}
+
+.hb-status-stat-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--gray-500);
+}
+
+.hb-status-stat-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    color: var(--gray-950);
+}
+
+.dark .hb-status-stat-value {
+    color: #ffffff;
+}
+
+.hb-status-stat-bad {
+    color: var(--danger-600);
+}
+
+.dark .hb-status-stat-bad {
+    color: var(--danger-400);
+}
+
+.hb-status-stat-sub,
+.hb-status-muted {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 0.8125rem;
+    color: var(--gray-500);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.hb-status-muted {
+    white-space: normal;
+}
+
+/* The time line: tracks of bands above the bars, an axis below. */
+.hb-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    container-type: inline-size;
+}
+
+.hb-timeline-track {
+    position: relative;
+    height: calc(var(--hb-rows, 1) * 1.75rem - 0.25rem);
+    border-radius: 0.25rem;
+    background-color: var(--gray-50);
+}
+
+.dark .hb-timeline-track {
+    background-color: rgb(255 255 255 / 0.03);
+}
+
+.hb-band {
+    position: absolute;
+    /* Bands that would overlap are stacked (ViewProjectHealth::stack()). */
+    top: calc(var(--hb-row, 0) * 1.75rem);
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    /* A moment (a quick entry) still shows its icon. */
+    min-width: 1.25rem;
+    height: 1.5rem;
+    padding-inline: 0.25rem;
+    overflow: hidden;
+    border-inline-start: 2px solid var(--hb-tone);
+    border-radius: 0.25rem;
+    background-color: color-mix(in oklab, var(--hb-tone) 18%, transparent);
+    font-size: 0.75rem;
+    color: var(--gray-700);
+    white-space: nowrap;
+}
+
+.dark .hb-band {
+    color: var(--gray-300);
+}
+
+.hb-band:hover,
+.hb-band:focus-visible {
+    z-index: 1;
+    overflow: visible;
+    background-color: color-mix(in oklab, var(--hb-tone) 32%, transparent);
+}
+
+/* Near the right edge: anchored there, the icon on the right. */
+.hb-band-flip {
+    flex-direction: row-reverse;
+    border-inline-start-width: 0;
+    border-inline-end: 2px solid var(--hb-tone);
+}
+
+/* Planned, not done yet: outlined, not filled. */
+.hb-band-planned {
+    border: 1px dashed var(--hb-tone);
+    border-inline-start-width: 2px;
+    border-inline-start-style: solid;
+    background-color: transparent;
+}
+
+/* Near the right edge the solid edge goes with the icon, to the right. */
+.hb-band-planned.hb-band-flip {
+    border-inline-start: 1px dashed var(--hb-tone);
+    border-inline-end: 2px solid var(--hb-tone);
+}
+
+.hb-band-icon {
+    flex: none;
+    width: 0.875rem;
+    height: 0.875rem;
+    color: var(--hb-tone);
+}
+
+.hb-band-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hb-timeline-bars {
+    display: flex;
+    gap: 1px;
+    height: 3rem;
+}
+
+.hb-timeline-bar {
+    flex: 1 1 0;
+    min-width: 0;
+    border-radius: 2px;
+    background-color: var(--hb-tone);
+    cursor: pointer;
+}
+
+.hb-timeline-bar:hover {
+    opacity: 0.75;
+}
+
+.hb-timeline-bar:focus-visible {
+    position: relative;
+    z-index: 1;
+    outline: 2px solid var(--gray-950);
+    outline-offset: 1px;
+}
+
+.dark .hb-timeline-bar:focus-visible {
+    outline-color: #ffffff;
+}
+
+/* The open bar: raised above its neighbours; the selection mark is below. */
+.hb-timeline-bar-selected {
+    position: relative;
+    z-index: 1;
+}
+
+/*
+ * The brand's selection mark (ink and yellow, as on the map), not a status
+ * colour: the status page's open bar, the cost page's open month and tile
+ * (also while hovered).
+ */
+:is(.hb-timeline-bar-selected, .hb-costs-month-selected, .hb-costs-tile-active, .hb-costs-tile-active:is(:hover, :focus-visible)) {
+    box-shadow: 0 0 0 2px var(--hb-ink), 0 0 0 4px var(--primary-400);
+}
+
+.dark :is(.hb-timeline-bar-selected, .hb-costs-month-selected, .hb-costs-tile-active, .hb-costs-tile-active:is(:hover, :focus-visible)) {
+    box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--primary-400);
+}
+
+/* A week of hours: no gaps, or 168 bars do not fit on a phone. */
+.hb-timeline-dense {
+    gap: 0;
+}
+
+.hb-timeline-dense > * {
+    border-radius: 0;
+}
+
+.hb-timeline-axis {
+    position: relative;
+    height: 1.25rem;
+    font-size: 0.6875rem;
+    color: var(--gray-500);
+}
+
+/* No bars (no checks): the axis is the line the bands sit on. */
+.hb-timeline-axis-bare {
+    padding-top: 0.25rem;
+    border-top: 1px solid var(--gray-300);
+}
+
+.dark .hb-timeline-axis-bare {
+    border-top-color: var(--gray-700);
+}
+
+.hb-timeline-tick {
+    position: absolute;
+    top: 0;
+    white-space: nowrap;
+}
+
+/* Near the right edge: ends there instead of starting there. */
+.hb-timeline-tick-end {
+    transform: translateX(-100%);
+}
+
+@container (max-width: 36rem) {
+    .hb-timeline-tick-minor {
+        display: none;
+    }
+}
+
+.hb-timeline-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--gray-500);
+}
+
+.hb-timeline-legend > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.hb-legend-band {
+    width: 1rem;
+    height: 0.625rem;
+    border-inline-start: 2px solid var(--hb-tone);
+    border-radius: 2px;
+    background-color: color-mix(in oklab, var(--hb-tone) 18%, transparent);
+}
+
+.hb-legend-band.hb-band-planned {
+    background-color: transparent;
+}
+
+/* What went wrong in the open bar. */
+.hb-failure + .hb-failure {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--gray-200);
+}
+
+.dark .hb-failure + .hb-failure {
+    border-top-color: var(--gray-800);
+}
+
+.hb-failure-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.hb-failure-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.hb-failure-name:hover {
+    text-decoration: underline;
+}
+
+.hb-failure-count {
+    font-size: 0.8125rem;
+    color: var(--danger-600);
+}
+
+.dark .hb-failure-count {
+    color: var(--danger-400);
+}
+
+.hb-failure-errors {
+    margin-top: 0.375rem;
+    font-size: 0.8125rem;
+    color: var(--gray-600);
+}
+
+.dark .hb-failure-errors {
+    color: var(--gray-400);
+}
+
+.hb-failure-times {
+    font-variant-numeric: tabular-nums;
+    color: var(--gray-500);
+}
+
+/* The response time: a line in an SVG that stretches with the bars. */
+.hb-rt {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.hb-rt-scale {
+    font-size: 0.6875rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--gray-500);
+}
+
+.hb-rt-chart {
+    display: block;
+    width: 100%;
+    height: 7rem;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.dark .hb-rt-chart {
+    border-bottom-color: var(--gray-800);
+}
+
+.hb-rt-line {
+    fill: none;
+    stroke: var(--info-500);
+    stroke-width: 2;
+    stroke-linejoin: round;
+}
+
+.hb-rt-hit {
+    fill: transparent;
+}
+
+.hb-rt-hit:hover {
+    fill: color-mix(in oklab, var(--info-500) 12%, transparent);
+}
+
+/*
+ * A strip per check, the same bars as the time line. Sized by its own width,
+ * not the screen's: the sidebar can be open on a tablet.
+ */
+.hb-lanes {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    container-type: inline-size;
+}
+
+.hb-lane {
+    display: grid;
+    grid-template-columns: minmax(10rem, 18rem) 1fr 4.5rem;
+    align-items: center;
+    gap: 1rem;
+}
+
+.hb-lane-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.hb-lane-name {
+    overflow: hidden;
+    font-size: 0.8125rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.hb-lane-name:hover {
+    text-decoration: underline;
+}
+
+.hb-lane-type {
+    flex: none;
+    font-size: 0.6875rem;
+    color: var(--gray-500);
+}
+
+.hb-lane-bars {
+    gap: 1px;
+    height: 0.875rem;
+}
+
+.hb-lane-bars > .hb-bar {
+    min-width: 0;
+}
+
+.hb-lane-bars.hb-timeline-dense {
+    gap: 0;
+}
+
+/* Paused: shown, but it counts for nothing. */
+.hb-lane-paused {
+    opacity: 0.55;
+}
+
+.hb-lane-uptime {
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: var(--gray-600);
+}
+
+.dark .hb-lane-uptime {
+    color: var(--gray-400);
+}
+
+@container (max-width: 36rem) {
+    .hb-lane {
+        grid-template-columns: minmax(0, 1fr) 4rem;
+        gap: 0.375rem 1rem;
+    }
+
+    .hb-lane-bars {
+        grid-column: 1 / -1;
+        grid-row: 2;
+    }
+}
+
+/* What happened: a time line, newest first. */
+.hb-feed {
+    display: flex;
+    flex-direction: column;
+}
+
+.hb-feed-item {
+    display: grid;
+    grid-template-columns: 7rem 1.25rem 1fr;
+    gap: 0.5rem;
+    align-items: start;
+    padding-block: 0.5rem;
+    border-bottom: 1px solid var(--gray-100);
+}
+
+.dark .hb-feed-item {
+    border-bottom-color: var(--gray-800);
+}
+
+.hb-feed-item:last-child {
+    border-bottom: 0;
+}
+
+.hb-feed-when {
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--gray-500);
+}
+
+.hb-feed-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: var(--hb-tone);
+}
+
+.hb-feed-down { --hb-tone: var(--danger-500); }
+.hb-feed-up { --hb-tone: var(--success-500); }
+.hb-feed-maintenance { --hb-tone: var(--info-500); }
+.hb-feed-incident { --hb-tone: var(--danger-500); }
+
+.hb-feed-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.hb-feed-title {
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.hb-feed-title:hover {
+    text-decoration: underline;
+}
+
+.hb-feed-detail {
+    overflow: hidden;
+    font-size: 0.8125rem;
+    color: var(--gray-500);
+    text-overflow: ellipsis;
+}
+
+/*
+ * The cost page (Pages\Costs): the numbers on top (the status page's tiles,
+ * three of them buttons that pick the period), a bar per month, the
+ * payments of the period, and per provider, project and client.
+ */
+.hb-costs {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.hb-costs-tile {
+    text-align: start;
+    cursor: pointer;
+}
+
+.hb-costs-todo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.hb-costs-todo li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.625rem;
+}
+
+.hb-costs-todo a:hover {
+    text-decoration: underline;
+}
+
+/*
+ * Twelve months: a stacked bar each, the amount above it. Sized by its own
+ * width, not the screen's: the sidebar can be open on a tablet.
+ */
+.hb-costs-chart-wrap {
+    container-type: inline-size;
+}
+
+.hb-costs-chart {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 0.375rem;
+    height: 14rem;
+}
+
+.hb-costs-month {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+    min-width: 0;
+    padding: 0.25rem 0.125rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+}
+
+.hb-costs-month:hover {
+    background-color: var(--gray-50);
+}
+
+.dark .hb-costs-month:hover {
+    background-color: rgb(255 255 255 / 0.05);
+}
+
+.hb-costs-month:focus-visible {
+    outline: 2px solid var(--gray-950);
+    outline-offset: 1px;
+}
+
+.dark .hb-costs-month:focus-visible {
+    outline-color: #ffffff;
+}
+
+.hb-costs-month-total,
+.hb-costs-month-label {
+    overflow: hidden;
+    font-size: 0.6875rem;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--gray-500);
+    font-variant-numeric: tabular-nums;
+}
+
+.hb-costs-month-label {
+    font-size: 0.75rem;
+    color: var(--gray-700);
+}
+
+.dark .hb-costs-month-label {
+    color: var(--gray-300);
+}
+
+/* Always there, empty but for January and the first month: the bars keep one baseline. */
+.hb-costs-month-year {
+    display: block;
+    min-height: 1lh;
+    font-size: 0.6875rem;
+    color: var(--gray-500);
+}
+
+/* The segments stack from the bottom: the column is reversed. */
+.hb-costs-bar {
+    display: flex;
+    flex: 1;
+    flex-direction: column-reverse;
+    min-height: 0;
+    border-bottom: 1px solid var(--gray-300);
+}
+
+.dark .hb-costs-bar {
+    border-bottom-color: var(--gray-700);
+}
+
+.hb-costs-segment {
+    display: block;
+    flex: none;
+}
+
+.hb-costs-monthly {
+    background-color: var(--gray-400);
+}
+
+.hb-costs-renewals {
+    background-color: var(--info-500);
+}
+
+.hb-costs-decide {
+    background-color: var(--warning-500);
+}
+
+.hb-costs-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--gray-500);
+}
+
+.hb-costs-legend > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.hb-costs-swatch {
+    display: inline-block;
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 0.125rem;
+}
+
+/* The payments of the period. */
+.hb-costs-table-wrap {
+    overflow-x: auto;
+}
+
+.hb-costs-table-wrap + .hb-costs-table-wrap {
+    margin-top: 1.5rem;
+}
+
+.hb-costs-table {
+    width: 100%;
+    font-size: 0.875rem;
+    border-collapse: collapse;
+}
+
+.hb-costs-table caption {
+    padding-bottom: 0.5rem;
+    font-weight: 600;
+    text-align: start;
+}
+
+.hb-costs-table th {
+    padding: 0.375rem 0.75rem 0.375rem 0;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-align: start;
+    color: var(--gray-500);
+    white-space: nowrap;
+}
+
+.hb-costs-table td {
+    padding: 0.5rem 0.75rem 0.5rem 0;
+    border-top: 1px solid var(--gray-200);
+    vertical-align: top;
+}
+
+.dark .hb-costs-table td {
+    border-top-color: rgb(255 255 255 / 0.1);
+}
+
+.hb-costs-table :is(th, td):last-child {
+    padding-right: 0;
+}
+
+.hb-costs-amount,
+.hb-costs-table .hb-costs-amount {
+    text-align: end;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.hb-costs-date {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.hb-costs-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-weight: 500;
+}
+
+.hb-costs-item:hover {
+    text-decoration: underline;
+}
+
+.hb-costs-icon {
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    color: var(--gray-400);
+}
+
+.hb-costs-provider,
+.hb-costs-detail {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--gray-500);
+}
+
+/* Per provider, project and client: side by side when there is room. */
+.hb-costs-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.hb-costs-group-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.hb-costs-group summary {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.25rem 0.75rem;
+    padding: 0.375rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+.hb-costs-group summary::-webkit-details-marker {
+    display: none;
+}
+
+.hb-costs-group summary:hover {
+    background-color: var(--gray-50);
+}
+
+.dark .hb-costs-group summary:hover {
+    background-color: rgb(255 255 255 / 0.05);
+}
+
+.hb-costs-group-label {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.hb-costs-group-name {
+    overflow: hidden;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The native marker is gone (the summary is a grid): a chevron that turns when open. */
+.hb-costs-chevron {
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    color: var(--gray-400);
+    transition: transform 0.15s;
+}
+
+.hb-costs-group[open] .hb-costs-chevron {
+    transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hb-costs-chevron {
+        transition: none;
+    }
+}
+
+.hb-costs-group summary:focus-visible {
+    outline: 2px solid var(--gray-950);
+    outline-offset: 1px;
+}
+
+.dark .hb-costs-group summary:focus-visible {
+    outline-color: #ffffff;
+}
+
+/* Shared, no project, our own: a bucket, not a provider or client. */
+.hb-costs-group-bucket {
+    font-style: italic;
+    font-weight: 400;
+    color: var(--gray-600);
+}
+
+.dark .hb-costs-group-bucket {
+    color: var(--gray-400);
+}
+
+.hb-costs-share {
+    grid-column: 1 / -1;
+    height: 0.25rem;
+    border-radius: 9999px;
+    background-color: var(--gray-100);
+}
+
+.dark .hb-costs-share {
+    background-color: rgb(255 255 255 / 0.08);
+}
+
+.hb-costs-share > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background-color: var(--gray-500);
+}
+
+/* Lines of items with their yearly amount: in a group, and in a cost section. */
+.hb-costs-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+}
+
+.hb-costs-lines > li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.hb-costs-group .hb-costs-lines {
+    padding: 0.5rem 0.5rem 0.25rem 1.75rem;
+}
+
+.hb-costs-group-item {
+    min-width: 0;
+}
+
+/* What the group shares with others: counted under "Shared", shown here too. */
+.hb-costs-group-sub {
+    grid-column: 1 / -1;
+    padding-left: 1.25rem;
+    font-size: 0.75rem;
+    color: var(--gray-500);
+}
+
+.dark .hb-costs-group-sub {
+    color: var(--gray-400);
+}
+
+.hb-costs-lines > li.hb-costs-shared-label {
+    padding-top: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--gray-500);
+}
+
+.dark .hb-costs-lines > li.hb-costs-shared-label {
+    color: var(--gray-400);
+}
+
+.hb-costs-lines > li.hb-costs-shared {
+    color: var(--gray-600);
+}
+
+.dark .hb-costs-lines > li.hb-costs-shared {
+    color: var(--gray-400);
+}
+
+.hb-costs-group-link {
+    display: inline-block;
+    margin: 0.25rem 0 0.5rem 1.75rem;
+    font-size: 0.8125rem;
+    color: var(--gray-500);
+}
+
+.hb-costs-group-link:hover {
+    text-decoration: underline;
+}
+
+/* "Costs" on a project or client page (CostSchema::ownerSection()). */
+.hb-costs-owner {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.hb-costs-owner-totals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 2.5rem;
+}
+
+.hb-costs-owner-total {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+}
+
+.hb-costs-owner-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+    color: var(--gray-950);
+}
+
+.dark .hb-costs-owner-value {
+    color: #ffffff;
+}
+
+.hb-costs-owner .hb-costs-lines {
+    max-width: 40rem;
+}
+
+.hb-costs-unpriced {
+    font-size: 0.8125rem;
+    color: var(--gray-600);
+}
+
+.dark .hb-costs-unpriced {
+    color: var(--gray-400);
+}
+
+.hb-costs-unpriced a {
+    font-weight: 500;
+    text-decoration: underline;
+    text-decoration-color: var(--gray-300);
+}
+
+.dark .hb-costs-unpriced a {
+    text-decoration-color: var(--gray-600);
+}
+
+.hb-costs-unpriced a:hover,
+.dark .hb-costs-unpriced a:hover {
+    text-decoration-color: currentColor;
+}
+
+/* Narrow: twelve bars stay, the amounts above them go (the label has them). */
+@container (max-width: 36rem) {
+    .hb-costs-chart {
+        gap: 0.125rem;
+        height: 11rem;
+    }
+
+    .hb-costs-month-total {
+        display: none;
+    }
+}

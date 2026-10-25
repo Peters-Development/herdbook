@@ -1,0 +1,27 @@
+# HTTPS on the local network: profile `lan` in docker/docker-compose.prod.yml.
+#
+# The certificates come from Caddy's own CA, for LAN_IP and every name in
+# LAN_HOSTNAMES. Its root certificate (in DATA_DIR/caddy, so in the backup)
+# goes onto every device that opens the app: docs/networking.md#local-network.
+{
+	# The container's own trust store does not matter: the devices need the root.
+	skip_install_trust
+	admin off
+	# Port 80 is not published: no HTTP-to-HTTPS redirect server.
+	auto_https disable_redirects
+	servers {
+		# Only TCP is published: no HTTP/3 offer that would go unanswered.
+		protocols h1 h2
+	}
+	# https://<ip> sends no server name, and behind Docker's port mapping
+	# Caddy does not see the address that was dialled: hand out the
+	# certificate for LAN_IP.
+	default_sni {$LAN_IP}
+}
+
+{$LAN_IP} {$LAN_HOSTNAMES} {
+	tls internal
+	# Caddy sets X-Forwarded-For to the client itself; web-lan takes the
+	# client's address from it (docker/nginx/production.conf.template).
+	reverse_proxy web-lan:80
+}

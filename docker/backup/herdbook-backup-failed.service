@@ -1,0 +1,7 @@
+[Unit]
+Description=Report a failed herdbook backup (through the app, else ntfy)
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/herdbook/backup.env
+ExecStart=/srv/herdbook/docker/backup/notify-failure.sh

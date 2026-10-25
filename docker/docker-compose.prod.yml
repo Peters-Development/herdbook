@@ -1,0 +1,255 @@
+# Production stack, for the host (the machine Herdbook runs on). Always run it
+# through the wrapper, which loads both env files:
+#   docker/compose.sh <command>           (docker/up.sh and docker/deploy.sh use it)
+# Setup: docs/deployment.md.
+#
+#   .env              the Laravel app's settings; the only file the app containers see
+#   docker/box.env    the host's own settings and secrets (profiles, MySQL root password,
+#                     Tailscale auth keys, Vaultwarden, LAN); used for interpolation here
+#
+# How the app is reached is chosen with COMPOSE_PROFILES in docker/box.env:
+#   tailscale    only on the tailnet, through a Tailscale sidecar (`tailscale
+#                serve` → HTTPS on herdbook.<tailnet>.ts.net). No published port.
+#   lan          on the local network: Caddy publishes HTTPS on LAN_IP:LAN_PORT,
+#                with certificates from its own CA.
+#   vaultwarden  the password vault, always on the tailnet (its own sidecar).
+# Both ways in at once is fine: COMPOSE_PROFILES=tailscale,lan.
+#
+# Settings that only one profile needs are checked by docker/compose.sh, not
+# with ${VAR:?} here: compose checks those even for profiles that are off.
+name: herdbook
+
+# Every service has a fixed container_name (herdbook-app, herdbook-mysql, …), so
+# `docker exec -it herdbook-app …` works on the host. The dev stack uses the same
+# names: the two never run on one Docker host (a local test of this file needs
+# other names, and other volume names).
+
+# Docker's json-file logs grow without limit; `local` rotates (5 x 20 MB).
+x-logging: &logging
+    driver: local
+    options:
+        max-size: 20m
+        max-file: "5"
+
+x-app: &app
+    build:
+        context: ..
+        dockerfile: docker/Dockerfile
+        target: app
+    image: herdbook-app
+    restart: unless-stopped
+    logging: *logging
+    env_file: ../.env
+    volumes:
+        - ${DATA_DIR:?set DATA_DIR in docker/box.env}/app:/var/www/storage/app
+    depends_on:
+        mysql:
+            condition: service_healthy
+    networks:
+        - main
+
+# Both web servers run the same image; each builds it, so the one profile
+# that is on always has it (the second build is a cache hit).
+x-web: &web
+    build:
+        context: ..
+        dockerfile: docker/Dockerfile
+        target: web
+    image: herdbook-web
+    restart: unless-stopped
+    logging: *logging
+
+x-tailscale: &tailscale
+    # Pin a release (https://hub.docker.com/r/tailscale/tailscale/tags) to
+    # update deliberately; `stable` follows Tailscale's stable channel.
+    image: tailscale/tailscale:stable
+    restart: unless-stopped
+    logging: *logging
+    devices:
+        - /dev/net/tun:/dev/net/tun
+    cap_add:
+        - net_admin
+
+services:
+    app:
+        <<: *app
+        container_name: herdbook-app
+
+    queue:
+        <<: *app
+        container_name: herdbook-queue
+        command: php artisan queue:work --queue=checks,default --tries=3 --timeout=60
+
+    # A second consumer for the checks only: probes that wait on a dead host
+    # must not hold up the next minute's checks, nor mail and other jobs.
+    queue-checks:
+        <<: *app
+        container_name: herdbook-queue-checks
+        command: php artisan queue:work --queue=checks --tries=3 --timeout=60
+
+    scheduler:
+        <<: *app
+        container_name: herdbook-scheduler
+        command: php artisan schedule:work
+
+    mysql:
+        image: mysql:8.4
+        container_name: herdbook-mysql
+        restart: unless-stopped
+        logging: *logging
+        # No replication here: binary logs would only fill the disk (30 days
+        # of sessions, cache and queue writes by default).
+        command: ["mysqld", "--disable-log-bin"]
+        environment:
+            MYSQL_DATABASE: ${DB_DATABASE:?}
+            MYSQL_USER: ${DB_USERNAME:?}
+            MYSQL_PASSWORD: ${DB_PASSWORD:?}
+            MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in docker/box.env}
+        volumes:
+            - mysql-data:/var/lib/mysql
+        healthcheck:
+            # Over TCP: the socket also answers while MySQL runs its temporary
+            # initialisation server on the very first start.
+            test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+            interval: 5s
+            timeout: 3s
+            retries: 10
+            # The first initialisation, or crash recovery after a power cut,
+            # can take longer than the retries above.
+            start_period: 120s
+        networks:
+            - main
+
+    # --- tailscale ----------------------------------------------------------
+
+    # nginx shares the network namespace of ts-herdbook: it listens on that
+    # node's loopback and `tailscale serve` proxies HTTPS to it. A restarted or
+    # recreated ts-herdbook leaves web in a dead namespace: docker/up.sh
+    # recreates web (and vaultwarden) after every `up`. No dependency on app:
+    # nginx looks `app` up per request, and the web servers must not wait for
+    # MySQL's recovery after a power cut.
+    web:
+        <<: *web
+        container_name: herdbook-web
+        profiles: [tailscale]
+        network_mode: service:ts-herdbook
+        depends_on:
+            - ts-herdbook
+
+    ts-herdbook:
+        <<: *tailscale
+        container_name: herdbook-ts
+        profiles: [tailscale]
+        hostname: herdbook
+        environment:
+            TS_AUTHKEY: ${TS_AUTHKEY_HERDBOOK:-}
+            TS_HOSTNAME: herdbook
+            TS_EXTRA_ARGS: --advertise-tags=tag:herdbook
+            TS_STATE_DIR: /var/lib/tailscale
+            TS_SERVE_CONFIG: /config/serve.json
+            TS_USERSPACE: "false"
+        volumes:
+            - ts-herdbook-state:/var/lib/tailscale
+            - ./tailscale/herdbook:/config:ro
+        networks:
+            - main
+
+    # --- lan ----------------------------------------------------------------
+
+    # On the internal network only: Caddy is the one way in. Like web, no
+    # dependencies: Caddy looks web-lan up per connection, nginx `app` per request.
+    web-lan:
+        <<: *web
+        container_name: herdbook-web-lan
+        profiles: [lan]
+        environment:
+            NGINX_LISTEN: "80"
+        networks:
+            - main
+
+    # Bump deliberately (https://github.com/caddyserver/caddy/releases).
+    caddy:
+        image: caddy:2.11.7-alpine
+        container_name: herdbook-caddy
+        profiles: [lan]
+        restart: unless-stopped
+        logging: *logging
+        # Published on the host's LAN address only. Docker bypasses ufw for
+        # published ports: limit who may reach it with VLANs or the
+        # DOCKER-USER chain (docs/networking.md#local-network).
+        ports:
+            - "${LAN_IP:-127.0.0.1}:${LAN_PORT:-443}:443"
+        environment:
+            LAN_IP: ${LAN_IP:-}
+            LAN_HOSTNAMES: ${LAN_HOSTNAMES:-}
+        volumes:
+            # The directory, not the file: a `git pull` replaces the file, and a
+            # file mount keeps showing the old one. Caddy reads it only at
+            # start: docker/deploy.sh recreates caddy when it changed.
+            - ./caddy:/etc/caddy:ro
+            # Caddy's CA (the root that devices trust) and its certificates.
+            - ${DATA_DIR:?}/caddy:/data
+        networks:
+            - main
+
+    # --- vaultwarden --------------------------------------------------------
+
+    # Bump deliberately (release notes: https://github.com/dani-garcia/vaultwarden/releases).
+    vaultwarden:
+        image: vaultwarden/server:1.37.4
+        container_name: herdbook-vaultwarden
+        profiles: [vaultwarden]
+        restart: unless-stopped
+        logging: *logging
+        network_mode: service:ts-vault
+        environment:
+            DOMAIN: https://vault.${TAILNET_DOMAIN:-}
+            ROCKET_ADDRESS: 127.0.0.1
+            ROCKET_PORT: 80
+            SIGNUPS_ALLOWED: ${VAULT_SIGNUPS_ALLOWED:-false}
+            # Empty disables the /admin page (docs/vaultwarden.md).
+            ADMIN_TOKEN: ${VAULT_ADMIN_TOKEN:-}
+            # `tailscale serve` passes the client in X-Forwarded-For; without
+            # this every login attempt comes from 127.0.0.1 (one rate limit).
+            IP_HEADER: X-Forwarded-For
+            # No favicon fetches for every item's domain from the host's own line.
+            DISABLE_ICON_DOWNLOAD: "true"
+        volumes:
+            - ${DATA_DIR:?}/vaultwarden:/data
+        depends_on:
+            - ts-vault
+
+    # Its own network: Vaultwarden shares this namespace and has no business
+    # reaching php-fpm (app:9000) or MySQL on `main`.
+    ts-vault:
+        <<: *tailscale
+        container_name: herdbook-ts-vault
+        profiles: [vaultwarden]
+        hostname: vault
+        environment:
+            TS_AUTHKEY: ${TS_AUTHKEY_VAULT:-}
+            TS_HOSTNAME: vault
+            TS_EXTRA_ARGS: --advertise-tags=tag:vault
+            TS_STATE_DIR: /var/lib/tailscale
+            TS_SERVE_CONFIG: /config/serve.json
+            TS_USERSPACE: "false"
+        volumes:
+            - ts-vault-state:/var/lib/tailscale
+            - ./tailscale/vault:/config:ro
+        networks:
+            - vault
+
+networks:
+    main:
+        driver: bridge
+    vault:
+        driver: bridge
+
+volumes:
+    mysql-data:
+        name: herdbook_mysql-data
+    # Node identity. Losing it registers a new node (and needs a fresh auth key).
+    ts-herdbook-state:
+        name: herdbook_ts-herdbook-state
+    ts-vault-state:
+        name: herdbook_ts-vault-state

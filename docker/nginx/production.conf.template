@@ -1,0 +1,61 @@
+# The production web server, for both ways in (docker/docker-compose.prod.yml).
+# The nginx image renders this file at start; only NGINX_* variables are
+# filled in (NGINX_ENVSUBST_FILTER in docker/Dockerfile), nginx's own stay.
+#
+#   web      tailscale: in the network namespace of the ts-herdbook container,
+#            on its loopback only (NGINX_LISTEN=127.0.0.1:80). `tailscale
+#            serve` (HTTPS on the tailnet) is the one way in; nothing on the
+#            tailnet can reach plain HTTP on this node.
+#   web-lan  lan: on the internal Docker network only (NGINX_LISTEN=80, no
+#            published port), behind Caddy, which serves HTTPS on the LAN.
+server {
+    listen ${NGINX_LISTEN};
+    index index.php;
+    root /var/www/public;
+
+    client_max_body_size 32M;
+
+    # No nginx version in headers and error pages.
+    server_tokens off;
+
+    # web-lan: the client's own address, from the X-Forwarded-For that Caddy
+    # sets (Caddy replaces whatever the client sent). Only containers on the
+    # internal network reach this port: Caddy, and the app's own containers
+    # (their HTTP checks send no X-Forwarded-For). Docker's networks come from
+    # these private ranges unless its address pools were changed. `web` only
+    # hears 127.0.0.1, which these ranges leave alone: there Laravel's
+    # trustProxies takes over.
+    set_real_ip_from 10.0.0.0/8;
+    set_real_ip_from 172.16.0.0/12;
+    set_real_ip_from 192.168.0.0/16;
+    real_ip_header X-Forwarded-For;
+
+    # Resolve `app` through Docker's DNS at request time: a recreated app
+    # container gets a new IP, and a name resolved once at startup would
+    # keep pointing at the old one (502 until nginx restarts).
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $php_upstream app:9000;
+
+    location / {
+        # Static files (CSS, JS, fonts, icons): the app's own responses get
+        # their headers from Laravel (App\Http\Middleware\SecurityHeaders).
+        add_header X-Content-Type-Options nosniff always;
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_pass $php_upstream;
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME /var/www/public$fastcgi_script_name;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+        # Every request arrived over HTTPS, at `tailscale serve` or at Caddy.
+        fastcgi_param HTTPS on;
+    }
+
+    location ~ /\.(?!well-known) {
+        deny all;
+    }
+}
