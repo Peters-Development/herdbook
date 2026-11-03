@@ -7,6 +7,7 @@ use App\Enums\CheckType;
 use App\Enums\HealthState;
 use App\Enums\ServerRole;
 use App\Models\Check;
+use App\Models\Domain;
 use App\Models\Environment;
 use App\Models\EnvironmentServer;
 use App\Models\Hostname;
@@ -245,6 +246,18 @@ class ProjectHealthTest extends TestCase
         $this->assertSame(0.5, $health->hours[22]);
         $this->assertEquals(1, $health->hours[23]);
         $this->assertEquals(75.0, $health->uptime);
+    }
+
+    public function test_a_check_on_the_mail_server_of_a_domain_counts_for_the_environments_of_its_hostnames(): void
+    {
+        $mail = Server::factory()->create();
+        $domain = Domain::factory()->create(['mail_server_id' => $mail->id]);
+        Hostname::factory()->for($domain)->create(['environment_id' => $this->production->id]);
+        $this->hostnameCheck(CheckType::Http, CheckState::Up);
+        $this->state(Check::factory()->forServer($mail, CheckType::Tcp)->create(), CheckState::Down);
+
+        $this->assertSame(HealthState::Down, $this->health()->state);
+        $this->assertSame([$mail->id], app(ProjectHealth::class)->productionServerIds($this->project));
     }
 
     private function health(): HealthReport

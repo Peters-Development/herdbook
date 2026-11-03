@@ -3,8 +3,10 @@
 namespace Tests\Feature\Inventory;
 
 use App\Enums\ServerRole;
+use App\Models\Domain;
 use App\Models\Environment;
 use App\Models\EnvironmentServer;
+use App\Models\Hostname;
 use App\Models\Server;
 use App\Models\ServerDependency;
 use App\Services\Impact\ImpactAnalyzer;
@@ -100,6 +102,61 @@ class ImpactAnalyzerTest extends TestCase
 
         $this->assertInstanceOf(ImpactedEnvironment::class, $impact);
         $this->assertSame(ServerRole::Database, $impact->role);
+    }
+
+    public function test_the_mail_server_of_a_domain_takes_down_the_environments_of_its_hostnames(): void
+    {
+        $mail = Server::factory()->create(['name' => 'mail-1']);
+        $vps = Server::factory()->create(['name' => 'vps-1']);
+        $production = Environment::factory()->create();
+        $this->runsOn($production, $vps, ServerRole::App);
+        $domain = Domain::factory()->create(['name' => 'example.com', 'mail_server_id' => $mail->id]);
+        Hostname::factory()->for($domain)->create(['fqdn' => 'www.example.com', 'environment_id' => $production->id]);
+        Hostname::factory()->for($domain)->create(['fqdn' => 'mail.example.com', 'environment_id' => null]);
+
+        $impact = app(ImpactAnalyzer::class)->forServer($mail)->sole();
+
+        $this->assertTrue($impact->environment->is($production));
+        $this->assertTrue($impact->domain->is($domain));
+        $this->assertSame(ServerRole::Mail, $impact->role);
+        $this->assertTrue($impact->isDirect());
+        $this->assertSame('example.com → mail-1', $impact->path());
+        $this->assertNull(app(ImpactAnalyzer::class)->forServer($vps)->sole()->domain);
+    }
+
+    public function test_mail_on_the_failing_server_itself_wins_over_running_on_a_server_that_needs_it(): void
+    {
+        $storage = Server::factory()->create(['name' => 'storage']);
+        $app = Server::factory()->create(['name' => 'app']);
+        ServerDependency::create(['server_id' => $app->id, 'depends_on_id' => $storage->id, 'kind' => 'NFS']);
+        $production = Environment::factory()->create();
+        $this->runsOn($production, $app, ServerRole::App);
+        Hostname::factory()->for(Domain::factory()->create(['name' => 'example.com', 'mail_server_id' => $storage->id]))->create(['environment_id' => $production->id]);
+
+        $impact = app(ImpactAnalyzer::class)->forServer($storage)->sole();
+
+        $this->assertTrue($impact->isDirect());
+        $this->assertSame('example.com → storage', $impact->path());
+    }
+
+    public function test_running_on_the_server_wins_over_mail_through_a_domain_and_a_chain_starts_at_the_domain(): void
+    {
+        $mail = Server::factory()->create(['name' => 'mail-1']);
+        $storage = Server::factory()->create(['name' => 'storage']);
+        ServerDependency::create(['server_id' => $mail->id, 'depends_on_id' => $storage->id, 'kind' => 'NFS']);
+        $domain = Domain::factory()->create(['name' => 'example.com', 'mail_server_id' => $mail->id]);
+        $both = Environment::factory()->create();
+        $this->runsOn($both, $mail, ServerRole::Other);
+        Hostname::factory()->for($domain)->create(['environment_id' => $both->id]);
+        $onlyMail = Environment::factory()->staging()->create();
+        Hostname::factory()->for($domain)->create(['environment_id' => $onlyMail->id]);
+
+        $impacts = app(ImpactAnalyzer::class)->forServer($mail)->keyBy(fn (ImpactedEnvironment $impact): int => $impact->environment->id);
+
+        $this->assertNull($impacts[$both->id]->domain);
+        $this->assertSame(ServerRole::Other, $impacts[$both->id]->role);
+        $this->assertTrue($impacts[$onlyMail->id]->domain->is($domain));
+        $this->assertSame('example.com → mail-1 → NFS → storage', app(ImpactAnalyzer::class)->forServer($storage)->firstWhere('environment.id', $onlyMail->id)->path());
     }
 
     private function runsOn(Environment $environment, Server $server, ServerRole $role): void

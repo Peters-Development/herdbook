@@ -46,6 +46,7 @@ final class ActivityPresenter
         'hostname_id' => [Hostname::class, 'fqdn'],
         'server_id' => [Server::class, 'name'],
         'depends_on_id' => [Server::class, 'name'],
+        'mail_server_id' => [Server::class, 'name'],
         'project_id' => [Project::class, 'name'],
         'user_id' => [User::class, 'name'],
     ];
@@ -158,6 +159,7 @@ final class ActivityPresenter
             'environment_id' => __('Environment'),
             'server_id' => __('Server'),
             'depends_on_id' => __('Depends on'),
+            'mail_server_id' => __('Mail server'),
             'project_id' => __('Project'),
             'role' => __('Role'),
             'repository_url' => __('Repository'),

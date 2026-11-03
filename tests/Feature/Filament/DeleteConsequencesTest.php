@@ -9,6 +9,7 @@ use App\Filament\Resources\Providers\Pages\EditProvider;
 use App\Filament\Resources\Servers\Pages\EditServer;
 use App\Models\Check;
 use App\Models\Client;
+use App\Models\Domain;
 use App\Models\Environment;
 use App\Models\EnvironmentServer;
 use App\Models\Hostname;
@@ -66,6 +67,17 @@ class DeleteConsequencesTest extends TestCase
         $this->signIn();
         $server = Server::factory()->create();
         EnvironmentServer::create(['environment_id' => Environment::factory()->create()->id, 'server_id' => $server->id, 'role' => ServerRole::App]);
+
+        Livewire::test(EditServer::class, ['record' => $server->getRouteKey()])
+            ->mountAction(DeleteAction::class)
+            ->assertMountedActionModalSee('nog in gebruik');
+    }
+
+    public function test_a_server_that_runs_the_mail_of_a_domain_is_in_use(): void
+    {
+        $this->signIn();
+        $server = Server::factory()->create();
+        Domain::factory()->create(['mail_server_id' => $server->id]);
 
         Livewire::test(EditServer::class, ['record' => $server->getRouteKey()])
             ->mountAction(DeleteAction::class)

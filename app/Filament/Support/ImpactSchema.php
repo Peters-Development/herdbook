@@ -28,13 +28,19 @@ final class ImpactSchema
                     ->label(__('Affected by an outage'))
                     ->hiddenLabel()
                     ->state(fn (Model $record): array => $impacts($record)
-                        ->map(fn (ImpactedEnvironment $impact): string => $impact->isDirect()
-                            ? __(':environment: runs on :server (:role)', [
+                        ->map(fn (ImpactedEnvironment $impact): string => match (true) {
+                            ! $impact->isDirect() => __(':environment: via :path', ['environment' => $impact->environment->full_name, 'path' => $impact->path()]),
+                            $impact->domain !== null => __(':environment: mail of :domain on :server', [
+                                'environment' => $impact->environment->full_name,
+                                'domain' => $impact->domain->name,
+                                'server' => $impact->server->name,
+                            ]),
+                            default => __(':environment: runs on :server (:role)', [
                                 'environment' => $impact->environment->full_name,
                                 'server' => $impact->server->name,
                                 'role' => $impact->role->getLabel(),
-                            ])
-                            : __(':environment: via :path', ['environment' => $impact->environment->full_name, 'path' => $impact->path()]))
+                            ]),
+                        })
                         ->all())
                     ->listWithLineBreaks()
                     ->bulleted()

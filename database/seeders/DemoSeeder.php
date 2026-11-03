@@ -106,7 +106,7 @@ class DemoSeeder extends Seeder
             'Hetzner' => [ProviderKind::Hosting],
             'Gandi' => [ProviderKind::Registrar, ProviderKind::Dns],
             'Cloudflare' => [ProviderKind::Dns],
-            'Namecheap' => [ProviderKind::Registrar, ProviderKind::Dns],
+            'Namecheap' => [ProviderKind::Registrar, ProviderKind::Dns, ProviderKind::Hosting],
             'Vodafone' => [ProviderKind::Internet],
             'JetBrains' => [ProviderKind::Other],
             'Google' => [ProviderKind::Mail],
@@ -127,6 +127,8 @@ class DemoSeeder extends Seeder
             'web-02' => ['Hetzner', '198.51.100.22', 'CX32', 7.59, 200],
             'staging-01' => ['Hetzner', '198.51.100.30', 'CX22', 4.59, 200],
             'mail-01' => ['Hetzner', '198.51.100.40', 'CX22', 4.59, 200],
+            // A hosting package for the mail of client domains (Domain::mailServer()).
+            'shared-mail' => ['Namecheap', '198.51.100.50', 'Mail + DNS package', 3.50, 60],
             'legacy-01' => ['DigitalOcean', '203.0.113.99', 'Basic 4 GB', 14.95, null],
         ] as $name => [$provider, $ip, $plan, $cost, $expiresInDays]) {
             $this->servers[$name] = Server::create([
@@ -139,9 +141,14 @@ class DemoSeeder extends Seeder
                 },
                 'plan' => $plan,
                 'public_ipv4' => $ip,
-                'os_name' => 'Ubuntu',
-                'os_version' => $name === 'legacy-01' ? '20.04' : '24.04',
-                'ssh_user' => 'deploy',
+                // A package, not a machine of our own.
+                'os_name' => $name === 'shared-mail' ? null : 'Ubuntu',
+                'os_version' => match ($name) {
+                    'shared-mail' => null,
+                    'legacy-01' => '20.04',
+                    default => '24.04',
+                },
+                'ssh_user' => $name === 'shared-mail' ? null : 'deploy',
                 'cost_amount' => $cost,
                 'cost_period' => CostPeriod::Month,
                 'expires_on' => $expiresInDays === null ? null : $this->today()->addDays($expiresInDays)->toDateString(),
@@ -213,6 +220,8 @@ class DemoSeeder extends Seeder
                 'expires_on' => $this->today()->addDays($expiresInDays)->toDateString(),
                 'auto_renews' => $autoRenews,
                 'renewal_period_months' => 12,
+                // Websites on a VPS, the mail on a hosting package.
+                'mail_server_id' => in_array($name, ['meadowbakery.test', 'cartercycles.test'], true) ? $this->servers['shared-mail']->id : null,
             ]);
         }
     }
@@ -347,6 +356,15 @@ class DemoSeeder extends Seeder
                 'type' => CheckType::Ping,
                 'target' => $server->public_ipv4,
                 'interval_seconds' => 60,
+            ]), CheckState::Up);
+        }
+
+        // The mail of the client domains on the package: its ports, once.
+        foreach ([993, 465] as $port) {
+            $this->settle(Check::create([
+                'server_id' => $this->servers['shared-mail']->id,
+                'type' => CheckType::Tcp,
+                'target' => "{$this->servers['shared-mail']->public_ipv4}:{$port}",
             ]), CheckState::Up);
         }
     }

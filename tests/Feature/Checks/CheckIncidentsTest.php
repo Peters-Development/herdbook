@@ -4,12 +4,14 @@ namespace Tests\Feature\Checks;
 
 use App\Enums\AlertLevel;
 use App\Enums\CheckState;
+use App\Enums\CheckType;
 use App\Enums\IncidentSource;
 use App\Enums\IncidentStatus;
 use App\Enums\ProjectStatus;
 use App\Enums\ServerRole;
 use App\Models\Check;
 use App\Models\CheckResult;
+use App\Models\Domain;
 use App\Models\Environment;
 use App\Models\EnvironmentServer;
 use App\Models\Hostname;
@@ -24,6 +26,25 @@ use Tests\TestCase;
 class CheckIncidentsTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_the_mail_server_of_a_domain_going_down_opens_an_incident_for_its_projects(): void
+    {
+        $environment = Environment::factory()->create();
+        $mail = Server::factory()->create();
+        Hostname::factory()->for(Domain::factory()->create(['mail_server_id' => $mail->id]))->create(['environment_id' => $environment->id]);
+        $port = Check::factory()->forServer($mail, CheckType::Tcp)->critical()->create();
+        $port->forceFill(['state' => CheckState::Down])->save();
+        $port->events()->create(['from_state' => CheckState::Pending, 'to_state' => CheckState::Down, 'occurred_at' => '2026-10-22 13:07:00', 'error' => 'Geen antwoord']);
+
+        $this->assertTrue($port->watchesProduction());
+
+        Date::setTestNow('2026-10-22 13:13:00');
+        $this->artisan('checks:incidents')->assertSuccessful();
+
+        $incident = Incident::query()->sole();
+        $this->assertTrue($incident->projects()->sole()->is($environment->project));
+        $this->assertTrue($incident->servers()->sole()->is($mail));
+    }
 
     private function downCheck(Environment $environment, AlertLevel $level = AlertLevel::Critical, string $wentDownAt = '2026-10-22 13:07:00'): Check
     {

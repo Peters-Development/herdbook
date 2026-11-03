@@ -67,6 +67,16 @@ class Server extends Model implements Renewable
         return $this->hasMany(Check::class);
     }
 
+    /**
+     * The domains whose mail runs here (Domain::mailServer()).
+     *
+     * @return HasMany<Domain, $this>
+     */
+    public function mailDomains(): HasMany
+    {
+        return $this->hasMany(Domain::class, 'mail_server_id');
+    }
+
     /** @return BelongsTo<Provider, $this> */
     public function provider(): BelongsTo
     {

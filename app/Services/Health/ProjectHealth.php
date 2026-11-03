@@ -7,22 +7,25 @@ use App\Enums\EnvironmentKind;
 use App\Enums\HealthState;
 use App\Models\Check;
 use App\Models\Environment;
-use App\Models\EnvironmentServer;
 use App\Models\Hostname;
 use App\Models\Project;
 use App\Models\Server;
 use App\Models\ServerDependency;
 use App\Services\Checks\CheckHistory;
 use App\Services\Impact\ImpactAnalyzer;
+use App\Services\Impact\ServerUse;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
 /**
  * How projects and environments are doing, from their checks: those of the
- * environment's hostnames, those of the servers it runs on, and those of
+ * environment's hostnames, those of the servers it uses (it runs on them, or
+ * the mail of its domain does: ImpactAnalyzer::usage()), and those of
  * the servers these depend on (the same reach as ImpactAnalyzer: a failing
  * storage server takes down what mounts it). A project is its production:
  * the environments of kind production.
+ *
+ * Also who uses which server directly (uses()), which the reach is built on.
  *
  * Loads all checks once (a few hundred rows at most); scoped in
  * AppServiceProvider, so that is once per request or job.
@@ -57,6 +60,9 @@ final class ProjectHealth
 
     /** @var array<int, list<int>> project id => the servers its production runs on itself */
     private array $directServersByProject = [];
+
+    /** @var Collection<int|string, Collection<int, ServerUse>> server id => who uses it directly */
+    private Collection $usesByServer;
 
     /** @var array<int, list<array{up: int, down: int}>>|null */
     private ?array $history = null;
@@ -146,6 +152,32 @@ final class ProjectHealth
         $this->load();
 
         return $this->directServersByProject[$project instanceof Project ? $project->id : $project] ?? [];
+    }
+
+    /**
+     * Who uses which server directly, loaded once per request
+     * (ImpactAnalyzer::usage()).
+     *
+     * @return Collection<int, ServerUse>
+     */
+    public function uses(): Collection
+    {
+        $this->load();
+
+        return $this->usesByServer->flatten(1);
+    }
+
+    /**
+     * Who uses the server directly: the environments that run on it, and
+     * those with the mail of their domain there (ImpactAnalyzer::usage()).
+     *
+     * @return Collection<int, ServerUse>
+     */
+    public function usesOf(int $serverId): Collection
+    {
+        $this->load();
+
+        return $this->usesByServer->get($serverId, new Collection);
     }
 
     /**
@@ -301,11 +333,9 @@ final class ProjectHealth
 
         $hostnameEnvironments = Hostname::query()->whereNotNull('environment_id')->pluck('environment_id', 'id');
 
-        $serverEnvironments = EnvironmentServer::query()
-            ->toBase()
-            ->get(['environment_id', 'server_id'])
-            ->groupBy('server_id')
-            ->map(fn (Collection $rows): array => $rows->pluck('environment_id')->map(fn (mixed $id): int => (int) $id)->all());
+        // Also the environments whose domain has its mail on the server.
+        $this->usesByServer = ImpactAnalyzer::usage()->groupBy('serverId');
+        $serverEnvironments = $this->usesByServer->map(fn (Collection $uses): array => $uses->pluck('environmentId')->unique()->values()->all());
 
         $dependencies = ServerDependency::query()->get(['id', 'server_id', 'depends_on_id']);
         $reach = [];

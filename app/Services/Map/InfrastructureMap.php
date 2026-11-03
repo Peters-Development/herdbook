@@ -14,7 +14,6 @@ use App\Filament\Resources\Providers\ProviderResource;
 use App\Filament\Resources\Servers\ServerResource;
 use App\Models\Domain;
 use App\Models\Environment;
-use App\Models\EnvironmentServer;
 use App\Models\Hostname;
 use App\Models\Network;
 use App\Models\Project;
@@ -24,6 +23,7 @@ use App\Models\ServerDependency;
 use App\Services\Health\HealthReport;
 use App\Services\Health\ProjectHealth;
 use App\Services\Impact\ImpactAnalyzer;
+use App\Services\Impact\ServerUse;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -75,12 +75,13 @@ final class InfrastructureMap
 
         /** @var Collection<int, Environment> $environments */
         $environments = $projects->flatMap(fn (Project $project) => $project->environments)->keyBy('id');
-        $assignments = EnvironmentServer::query()->toBase()->get(['environment_id', 'server_id', 'role']);
+        // Also a server with the mail of a domain of theirs.
+        $uses = $this->health->uses();
         $dependencies = ServerDependency::query()->get(['id', 'server_id', 'depends_on_id', 'kind']);
         $allServers = Server::query()->with(['provider', 'network'])->orderBy('name')->get()->keyBy('id');
 
         // Servers: those the environments run on, then what these need.
-        $direct = $assignments->whereIn('environment_id', $environments->keys())->pluck('server_id')->map(fn (mixed $id): int => (int) $id)->unique();
+        $direct = $uses->whereIn('environmentId', $environments->keys())->pluck('serverId')->unique();
         $serverIds = $filtered ? ImpactAnalyzer::upstream($dependencies, $direct->values()->all()) : $allServers->keys()->all();
         $servers = $allServers->intersectByKeys(array_flip($serverIds));
 
@@ -100,7 +101,7 @@ final class InfrastructureMap
         // Positions, column by column, from the environments outwards.
         $environmentPlace = $this->places($environments->keys()->all());
 
-        $environmentsByServer = $assignments->groupBy('server_id')->map(fn (Collection $rows): array => $rows->pluck('environment_id')->map(fn (mixed $id): int => (int) $id)->all());
+        $environmentsByServer = $uses->groupBy('serverId')->map(fn (Collection $uses): array => $uses->pluck('environmentId')->unique()->values()->all());
         $dependentsByServer = $dependencies->groupBy('depends_on_id')->map(fn (Collection $rows): array => $rows->pluck('server_id')->all());
 
         $serverPlace = $this->places($this->sortByNeighbours(
@@ -156,7 +157,7 @@ final class InfrastructureMap
                 'url' => ProjectResource::getUrl('view', ['record' => $project]),
                 'nodes' => $project->environments->map(fn (Environment $environment): array => $this->environmentNode($environment, $project))->all(),
             ])->values()->all(),
-            'edges' => $this->edges($providers, $networks, $servers, $environments, $hostnames, $domains, $assignments, $dependencies),
+            'edges' => $this->edges($providers, $networks, $servers, $environments, $hostnames, $domains, $uses, $dependencies),
         ];
     }
 
@@ -319,7 +320,7 @@ final class InfrastructureMap
      *
      * @return list<array{from: string, to: string, label: ?string, title?: string, kind: string}>
      */
-    private function edges(Collection $providers, Collection $networks, Collection $servers, Collection $environments, Collection $hostnames, Collection $domains, Collection $assignments, Collection $dependencies): array
+    private function edges(Collection $providers, Collection $networks, Collection $servers, Collection $environments, Collection $hostnames, Collection $domains, Collection $uses, Collection $dependencies): array
     {
         $edges = [];
 
@@ -340,10 +341,12 @@ final class InfrastructureMap
             }
         }
 
-        foreach ($assignments as $assignment) {
-            if ($servers->has($assignment->server_id) && $environments->has($assignment->environment_id)) {
-                // One line, also for a server with two roles in the environment.
-                $edges[] = ['from' => "server-{$assignment->server_id}", 'to' => "environment-{$assignment->environment_id}", 'label' => null, 'kind' => 'runs'];
+        // One line per server and environment, also for a server with two
+        // roles there; a mail line only where the environment is not assigned
+        // to that server.
+        foreach ($uses->sortBy(fn (ServerUse $use): bool => $use->domainId !== null)->unique(fn (ServerUse $use): string => "{$use->serverId}-{$use->environmentId}") as $use) {
+            if ($servers->has($use->serverId) && $environments->has($use->environmentId)) {
+                $edges[] = ['from' => "server-{$use->serverId}", 'to' => "environment-{$use->environmentId}", 'label' => null, 'kind' => $use->domainId === null ? 'runs' : 'mail'];
             }
         }
 

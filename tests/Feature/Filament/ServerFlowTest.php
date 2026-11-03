@@ -10,8 +10,10 @@ use App\Filament\Resources\Servers\Pages\EditServer;
 use App\Filament\Resources\Servers\Pages\ListServers;
 use App\Filament\Resources\Servers\Pages\ViewServer;
 use App\Filament\Resources\Servers\ServerResource;
+use App\Models\Domain;
 use App\Models\Environment;
 use App\Models\EnvironmentServer;
+use App\Models\Hostname;
 use App\Models\Provider;
 use App\Models\Server;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -80,6 +82,18 @@ class ServerFlowTest extends TestCase
             ->assertOk()
             ->assertSee('Geraakt bij uitval')
             ->assertSee(e($environment->full_name).": draait op {$server->name} (App)", false);
+    }
+
+    public function test_the_view_page_shows_the_environments_that_have_their_mail_on_the_server(): void
+    {
+        $this->signIn();
+        $server = Server::factory()->create(['name' => 'mail-1']);
+        $environment = Environment::factory()->create();
+        Hostname::factory()->for(Domain::factory()->create(['name' => 'example.com', 'mail_server_id' => $server->id]))->create(['environment_id' => $environment->id]);
+
+        $this->get(ServerResource::getUrl('view', ['record' => $server]))
+            ->assertOk()
+            ->assertSee(e($environment->full_name).': mail van example.com op mail-1', false);
     }
 
     public function test_a_server_of_our_own_has_no_contract_and_is_reached_over_its_private_address(): void

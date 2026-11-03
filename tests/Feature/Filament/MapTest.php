@@ -259,6 +259,38 @@ class MapTest extends TestCase
             ->assertSee('&lt;script&gt;', false);
     }
 
+    public function test_the_mail_server_of_a_domain_hangs_from_its_environments_and_goes_down_with_the_domain(): void
+    {
+        $this->signIn();
+        ['project' => $project, 'production' => $production, 'hostname' => $hostname] = $this->inventory();
+        $mail = Server::factory()->create(['name' => 'mail-01']);
+        $hostname->domain->update(['mail_server_id' => $mail->id]);
+
+        $map = app(InfrastructureMap::class)->build(projectId: $project->id);
+
+        $this->assertContains('mail-01', collect($map['columns']['servers'])->pluck('label'));
+        $this->assertContains(['from' => "server-{$mail->id}", 'to' => "environment-{$production->id}", 'label' => null, 'kind' => 'mail'], $map['edges']);
+
+        $impact = Livewire::test(Map::class)->instance()->impact($mail->id);
+
+        $this->assertEqualsCanonicalizing(["environment-{$production->id}", "domain-{$hostname->domain_id}", "server-{$mail->id}"], $impact['nodes']);
+        $this->assertSame('alpha.test → mail-01', $impact['items'][0]['path']);
+    }
+
+    public function test_a_server_the_environment_runs_on_draws_one_line_also_with_the_mail_of_its_domain_there(): void
+    {
+        ['production' => $production, 'app' => $app, 'hostname' => $hostname] = $this->inventory();
+        $hostname->domain->update(['mail_server_id' => $app->id]);
+
+        $edges = collect(app(InfrastructureMap::class)->build()['edges'])->where('from', "server-{$app->id}")->where('to', "environment-{$production->id}");
+
+        $this->assertSame(['runs'], $edges->pluck('kind')->all());
+
+        // its domain still lights up with the server
+        $this->signIn();
+        $this->assertContains("domain-{$hostname->domain_id}", Livewire::test(Map::class)->instance()->impact($app->id)['nodes']);
+    }
+
     /**
      * Alpha: production on app-01, which needs opslag-01 (NFS); staging on
      * test-01; one hostname on production.
