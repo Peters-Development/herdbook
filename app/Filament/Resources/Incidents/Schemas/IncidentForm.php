@@ -46,7 +46,7 @@ class IncidentForm
                     ->schema([
                         Textarea::make('impact')
                             ->label(__('Impact'))
-                            ->helperText(__('Who noticed what, and for how long?'))
+                            ->explain(__('Who noticed what, and for how long?'))
                             ->rows(3)->maxLength(10000)
                             ->rules([new NoSecretMaterial]),
                         MarkdownEditor::make('root_cause')->label(__('Root cause'))->rules([new NoSecretMaterial]),

@@ -46,7 +46,7 @@ final class RenewalSchema
     public static function formSection(?string $heading = null, ?string $description = null, int $term = 12): Section
     {
         return Section::make($heading ?? __('Renewal'))
-            ->description(__('You enter the expiry date yourself. "Renew" moves it on by one term.').($description ? " {$description}" : ''))
+            ->explain(__('You enter the expiry date yourself. "Renew" moves it on by one term.').($description ? " {$description}" : ''))
             ->columns(2)
             ->schema([
                 DatePicker::make('expires_on')
@@ -69,7 +69,7 @@ final class RenewalSchema
                     ->minValue(1)
                     ->maxValue(365)
                     ->placeholder(__('From the provider'))
-                    ->helperText(__("Default: the provider's lead time, or :days days.", ['days' => config('herdbook.renewal.default_lead_days')])),
+                    ->explain(__("Default: the provider's lead time, or :days days.", ['days' => config('herdbook.renewal.default_lead_days')])),
             ]);
     }
 

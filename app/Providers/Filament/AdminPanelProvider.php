@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\Auth\EditProfile;
+use App\Filament\Support\Hints;
 use App\Filament\Support\InitialsAvatarProvider;
 use App\Http\Middleware\SetUserLocale;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
@@ -34,6 +35,8 @@ class AdminPanelProvider extends PanelProvider
 {
     public function boot(): void
     {
+        Hints::register();
+
         // The app's own assets are versioned by their content: a deploy that
         // changes one is never served from a browser cache.
         FilamentAsset::appVersion(hash('xxh128', implode('', array_map(
@@ -80,6 +83,7 @@ class AdminPanelProvider extends PanelProvider
             ->defaultThemeMode(ThemeMode::Dark)
             ->login()
             ->profile(EditProfile::class, isSimple: false)
+            ->userMenuItems(['hints' => Hints::toggleAction()])
             ->multiFactorAuthentication(
                 AppAuthentication::make()
                     ->brandName('Herdbook')

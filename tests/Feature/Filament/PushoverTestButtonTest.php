@@ -100,7 +100,7 @@ class PushoverTestButtonTest extends TestCase
 
         $this->profile()
             ->assertActionHidden($this->button())
-            ->assertSee('Herdbook heeft nog geen app-token');
+            ->assertSee('Niet ingericht: PUSHOVER_APP_TOKEN in .env');
     }
 
     private function profile(): mixed

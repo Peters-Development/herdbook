@@ -46,7 +46,7 @@ final class LinkSchema
         $relationships ??= array_keys(self::RELATIONSHIPS);
 
         return Section::make(__('Related to'))
-            ->description(__('Link it to the :items it is about. It then shows up on their page.', ['items' => self::describe($relationships)]))
+            ->explain(__('Link it to the :items it is about. It then shows up on their page.', ['items' => self::describe($relationships)]))
             ->columns(2)
             ->collapsible()
             ->schema(array_map(self::select(...), $relationships));

@@ -61,7 +61,7 @@ class ServerForm
                             ->relationship('network', 'name')
                             ->searchable()
                             ->preload()
-                            ->helperText(__('Where the server is, such as an office network. A VPS only needs its provider.'))
+                            ->explain(__('Where the server is, such as an office network. A VPS only needs its provider.'))
                             ->columnSpanFull(),
                         TextInput::make('public_ipv4')->label(__('Public IPv4'))->ipv4()->extraInputAttributes(['class' => 'fi-font-mono']),
                         TextInput::make('public_ipv6')->label(__('Public IPv6'))->ipv6()->extraInputAttributes(['class' => 'fi-font-mono']),
@@ -86,7 +86,7 @@ class ServerForm
                 RenewalSchema::formSection(__('Contract'))
                     ->visible(fn (Get $get, ?Server $record): bool => filled($get('provider_id')) || filled($get('expires_on')) || (bool) $record?->hasContract()),
                 Section::make(__('Depends on'))
-                    ->description(__('Servers this server needs, such as storage over NFS or a WireGuard tunnel.'))
+                    ->explain(__('Servers this server needs, such as storage over NFS or a WireGuard tunnel.'))
                     ->columnSpanFull()
                     ->schema([
                         Repeater::make('dependencies')

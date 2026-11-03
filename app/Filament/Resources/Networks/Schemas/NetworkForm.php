@@ -46,7 +46,7 @@ class NetworkForm
                             ->searchable()
                             ->preload()
                             ->live()
-                            ->helperText(__('Who you call when the line is down: a provider that supplies :kind.', ['kind' => ProviderKind::Internet->getLabel()])),
+                            ->explain(__('Who to call when the line is down (a provider that supplies :kind).', ['kind' => ProviderKind::Internet->getLabel()])),
                     ]),
                 CostSchema::formSection(CostPeriod::Month),
                 // A LAN without a line of its own has no contract (Network::hasContract()). The
@@ -69,12 +69,12 @@ class NetworkForm
                             ->extraInputAttributes(['class' => 'fi-font-mono']),
                         TextInput::make('public_ip')
                             ->label(__('Static IP address'))
-                            ->helperText(__('The public address of the line, if it has a static IP.'))
+                            ->explain(__('The public address of the line, if it has a static IP.'))
                             ->ip()
                             ->extraInputAttributes(['class' => 'fi-font-mono']),
                     ]),
                 Section::make(__('Addresses'))
-                    ->description(__('Other devices in this network, such as the router, a NAS or a printer. You put a server in the network from its own page; if it has the same address as a device, the network\'s page says so.'))
+                    ->explain(__('Other devices, such as the router, a NAS or a printer. A server joins the network from its own page.'))
                     ->columnSpanFull()
                     ->schema([
                         Repeater::make('addresses')

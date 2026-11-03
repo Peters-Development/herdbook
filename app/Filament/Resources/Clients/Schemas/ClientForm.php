@@ -26,7 +26,7 @@ class ClientForm
                             ->label(__('External link'))
                             ->url()
                             ->maxLength(255)
-                            ->helperText(__('Where to find this client in your invoicing or CRM tool.')),
+                            ->explain(__('Where to find this client in your invoicing or CRM tool.')),
                     ]),
                 Section::make(__('Contact during outages'))
                     ->columns(3)
