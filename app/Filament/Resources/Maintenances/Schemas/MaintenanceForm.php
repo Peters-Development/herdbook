@@ -42,16 +42,16 @@ class MaintenanceForm
                             ->default(fn () => self::requestedStatus() === MaintenanceStatus::Planned ? null : now())
                             ->required(),
                         MaintenanceSchema::end()
-                            ->helperText(__('For a maintenance window; optional.')),
+                            ->explain(__('For a maintenance window; optional.')),
                     ]),
                 Section::make(__('Work plan'))
-                    ->description(__('What is going to happen: the steps, what goes down and how to roll back.'))
+                    ->explain(__('What is going to happen: the steps, what goes down and how to roll back.'))
                     ->collapsible()
                     ->schema([
                         MarkdownEditor::make('plan')->label(__('Work plan'))->hiddenLabel()->rules([new NoSecretMaterial]),
                     ]),
                 Section::make(__('What was done'))
-                    ->description(__('What stood out and what is still to do.'))
+                    ->explain(__('What stood out and what is still to do.'))
                     ->collapsible()
                     ->schema([
                         MaintenanceSchema::report()->hiddenLabel(),

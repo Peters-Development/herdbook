@@ -41,7 +41,7 @@ class CredentialReferenceForm
                         TextInput::make('vault_item_id')
                             ->label(__('Vaultwarden item'))
                             ->placeholder(__('Paste the link to the item, or its ID'))
-                            ->helperText(__('Open the item in the web vault and copy the link from the address bar.'))
+                            ->explain(__('Open the item in the web vault and copy the link from the address bar.'))
                             ->dehydrateStateUsing(fn (?string $state): ?string => CredentialReference::extractVaultItemId($state))
                             ->rules([fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
                                 $itemId = CredentialReference::extractVaultItemId($value);

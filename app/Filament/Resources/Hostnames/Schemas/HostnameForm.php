@@ -79,7 +79,7 @@ class HostnameForm
                 ->label(__('Redirects to'))
                 ->extraInputAttributes(['class' => 'fi-font-mono'])
                 ->placeholder($domain->name ?? 'example.com')
-                ->helperText(__('Only if this name sends visitors elsewhere, like www to the name without www. Monitoring then checks the redirect.'))
+                ->explain(__('Only if this name sends visitors elsewhere, like www to the name without www. Monitoring then checks the redirect.'))
                 ->maxLength(253)
                 ->datalist(fn (): array => Hostname::query()->where('fqdn', 'not like', '*.%')->orderBy('fqdn')->pluck('fqdn')->all())
                 ->regex('/^'.Hostname::NAME_PATTERN.'$/i')
@@ -91,12 +91,12 @@ class HostnameForm
                 }]),
             Toggle::make('behind_proxy')
                 ->label(__('Behind a proxy (Cloudflare)'))
-                ->helperText(__('The DNS record then does not point to the server itself.'))
+                ->explain(__('The DNS record then does not point to the server itself.'))
                 ->inline(false),
             // Under a local domain every name is local (Hostname::booted()).
             Toggle::make('local_only')
                 ->label(__('Only on the local network'))
-                ->helperText(__("A name in your local DNS only, with a self-signed certificate or one of a CA of your own (like Caddy's). Turn on monitoring then creates just a check of the page that accepts its certificate."))
+                ->explain(__("Only in your local DNS, with a self-signed certificate or one of your own CA (such as Caddy's). Turning on monitoring then creates just a page check that accepts its certificate."))
                 ->hidden(fn (Get $get): bool => $domain?->local_only ?? (filled($get('domain_id')) && (bool) Domain::query()->whereKey($get('domain_id'))->value('local_only')))
                 ->inline(false),
             TagsInput::make('expected_ips')

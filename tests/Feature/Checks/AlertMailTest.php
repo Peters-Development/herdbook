@@ -368,7 +368,7 @@ class AlertMailTest extends TestCase
         config(['mail.default' => 'log']);
         $this->signIn();
 
-        Livewire::test(EditProfile::class)->assertSee('Herdbook kan nog niet mailen');
+        Livewire::test(EditProfile::class)->assertSee('Niet ingericht: MAIL_* in .env (een log-mailer telt niet)');
     }
 
     /**

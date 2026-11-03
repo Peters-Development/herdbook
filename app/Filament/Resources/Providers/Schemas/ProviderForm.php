@@ -36,7 +36,7 @@ class ProviderForm
                             ->minValue(1)
                             ->maxValue(365)
                             ->placeholder((string) config('herdbook.renewal.default_lead_days'))
-                            ->helperText(__('Applies to the domains and contracts with this provider, unless they set their own.')),
+                            ->explain(__('Applies to the domains and contracts with this provider, unless they set their own.')),
                         Textarea::make('notes')->label(__('Notes'))->rows(3)->maxLength(10000)->rules([new NoSecretMaterial])->columnSpanFull(),
                     ]),
             ]);

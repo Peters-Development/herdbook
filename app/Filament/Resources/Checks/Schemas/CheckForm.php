@@ -118,7 +118,7 @@ class CheckForm
                             ->columnSpanFull(),
                         TextInput::make('settings.keyword')
                             ->label(__('Keyword'))
-                            ->helperText(__('Must appear on the page (not case-sensitive).'))
+                            ->explain(__('Must appear on the page (not case-sensitive).'))
                             ->visible(fn (Get $get): bool => self::type($get('type')) === CheckType::Keyword)
                             ->required(fn (Get $get): bool => self::type($get('type')) === CheckType::Keyword)
                             ->maxLength(255),
@@ -137,7 +137,7 @@ class CheckForm
                         TextInput::make('settings.redirects_to')
                             ->label(__('Must redirect to'))
                             ->placeholder(__('Default: the page itself must work'))
-                            ->helperText(__('The check then does not follow the redirect, but checks that it points to this name.'))
+                            ->explain(__('Checks that the redirect points to this name, instead of following it.'))
                             ->extraInputAttributes(['class' => 'fi-font-mono'])
                             ->maxLength(253)
                             ->regex('/^'.Hostname::NAME_PATTERN.'$/i')
@@ -149,7 +149,7 @@ class CheckForm
                             ->label(__('Accept any certificate'))
                             // A new check of a local name: its certificate is one the host does not trust.
                             ->default(fn (): bool => self::isLocal(RequestedRecord::id('hostname', Hostname::class)))
-                            ->helperText(__("For a self-signed certificate or one of a CA of your own, like Caddy's on the local network: the page must still answer, but its certificate is not verified."))
+                            ->explain(__("For a self-signed certificate or one of your own CA (such as Caddy's): the page must still answer, but the certificate is not verified."))
                             ->visible(fn (Get $get): bool => self::type($get('type'))?->isHttp() ?? false)
                             ->columnSpanFull(),
                         TextInput::make('settings.warn_days')

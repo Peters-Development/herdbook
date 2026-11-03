@@ -241,6 +241,7 @@ Herdbook loads nothing from other servers. Fonts (IBM Plex) are self-hosted in `
 
 - **Yellow is the brand, not a status.** Filament's `primary` color is yellow and `warning` is orange, so the two never read as the same thing. A status enum never returns `primary` as its color.
 - **Technical values in a monospace font**: IP addresses, hostnames, SSH commands, check targets and hosts get `->fontFamily(FontFamily::Mono)` in tables and infolists, and `->extraInputAttributes(['class' => 'fi-font-mono'])` on inputs.
+- **Explanations are hints**: what explains a field or a form section goes through `->explain(__('…'))` (`App\Filament\Support\Hints`), not `->helperText()` or `->description()`, so an account can hide them. Keep them to one short sentence where you can; the docs hold the rest. What the app says about its own state (a missing token, the amount per month) is no hint: use `->helperText()` or `->hint()`, so it always shows.
 
 <a name="adding-a-renewable-model"></a>
 ## Adding a Renewable Model

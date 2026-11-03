@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'locale', 'password', 'pushover_user_key', 'receives_critical_alerts', 'receives_alert_mail'])]
+#[Fillable(['name', 'email', 'locale', 'shows_hints', 'password', 'pushover_user_key', 'receives_critical_alerts', 'receives_alert_mail'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery, HasLocalePreference
 {
@@ -31,6 +31,7 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
      */
     protected $attributes = [
         'locale' => null,
+        'shows_hints' => true,
     ];
 
     /**
@@ -62,6 +63,7 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
     {
         return [
             'email_verified_at' => 'datetime',
+            'shows_hints' => 'boolean',
             'password' => 'hashed',
             'receives_critical_alerts' => 'boolean',
             'receives_alert_mail' => 'boolean',

@@ -58,7 +58,7 @@ class DomainForm
                         self::mailServerField(),
                         Toggle::make('local_only')
                             ->label(__('Only on the local network'))
-                            ->helperText(__('Registered nowhere: a domain in your local DNS only, such as home.arpa. It has no registrar, costs or renewal (they are cleared), and every name under it is local, until you turn this off again.'))
+                            ->explain(__('Only in your local DNS, such as home.arpa: no registrar, costs or renewal (they are cleared), and every name under it is local.'))
                             ->live()
                             ->columnSpanFull(),
                         Textarea::make('notes')
@@ -90,6 +90,6 @@ class DomainForm
                 ->pluck('name', 'id')
                 ->all())
             ->searchable()
-            ->helperText(__('Where the mail of this domain runs when that is not a server of its projects, such as a hosting package for mail and DNS. An outage there counts for the projects of its hostnames. Leave it empty when the mail runs on the server of the website, or with a mail service such as Google Workspace (add that as a subscription).'));
+            ->explain(__('Only when the mail runs somewhere other than the website\'s server, such as on a hosting package (a service like Google Workspace is a subscription). An outage there counts for the projects of the domain.'));
     }
 }

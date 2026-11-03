@@ -45,14 +45,20 @@ class EditProfile extends BaseEditProfile
                     ->placeholder(fn (): string => __('Default (:language)', [
                         'language' => config('herdbook.locales')[config('herdbook.default_locale')] ?? config('herdbook.default_locale'),
                     ])),
+                Toggle::make('shows_hints')
+                    ->label(__('Show explanations'))
+                    ->explain(__('Under the inputs. Off, they move to an icon next to the label or heading.')),
                 Section::make(__('Alerts'))
-                    ->description(__('An alert goes out through the first channel that works, and only through that one. Critical checks (production down): Pushover, then ntfy, then email. Everything else: ntfy, then email, then Pushover. On an iPhone, only Pushover breaks through Do Not Disturb.'))
+                    ->explain(__('An alert goes out through the first channel that works. Critical: Pushover, ntfy, email. Everything else: ntfy, email, Pushover. On an iPhone, only Pushover breaks through Do Not Disturb.'))
                     ->schema([
                         TextInput::make('pushover_user_key')
                             ->label(__('Pushover user key'))
-                            ->helperText(fn (): string => filled(config('herdbook.alerts.pushover_token'))
-                                ? __('At the top of the Pushover app or on pushover.net. The bell next to it sends a test alert, even before you save.')
-                                : __('At the top of the Pushover app or on pushover.net. Herdbook has no application token yet (PUSHOVER_APP_TOKEN in .env): until then, nothing goes out through Pushover.'))
+                            ->explain(fn (): string => filled(config('herdbook.alerts.pushover_token'))
+                                ? __('At the top of the Pushover app or on pushover.net. The bell sends a test alert, even before you save.')
+                                : __('At the top of the Pushover app or on pushover.net.'))
+                            // What the app is missing is no hint: it always shows.
+                            ->hint(fn (): ?string => filled(config('herdbook.alerts.pushover_token')) ? null : __('Not set up: PUSHOVER_APP_TOKEN in .env'))
+                            ->hintColor('warning')
                             ->regex(self::USER_KEY)
                             ->validationMessages(['regex' => __('A user key is 30 letters and digits.')])
                             ->maxLength(50)
@@ -61,9 +67,9 @@ class EditProfile extends BaseEditProfile
                             ->label(__('Receive alerts through Pushover')),
                         Toggle::make('receives_alert_mail')
                             ->label(__('Receive alerts by email'))
-                            ->helperText(fn (): string => app(MailChannel::class)->canDeliver()
-                                ? __('To the email address above, for the alerts that go out by email: when ntfy (and for critical checks Pushover) is not set up or fails.')
-                                : __('Herdbook cannot send mail yet: set MAIL_* in .env (a mailer that writes to the log does not count). Until then, nothing goes out by email.')),
+                            ->explain(__('To the email address above, when ntfy (and for critical checks Pushover) is not set up or fails.'))
+                            ->hint(fn (): ?string => app(MailChannel::class)->canDeliver() ? null : __('Not set up: MAIL_* in .env (a log mailer does not count)'))
+                            ->hintColor('warning'),
                     ]),
             ]);
     }

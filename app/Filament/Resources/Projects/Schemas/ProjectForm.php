@@ -68,11 +68,11 @@ class ProjectForm
                             ->maxLength(255),
                         Toggle::make('on_status_screen')
                             ->label(__('On the status screen'))
-                            ->helperText(__('The name and the state of production appear on the status screen. Anyone who can see the screen can see them.'))
+                            ->explain(__('Shows the name and the state of production on the status screen: anyone who can see the screen sees them.'))
                             ->columnSpanFull(),
                         Toggle::make('unmonitored')
                             ->label(__('Does not need monitoring'))
-                            ->helperText(__('For something that needs no checks, such as a server on your own network. Without checks, the project then shows ":unmonitored" instead of ":unwatched", and does not count as a gap. If checks are added after all, they count as usual.', [
+                            ->explain(__('For something that needs no checks, such as a server on your own network: it then shows ":unmonitored" instead of ":unwatched", and does not count as a gap.', [
                                 'unmonitored' => HealthState::Unmonitored->getLabel(),
                                 'unwatched' => HealthState::Unwatched->getLabel(),
                             ]))

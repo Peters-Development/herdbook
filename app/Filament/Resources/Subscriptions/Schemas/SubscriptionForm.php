@@ -34,7 +34,7 @@ class SubscriptionForm
             ->columns(2)
             ->components([
                 Section::make(__('Subscription'))
-                    ->description(__('A license, mail hosting, a SaaS plan or storage: what you pay for besides servers and domains.'))
+                    ->explain(__('A license, mail hosting, a SaaS plan or storage: what you pay for besides servers and domains.'))
                     ->columns(2)
                     ->schema([
                         TextInput::make('name')

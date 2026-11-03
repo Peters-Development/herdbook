@@ -42,7 +42,7 @@ final class CostSchema
         [$amount, $period] = self::fields($default);
 
         return Section::make(__('Costs'))
-            ->description(__('Excluding VAT. A monthly amount counts every month, a yearly amount at every renewal.'))
+            ->explain(__('A monthly amount counts every month, a yearly amount at every renewal.'))
             ->columns(2)
             ->schema([
                 $amount,
@@ -189,7 +189,7 @@ final class CostSchema
             ->label(__('Set amount'))
             ->icon(Heroicon::OutlinedCurrencyEuro)
             ->modalHeading(__('Set amount'))
-            ->modalDescription(__('For everything you selected, excluding VAT.'))
+            ->modalDescription(__('For everything you selected.'))
             ->modalSubmitActionLabel(__('Set'))
             ->schema(array_map(fn (TextInput|Select $field): TextInput|Select => $field->required(), self::fields($default)))
             ->action(function (Collection $records, array $data): void {
@@ -235,7 +235,9 @@ final class CostSchema
                 ->numeric()
                 ->minValue(0)
                 ->maxValue(99999999.99)
-                ->prefix(config('herdbook.currency_symbol')),
+                ->prefix(config('herdbook.currency_symbol'))
+                // A rule for what goes in, not an explanation: it always shows.
+                ->hint(__('excluding VAT')),
             Select::make('cost_period')
                 ->label(__('Billing period'))
                 ->options(CostPeriod::class)

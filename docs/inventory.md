@@ -33,6 +33,8 @@ The **project** is the center. A project has environments (production, staging, 
 
 The inventory lives in the **Inventory** menu group (projects, servers, domains, hostnames, checks, subscriptions and networks). Clients and providers live under **Settings**, because you set them up once and rarely touch them again.
 
+Many inputs have a short explanation under them. Once you know them, choose **Hide explanations** in the user menu (top right): each explanation then moves to an info icon next to its label or section heading, where you can still read it by pointing at it. **Show explanations** brings them back. The page reloads, so save what you were typing first; the setting is per account, and is also in your profile. What Herdbook has to tell you about its own setup, such as a missing Pushover token, always shows.
+
 <a name="the-model-at-a-glance"></a>
 ## The Model at a Glance
 
