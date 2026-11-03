@@ -2,14 +2,19 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Enums\CheckState;
+use App\Enums\CheckType;
+use App\Enums\HealthState;
 use App\Enums\ProviderKind;
 use App\Enums\RenewalStatus;
 use App\Enums\ServerRole;
+use App\Enums\ServerStatus;
 use App\Filament\Resources\Servers\Pages\CreateServer;
 use App\Filament\Resources\Servers\Pages\EditServer;
 use App\Filament\Resources\Servers\Pages\ListServers;
 use App\Filament\Resources\Servers\Pages\ViewServer;
 use App\Filament\Resources\Servers\ServerResource;
+use App\Models\Check;
 use App\Models\Domain;
 use App\Models\Environment;
 use App\Models\EnvironmentServer;
@@ -201,5 +206,61 @@ class ServerFlowTest extends TestCase
 
         Livewire::test(ListServers::class)
             ->assertTableColumnStateSet('environments_count', 1, $server);
+    }
+
+    public function test_the_list_shows_how_each_server_is_doing_and_who_uses_it(): void
+    {
+        $this->signIn();
+        $mail = Server::factory()->create(['name' => 'mail-1']);
+        $quiet = Server::factory()->create(['name' => 'quiet-1']);
+        EnvironmentServer::create(['environment_id' => Environment::factory()->create()->id, 'server_id' => $mail->id, 'role' => ServerRole::App]);
+        Hostname::factory()->for(Domain::factory()->create(['mail_server_id' => $mail->id]))->create(['environment_id' => Environment::factory()->create()->id]);
+        Check::factory()->forServer($mail, CheckType::Tcp)->create()->forceFill(['state' => CheckState::Down, 'last_checked_at' => now()])->save();
+        Check::factory()->forServer($mail)->create()->forceFill(['state' => CheckState::Up, 'last_checked_at' => now()])->save();
+
+        Livewire::test(ListServers::class)
+            ->assertTableColumnStateSet('health', HealthState::Down, $mail)
+            ->assertTableColumnStateSet('health', HealthState::Unwatched, $quiet)
+            ->assertTableColumnStateSet('roles', ['App', 'Mail'], $mail)
+            ->assertTableColumnStateSet('environments_count', 2, $mail)
+            ->assertTableColumnStateSet('checks_count', 2, $mail)
+            ->assertSee('mail van 1 domein')
+            ->filterTable('health', HealthState::Down->value)
+            ->assertCanSeeTableRecords([$mail])
+            ->assertCanNotSeeTableRecords([$quiet])
+            ->filterTable('health', HealthState::Unwatched->value)
+            ->assertCanSeeTableRecords([$quiet])
+            ->assertCanNotSeeTableRecords([$mail]);
+    }
+
+    public function test_a_server_out_of_use_shows_no_monitoring_state_and_is_no_gap(): void
+    {
+        $this->signIn();
+        $old = Server::factory()->create(['status' => ServerStatus::Decommissioned]);
+        $quiet = Server::factory()->create();
+        // an active check left behind on it, down
+        Check::factory()->forServer($old)->create()->forceFill(['state' => CheckState::Down, 'last_checked_at' => now()])->save();
+
+        Livewire::test(ListServers::class)
+            ->assertTableColumnStateSet('health', null, $old)
+            ->filterTable('health', HealthState::Down->value)
+            ->assertCanNotSeeTableRecords([$old])
+            ->filterTable('health', HealthState::Unwatched->value)
+            ->assertCanSeeTableRecords([$quiet])
+            ->assertCanNotSeeTableRecords([$old]);
+    }
+
+    public function test_the_problem_checks_are_named_and_mail_without_environments_counts_none(): void
+    {
+        $this->signIn();
+        $server = Server::factory()->create();
+        Domain::factory()->create(['mail_server_id' => $server->id]);
+        Check::factory()->forServer($server, CheckType::Tcp)->create(['name' => 'IMAPS 993'])->forceFill(['state' => CheckState::Down, 'last_checked_at' => now()])->save();
+
+        Livewire::test(ListServers::class)
+            ->assertTableColumnStateSet('environments_count', 0, $server)
+            ->assertTableColumnStateSet('roles', ['Mail'], $server)
+            ->assertSee('mail van 1 domein')
+            ->assertSeeHtml('IMAPS 993');
     }
 }

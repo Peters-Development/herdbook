@@ -122,6 +122,8 @@ A server is a VPS, a dedicated server or a machine on your own network. Besides 
 
 The server page brings together what you need when something is wrong with it: its addresses and SSH command, what **runs here** (every environment with its role, and the domains whose [mail](#mail-server) runs here), what is **affected by an outage**, its dependencies in both directions, when maintenance was last done, and its checks, incidents, maintenance, documents and credentials.
 
+The list of servers shows, per server, how its own checks are doing (**Monitoring**: the same state as on the map, from its pings and ports, not from what runs on it), its roles, how many environments use it, and whether it carries the mail of domains. Hover over a problem to see which checks are behind it. Filter on **Monitoring** to find the servers with a problem, or the ones that nothing watches yet (*Not monitored*); a decommissioned server shows no state and is left out of that filter. Location, contract date and the number of checks are columns you can show.
+
 <a name="roles"></a>
 ### Roles
 
