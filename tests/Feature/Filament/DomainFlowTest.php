@@ -4,16 +4,19 @@ namespace Tests\Feature\Filament;
 
 use App\Enums\ProviderKind;
 use App\Enums\RenewalStatus;
+use App\Enums\ServerStatus;
 use App\Filament\Resources\Domains\Pages\EditDomain;
 use App\Filament\Resources\Domains\Pages\ListDomains;
 use App\Filament\Resources\Domains\Pages\ViewDomain;
 use App\Filament\Resources\Domains\RelationManagers\HostnamesRelationManager;
 use App\Filament\Resources\Hostnames\Pages\CreateHostname;
+use App\Filament\Resources\Servers\ServerResource;
 use App\Models\Domain;
 use App\Models\Environment;
 use App\Models\Hostname;
 use App\Models\Project;
 use App\Models\Provider;
+use App\Models\Server;
 use Filament\Actions\Testing\TestAction;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -164,5 +167,87 @@ class DomainFlowTest extends TestCase
         Livewire::test(HostnamesRelationManager::class, ['ownerRecord' => $domain, 'pageClass' => ViewDomain::class])
             ->callAction(TestAction::make('create')->table(), ['fqdn' => '*.example.net'])
             ->assertHasNoFormErrors();
+    }
+
+    public function test_the_mail_server_is_chosen_on_the_domain_and_shown_on_both_sides(): void
+    {
+        $this->signIn();
+        $domain = Domain::factory()->create(['name' => 'example.com']);
+        $mail = Server::factory()->create(['name' => 'mail-1']);
+
+        Livewire::test(EditDomain::class, ['record' => $domain->getRouteKey()])
+            ->fillForm(['mail_server_id' => $mail->id])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertTrue($domain->fresh()->mailServer->is($mail));
+
+        Livewire::test(ViewDomain::class, ['record' => $domain->getRouteKey()])
+            ->assertSee('Mailserver')
+            ->assertSee('mail-1');
+
+        $this->get(ServerResource::getUrl('view', ['record' => $mail]))
+            ->assertOk()
+            ->assertSee('Mail van')
+            ->assertSee('example.com')
+            // only mail runs here: no "nothing runs here" next to it
+            ->assertDontSee('Er draait niets op deze server.');
+    }
+
+    public function test_a_mail_server_that_does_not_exist_is_refused(): void
+    {
+        $this->signIn();
+        $domain = Domain::factory()->create();
+
+        Livewire::test(EditDomain::class, ['record' => $domain->getRouteKey()])
+            ->fillForm(['mail_server_id' => 999])
+            ->call('save')
+            ->assertHasFormErrors(['mail_server_id']);
+
+        $this->assertNull($domain->fresh()->mail_server_id);
+    }
+
+    public function test_a_bulk_action_sets_and_clears_the_mail_server_of_many_domains(): void
+    {
+        $this->signIn();
+        $mail = Server::factory()->create();
+        $domains = Domain::factory()->count(3)->create();
+        $other = Domain::factory()->create();
+
+        Livewire::test(ListDomains::class)
+            ->selectTableRecords($domains)
+            ->callAction(TestAction::make('setMailServer')->table()->bulk(), ['mail_server_id' => $mail->id])
+            ->assertNotified('Mailserver ingesteld voor 3 domeinen.');
+
+        $this->assertSame(3, $mail->mailDomains()->count());
+        $this->assertNull($other->fresh()->mail_server_id);
+
+        Livewire::test(ListDomains::class)
+            ->selectTableRecords([$domains->first()])
+            ->callAction(TestAction::make('setMailServer')->table()->bulk(), ['mail_server_id' => null]);
+
+        $this->assertNull($domains->first()->fresh()->mail_server_id);
+        $this->assertSame(2, $mail->mailDomains()->count());
+    }
+
+    public function test_a_server_out_of_use_is_not_offered_unless_it_already_is_the_mail_server(): void
+    {
+        $this->signIn();
+        $old = Server::factory()->create(['name' => 'old-mail', 'status' => ServerStatus::Decommissioned]);
+        $domain = Domain::factory()->create();
+
+        Livewire::test(EditDomain::class, ['record' => $domain->getRouteKey()])
+            ->fillForm(['mail_server_id' => $old->id])
+            ->call('save')
+            ->assertHasFormErrors(['mail_server_id']);
+
+        $kept = Domain::factory()->create(['mail_server_id' => $old->id]);
+
+        Livewire::test(EditDomain::class, ['record' => $kept->getRouteKey()])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        Livewire::test(ViewDomain::class, ['record' => $kept->getRouteKey()])
+            ->assertSee('old-mail (Uit gebruik)');
     }
 }

@@ -4,8 +4,10 @@ namespace App\Filament\Resources\Domains\Schemas;
 
 use App\Enums\CostPeriod;
 use App\Enums\ProviderKind;
+use App\Enums\ServerStatus;
 use App\Filament\Support\CostSchema;
 use App\Filament\Support\RenewalSchema;
+use App\Models\Server;
 use App\Rules\NoSecretMaterial;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -53,6 +55,7 @@ class DomainForm
                             ->relationship('dnsProvider', 'name', fn (Builder $query, ?Model $record) => $query->offering(ProviderKind::Dns, $record?->dns_provider_id))
                             ->searchable()
                             ->preload(),
+                        self::mailServerField(),
                         Toggle::make('local_only')
                             ->label(__('Only on the local network'))
                             ->helperText(__('Registered nowhere: a domain in your local DNS only, such as home.arpa. It has no registrar, costs or renewal (they are cleared), and every name under it is local, until you turn this off again.'))
@@ -68,5 +71,25 @@ class DomainForm
                 CostSchema::formSection(CostPeriod::Year)->hidden(fn (Get $get): bool => (bool) $get('local_only')),
                 RenewalSchema::formSection()->hidden(fn (Get $get): bool => (bool) $get('local_only')),
             ]);
+    }
+
+    /**
+     * Also in the bulk action of the domains table: options rather than a
+     * relationship, which needs a record. Not a server out of use, unless it
+     * is the current one.
+     */
+    public static function mailServerField(): Select
+    {
+        return Select::make('mail_server_id')
+            ->label(__('Mail server'))
+            ->options(fn (?Model $record): array => Server::query()
+                ->where(fn (Builder $query) => $query
+                    ->where('status', '!=', ServerStatus::Decommissioned)
+                    ->when($record?->mail_server_id, fn (Builder $query, int $id) => $query->orWhereKey($id)))
+                ->orderBy('name')
+                ->pluck('name', 'id')
+                ->all())
+            ->searchable()
+            ->helperText(__('Where the mail of this domain runs when that is not a server of its projects, such as a hosting package for mail and DNS. An outage there counts for the projects of its hostnames. Leave it empty when the mail runs on the server of the website, or with a mail service such as Google Workspace (add that as a subscription).'));
     }
 }

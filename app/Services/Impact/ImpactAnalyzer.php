@@ -2,7 +2,11 @@
 
 namespace App\Services\Impact;
 
+use App\Enums\ServerRole;
+use App\Models\Domain;
+use App\Models\Environment;
 use App\Models\EnvironmentServer;
+use App\Models\Hostname;
 use App\Models\Server;
 use App\Models\ServerDependency;
 use Illuminate\Support\Collection;
@@ -11,7 +15,8 @@ use Illuminate\Support\Collection;
  * "What does this affect?": which environments go down when a server (or
  * a whole network of them) does. Follows server dependencies (NFS,
  * WireGuard, ...) upwards to every server that needs the failing one,
- * directly or indirectly.
+ * directly or indirectly, and the environments that use those servers
+ * (usage(): they run on it, or the mail of their domain does).
  */
 final class ImpactAnalyzer
 {
@@ -45,21 +50,52 @@ final class ImpactAnalyzer
 
         // Tens of rows: all of them at once, the walk is in memory.
         $chains = self::chains(ServerDependency::query()->with(['server', 'dependsOn'])->get(), $serverIds);
+        $uses = self::usage()->filter(fn (ServerUse $use): bool => isset($chains[$use->serverId]));
 
-        return EnvironmentServer::query()
-            ->with(['environment.project', 'server'])
-            ->whereIn('server_id', array_keys($chains))
-            ->get()
-            ->map(fn (EnvironmentServer $assignment): ImpactedEnvironment => new ImpactedEnvironment(
-                $assignment->environment,
-                $assignment->server,
-                $assignment->role,
-                $chains[$assignment->server_id],
+        $environments = Environment::query()->with('project')->findMany($uses->pluck('environmentId')->unique())->keyBy('id');
+        $servers = Server::query()->findMany($uses->pluck('serverId')->unique())->keyBy('id');
+        $domains = Domain::query()->findMany($uses->pluck('domainId')->filter()->unique())->keyBy('id');
+
+        return $uses
+            ->map(fn (ServerUse $use): ImpactedEnvironment => new ImpactedEnvironment(
+                $environments[$use->environmentId],
+                $servers[$use->serverId],
+                $use->role,
+                $chains[$use->serverId],
+                $use->domainId === null ? null : $domains[$use->domainId],
             ))
-            ->sortBy(fn (ImpactedEnvironment $impact): int => count($impact->chain))
+            // The shortest chain, and running on it before mail through a domain.
+            ->sortBy(fn (ImpactedEnvironment $impact): int => count($impact->chain) * 2 + ($impact->domain === null ? 0 : 1))
             ->unique(fn (ImpactedEnvironment $impact): int => $impact->environment->id)
             ->sortBy(fn (ImpactedEnvironment $impact): string => $impact->environment->full_name)
             ->values();
+    }
+
+    /**
+     * Which environments use which server directly: those that run on it
+     * (in a role), and those with a hostname whose domain has its mail there
+     * (Domain::mailServer(), role Mail). The start of every reach: impact,
+     * health, incidents and the map.
+     *
+     * @return Collection<int, ServerUse>
+     */
+    public static function usage(): Collection
+    {
+        $assignments = EnvironmentServer::query()
+            ->toBase()
+            ->get(['environment_id', 'server_id', 'role'])
+            ->map(fn (object $row): ServerUse => new ServerUse((int) $row->environment_id, (int) $row->server_id, ServerRole::from($row->role)));
+
+        $mail = Hostname::query()
+            ->toBase()
+            ->join('domains', 'domains.id', '=', 'hostnames.domain_id')
+            ->whereNotNull('domains.mail_server_id')
+            ->whereNotNull('hostnames.environment_id')
+            ->distinct()
+            ->get(['hostnames.environment_id', 'domains.mail_server_id', 'domains.id as domain_id'])
+            ->map(fn (object $row): ServerUse => new ServerUse((int) $row->environment_id, (int) $row->mail_server_id, ServerRole::Mail, (int) $row->domain_id));
+
+        return $assignments->concat($mail)->values();
     }
 
     /**

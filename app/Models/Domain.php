@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\DB;
  * registered nowhere: no registrar, costs or renewal.
  */
 #[Fillable([
-    'name', 'client_id', 'registrar_id', 'dns_provider_id', 'local_only', 'cost_amount', 'cost_period',
+    'name', 'client_id', 'registrar_id', 'dns_provider_id', 'mail_server_id', 'local_only', 'cost_amount', 'cost_period',
     'expires_on', 'auto_renews', 'renewal_period_months', 'renewal_lead_days', 'renewal_stopped_at',
     'notes',
 ])]
@@ -91,6 +91,18 @@ class Domain extends Model implements Renewable
     public function dnsProvider(): BelongsTo
     {
         return $this->belongsTo(Provider::class, 'dns_provider_id');
+    }
+
+    /**
+     * Where its mail runs, when that is not on a server of an environment of
+     * its own (a hosting package for mail and DNS): an outage there reaches
+     * the environments of its hostnames (ImpactAnalyzer::usage()).
+     *
+     * @return BelongsTo<Server, $this>
+     */
+    public function mailServer(): BelongsTo
+    {
+        return $this->belongsTo(Server::class, 'mail_server_id');
     }
 
     public static function renewalProviderRelation(): string

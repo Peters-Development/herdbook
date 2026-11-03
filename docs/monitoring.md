@@ -233,7 +233,7 @@ The dashboard tiles, the projects list, the status page, the map and the status 
 For an environment, these checks count:
 
 - the checks of the hostnames that point to it;
-- the checks of the servers it runs on;
+- the checks of the servers it runs on, and of the [mail server](inventory.md#mail-server) of the domains of its hostnames;
 - the checks of the servers those servers depend on, directly or through a chain.
 
 The last rule is what makes [dependencies](inventory.md#dependencies-and-impact) useful: when `storage-1` stops answering pings, a project whose production runs on `app-2`, which mounts `storage-1` over NFS, shows the outage too, even though its own website check may not have noticed yet.

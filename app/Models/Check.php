@@ -286,8 +286,8 @@ class Check extends Model
 
     /**
      * Whether an outage counts as production: the hostname points at a
-     * production environment, or the server (or a server that needs it)
-     * runs one.
+     * production environment, or one uses the server (or a server that
+     * needs it).
      */
     public function watchesProduction(): bool
     {
@@ -327,9 +327,10 @@ class Check extends Model
     }
 
     /**
-     * The production environments on this server and on every server that
-     * needs it: a storage server that goes down takes down what mounts it.
-     * The same reach as "Affected by an outage" and ProjectHealth.
+     * The production environments that use this server or a server that
+     * needs it (also for the mail of their domain): a storage server that
+     * goes down takes down what mounts it. The same reach as "Affected by an
+     * outage" and ProjectHealth.
      *
      * @return Collection<int, Environment>
      */
@@ -339,13 +340,22 @@ class Check extends Model
             return collect();
         }
 
+        // Asked several times for one down event (CheckIncidents): once per check.
+        return once(fn (): Collection => $this->loadProductionEnvironments());
+    }
+
+    /**
+     * @return Collection<int, Environment>
+     */
+    private function loadProductionEnvironments(): Collection
+    {
         $servers = array_keys(ImpactAnalyzer::chains(ServerDependency::query()->get(['id', 'server_id', 'depends_on_id']), $this->server->id));
 
         // Not archived projects: their checks are paused, an outage pages nobody about them.
         return Environment::query()
             ->with('project')
             ->where('kind', EnvironmentKind::Production)
-            ->whereHas('servers', fn (Builder $query) => $query->whereIn('servers.id', $servers))
+            ->whereKey(ImpactAnalyzer::usage()->whereIn('serverId', $servers)->pluck('environmentId')->unique()->values()->all())
             ->whereHas('project', fn (Builder $query) => $query->where('status', '!=', ProjectStatus::Archived))
             ->orderBy('id')
             ->get();

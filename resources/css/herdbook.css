@@ -688,6 +688,12 @@ button.hb-node {
     stroke-dasharray: 4 3;
 }
 
+/* The mail of a domain: the environment does not run there. */
+.hb-edge-mail {
+    stroke-dasharray: 1 3;
+    stroke-linecap: round;
+}
+
 .hb-edge-label {
     font-size: 0.625rem;
     font-weight: 600;
