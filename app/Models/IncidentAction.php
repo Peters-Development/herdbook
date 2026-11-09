@@ -66,7 +66,10 @@ class IncidentAction extends Model
             'completed_via' => AgentToken::current()?->name,
         ]) === 1;
 
-        $this->refresh();
+        // Deleted meanwhile, it stays as it was read.
+        if (($fresh = $this->fresh()) !== null) {
+            $this->setRawAttributes($fresh->getAttributes(), sync: true);
+        }
 
         return $completed;
     }
