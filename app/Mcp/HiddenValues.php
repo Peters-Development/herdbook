@@ -329,6 +329,15 @@ class HiddenValues
         return $packed === false ? strtolower($ipv6) : (string) inet_ntop($packed);
     }
 
+    /**
+     * Whether a name has what could be an address in it: dotted numbers,
+     * colons between hex, or hex pairs of a MAC.
+     */
+    private static function holdsAddress(string $name): bool
+    {
+        return preg_match('/\d{1,3}(?:\.\d{1,3}){3}|[0-9A-Fa-f]{0,4}:[0-9A-Fa-f]{0,4}:|[0-9A-Fa-f]{2}(?:[:-][0-9A-Fa-f]{2}){5}/', $name) === 1;
+    }
+
     private function knowsUnicodeNames(): bool
     {
         $this->known();
@@ -384,9 +393,13 @@ class HiddenValues
             $add(strlen($hex) === 12 ? implode(':', str_split($hex, 2)) : null, $address->name);
         }
 
-        // A value records share names none of them: 192.168.1.1 is the gateway of many a network.
+        // A value records share names none of them: 192.168.1.1 is the gateway
+        // of many a network. Nor does one whose name holds an address ("LAN
+        // 10.0.10.0/24"): the mask would spell it out.
         $this->known = array_map(
-            fn (array $names): string => count($names) === 1 ? '['.__('address of :name', ['name' => array_key_first($names)]).']' : '['.__('address').']',
+            fn (array $names): string => count($names) === 1 && ! self::holdsAddress((string) array_key_first($names))
+                ? '['.__('address of :name', ['name' => array_key_first($names)]).']'
+                : '['.__('address').']',
             $owners,
         );
 

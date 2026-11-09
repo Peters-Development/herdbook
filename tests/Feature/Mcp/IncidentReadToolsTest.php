@@ -342,6 +342,19 @@ class IncidentReadToolsTest extends TestCase
         );
     }
 
+    public function test_a_mask_never_spells_out_an_address_in_the_name_it_gives(): void
+    {
+        $network = Network::factory()->create(['name' => 'LAN 10.0.10.0/24', 'subnet' => '10.0.10.0/24', 'gateway' => '10.0.10.1']);
+        NetworkAddress::query()->create(['network_id' => $network->id, 'name' => '10.0.10.20 (nas)', 'address' => '10.0.10.20']);
+        $incident = Incident::factory()->create(['impact' => 'gw 10.0.10.1 and nas 10.0.10.20 down']);
+        $incident->networks()->attach($network);
+
+        $found = $this->callToolSuccessfully($this->token, 'get_incident', ['id' => $incident->id]);
+
+        $this->assertSame('gw [adres] and nas [adres] down', $found['impact']);
+        $this->assertSame('LAN [adres]/24', $found['networks'][0]['name']);
+    }
+
     public function test_no_mask_is_masked_again(): void
     {
         // A name that is another server's provider hostname shows in the masks.

@@ -235,7 +235,8 @@ final class Serializer
             'projects' => self::references($incident->projects),
             'servers' => self::references($incident->servers),
             'domains' => self::references($incident->domains),
-            'networks' => self::references($incident->networks),
+            // A network named after its subnet ("LAN 10.0.10.0/24") reads masked.
+            'networks' => array_map(fn (array $network): array => [...$network, 'name' => (string) app(HiddenValues::class)->mask($network['name'])], self::references($incident->networks)),
             'clients' => self::references($incident->clients),
             'open_actions' => $incident->actions->whereNull('done_at')->count(),
             'created_by' => $incident->user?->name,
