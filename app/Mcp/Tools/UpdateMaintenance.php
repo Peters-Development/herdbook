@@ -45,7 +45,7 @@ class UpdateMaintenance extends Tool
     {
         return [
             'id' => $this->idSchema($schema),
-            'version' => $this->versionSchema($schema, 'Its "version" from get_maintenance, list_maintenance or the answer of your last change.')->required(),
+            'version' => $this->versionSchema($schema, 'always needed.')->required(),
             ...$this->workSchema($schema, partial: true),
             'plan' => $this->planSchema($schema, partial: true),
             'report' => $this->reportSchema($schema, partial: true),
@@ -56,7 +56,7 @@ class UpdateMaintenance extends Tool
     {
         $input = $this->validated($request, [
             'id' => $this->idRules(),
-            'version' => ['required', 'string', 'max:64'],
+            'version' => $this->versionRules(required: true),
             ...$this->workRules(partial: true),
             'plan' => $this->textRules(),
             'report' => $this->textRules(),
@@ -68,7 +68,7 @@ class UpdateMaintenance extends Tool
         }
 
         if ($maintenance->status === MaintenanceStatus::Cancelled) {
-            return Response::error(__('This maintenance was cancelled. Ask a person to set it back to planned in Herdbook.'));
+            return Response::error(__('This maintenance was called off. Ask a person to set it back to planned in Herdbook.'));
         }
 
         $changes = Arr::except($this->parseWork($input), ['id', 'version']);
@@ -87,7 +87,7 @@ class UpdateMaintenance extends Tool
             }
 
             return $updated;
-        });
+        }, attempts: 3);
 
         return match (true) {
             $updated => $this->answer($maintenance),

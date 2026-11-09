@@ -18,9 +18,20 @@ trait ChangesMaintenance
 {
     use FindsMaintenance, WritesMaintenance;
 
-    protected function versionSchema(JsonSchema $schema, string $description): Type
+    /**
+     * $when: when the tool needs it.
+     */
+    protected function versionSchema(JsonSchema $schema, string $when): Type
     {
-        return $schema->string()->max(64)->description($description);
+        return $schema->string()->max(64)->description('Its "version", from get_maintenance, list_maintenance or the answer of your last change to it; '.$when.' Refused when someone changed it since.');
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function versionRules(bool $required = false): array
+    {
+        return [$required ? 'required' : 'nullable', 'string', 'max:64'];
     }
 
     /**
@@ -49,7 +60,7 @@ trait ChangesMaintenance
         }
 
         if ($messages !== []) {
-            throw ValidationException::withMessages($messages);
+            throw self::named(ValidationException::withMessages($messages));
         }
     }
 

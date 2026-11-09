@@ -106,10 +106,15 @@ final class ActivityPresenter
         }
 
         $changes = $activity->attribute_changes;
-        $casts = self::castsOf($activity);
+        $subject = self::subjectModel($activity);
+        $casts = $subject?->getCasts() ?? [];
         $old = $changes?->get('old', []) ?? [];
 
+        // In the order of the form, not of the stored JSON: MySQL sorts its keys.
+        $order = array_flip($subject?->getFillable() ?? []);
+
         $lines = collect($changes?->get('attributes', []) ?? [])
+            ->sortKeysUsing(fn (string $a, string $b): int => [$order[$a] ?? PHP_INT_MAX, $a] <=> [$order[$b] ?? PHP_INT_MAX, $b])
             ->map(fn (mixed $value, string $attribute): string => self::label($attribute).': '
                 .self::value($attribute, $old[$attribute] ?? null, $casts[$attribute] ?? null)
                 .' → '.self::value($attribute, $value, $casts[$attribute] ?? null))
@@ -292,15 +297,14 @@ final class ActivityPresenter
     }
 
     /**
-     * The casts of the subject's model, so values are shown as the model sees them.
-     *
-     * @return array<string, string>
+     * An empty instance of the subject's model: its casts, so values are
+     * shown as the model sees them, and its fields in the order of the form.
      */
-    private static function castsOf(Activity $activity): array
+    private static function subjectModel(Activity $activity): ?Model
     {
         $class = Relation::getMorphedModel((string) $activity->subject_type);
 
-        return $class !== null && is_subclass_of($class, Model::class) ? (new $class)->getCasts() : [];
+        return $class !== null && is_subclass_of($class, Model::class) ? new $class : null;
     }
 
     private static function value(string $attribute, mixed $value, ?string $cast): string

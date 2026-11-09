@@ -81,7 +81,7 @@ class MaintenanceWriteToolsTest extends TestCase
     {
         return [
             'no offset' => ['2026-11-12T22:00', '2026-11-12 21:00:00'],
-            'with seconds' => ['2026-11-12T22:00:30', '2026-11-12 21:00:30'],
+            'seconds, dropped as in the panel' => ['2026-11-12T22:00:30', '2026-11-12 21:00:00'],
             'a space' => ['2026-11-12 22:00', '2026-11-12 21:00:00'],
             'Z' => ['2026-11-12T22:00:00Z', '2026-11-12 22:00:00'],
             'an offset' => ['2026-11-12T22:00:00+00:00', '2026-11-12 22:00:00'],
@@ -126,11 +126,11 @@ class MaintenanceWriteToolsTest extends TestCase
     public static function refusals(): array
     {
         return [
-            'done in the future' => [['tool' => 'log_maintenance', 'starts_at' => '2026-11-10T09:00'], 'Wat al gedaan is, kan niet in de toekomst liggen.'],
-            'end before start' => [['starts_at' => '2026-11-12T22:00', 'ends_at' => '2026-11-12T21:00'], 'Het einde kan niet vóór het begin liggen.'],
-            'after 2038' => [['starts_at' => '2039-01-01T10:00'], 'Kies een moment tussen 1970 en 2038.'],
+            'done in the future' => [['tool' => 'log_maintenance', 'starts_at' => '2026-11-10T09:00'], 'starts_at: Wat al gedaan is, kan niet in de toekomst liggen.'],
+            'end before start' => [['starts_at' => '2026-11-12T22:00', 'ends_at' => '2026-11-12T21:00'], 'ends_at: Het einde kan niet vóór het begin liggen.'],
+            'after 2038' => [['starts_at' => '2039-01-01T10:00'], 'starts_at: Kies een moment tussen 1970 en 2038.'],
             'year 0026' => [['starts_at' => '0026-11-12T10:00'], 'Kies een moment tussen 1970 en 2038.'],
-            'tomorrow' => [['starts_at' => 'tomorrow'], 'Geef een moment als 2026-11-12T22:00'],
+            'tomorrow' => [['starts_at' => 'tomorrow'], 'starts_at: Geef een moment als 2026-11-12T22:00'],
             'no such month' => [['starts_at' => '2026-13-45T25:61'], 'Geef een moment als 2026-11-12T22:00'],
             'no such day' => [['starts_at' => '2026-02-30T10:00'], 'Geef een moment als 2026-11-12T22:00'],
             'midnight as 24:00' => [['starts_at' => '2026-11-12T24:00'], 'Geef een moment als 2026-11-12T22:00'],
@@ -151,9 +151,9 @@ class MaintenanceWriteToolsTest extends TestCase
             'a long title' => [['title' => '255+'], 'Het veld title mag niet meer dan 255 tekens bevatten.'],
             'a long plan' => [['plan' => 'MAX_TEXT+1'], 'Het veld plan mag niet meer dan 10000 tekens bevatten.'],
             'a private key' => [['plan' => "-----BEGIN OPENSSH PRIVATE KEY-----\nb3Bl"], 'Vaultwarden'],
-            'a password' => [['plan' => 'Set DB_PASSWORD=a1B2a1B2a1B2a1B2a1B2 in .env'], 'Vaultwarden'],
-            'a token in the title' => [['title' => 'Rotate DB_PASSWORD=a1B2a1B2a1B2a1B2a1B2'], 'Vaultwarden'],
-            'an image' => [['plan' => '![x](https://elsewhere.example/x.png)'], 'Geen afbeeldingen of HTML'],
+            'a password' => [['plan' => 'Set DB_PASSWORD=a1B2a1B2a1B2a1B2a1B2 in .env'], 'plan: Dit lijkt een wachtwoord of token.'],
+            'a token in the title' => [['title' => 'Rotate DB_PASSWORD=a1B2a1B2a1B2a1B2a1B2'], 'title: Dit lijkt een wachtwoord of token.'],
+            'an image' => [['plan' => '![x](https://elsewhere.example/x.png)'], 'plan: Geen afbeeldingen of HTML'],
         ];
     }
 

@@ -83,7 +83,7 @@ class MaintenanceChangeToolsTest extends TestCase
         $done = Maintenance::factory()->create(['starts_at' => '2026-11-08 09:00:00']);
         $done->servers()->attach($this->server);
 
-        $this->assertSame('Wat al gedaan is, kan niet in de toekomst liggen.', $this->callToolError($this->token, 'update_maintenance', ['id' => $done->id, 'version' => $done->version(), 'starts_at' => '2026-11-10T09:00']));
+        $this->assertSame('starts_at: Wat al gedaan is, kan niet in de toekomst liggen.', $this->callToolError($this->token, 'update_maintenance', ['id' => $done->id, 'version' => $done->version(), 'starts_at' => '2026-11-10T09:00']));
 
         $this->update($done, ['report' => 'Kernel 6.12.']);
         $this->assertSame('Kernel 6.12.', $done->refresh()->report);
@@ -95,8 +95,8 @@ class MaintenanceChangeToolsTest extends TestCase
         $refused = fn (array $changes): string => $this->callToolError($this->token, 'update_maintenance', ['id' => $maintenance->id, 'version' => $maintenance->version(), ...$changes]);
 
         // The new start after the stored end, the new end before the stored start.
-        $this->assertSame('Het einde kan niet vóór het begin liggen.', $refused(['starts_at' => '2026-11-13T09:00']));
-        $this->assertSame('Het einde kan niet vóór het begin liggen.', $refused(['ends_at' => '2026-11-12T20:00']));
+        $this->assertSame('ends_at: Het einde kan niet vóór het begin liggen.', $refused(['starts_at' => '2026-11-13T09:00']));
+        $this->assertSame('ends_at: Het einde kan niet vóór het begin liggen.', $refused(['ends_at' => '2026-11-12T20:00']));
         // No links left.
         $this->assertStringContainsString('Koppel het aan minstens één server of project', $refused(['server_ids' => []]));
         // Tasks and the start can't be emptied; null is no list.
@@ -162,6 +162,50 @@ class MaintenanceChangeToolsTest extends TestCase
         $this->assertSame('From the list', $maintenance->refresh()->title);
     }
 
+    public function test_the_version_covers_every_field_a_person_or_an_agent_can_change(): void
+    {
+        $changes = [
+            'title' => 'Another title',
+            'tasks' => ['inspection'],
+            'status' => MaintenanceStatus::Done,
+            'starts_at' => '2026-11-08 10:00:00',
+            'ends_at' => '2026-11-12 23:00:00',
+            'plan' => 'Another plan',
+            'report' => 'Another report',
+        ];
+
+        // A new column people can change belongs in version() too, or a save could undo a change made to it meanwhile.
+        $this->assertEqualsCanonicalizing([...array_keys($changes), 'user_id'], (new Maintenance)->getFillable());
+
+        foreach ($changes as $field => $value) {
+            $maintenance = $this->planned();
+            $version = $maintenance->version();
+            $maintenance->update([$field => $value]);
+
+            $this->assertNotSame($version, $maintenance->fresh()->version(), $field);
+        }
+
+        $maintenance = $this->planned();
+        $version = $maintenance->version();
+        $maintenance->projects()->attach(Project::factory()->create());
+        $this->assertNotSame($version, $maintenance->fresh()->version(), 'projects');
+    }
+
+    public function test_a_plan_an_agent_rewrote_says_so_where_agents_read_it(): void
+    {
+        $bob = User::factory()->create(['name' => 'Bob']);
+        $this->actingAs($bob);
+        $maintenance = $this->planned(['plan' => 'apt upgrade', 'user_id' => $bob->id]);
+        $this->assertSame(['plan' => null, 'report' => null], $this->callToolSuccessfully($this->token, 'get_maintenance', ['id' => $maintenance->id])['texts_changed']);
+
+        $this->update($maintenance, ['plan' => 'apt full-upgrade']);
+
+        $read = $this->callToolSuccessfully($this->token, 'get_maintenance', ['id' => $maintenance->id]);
+        $this->assertSame(['Bob', null], [$read['created_by'], $read['via']]);
+        $this->assertSame(['by' => 'Ada', 'via' => 'deploy-agent', 'at' => '2026-11-09T13:00:00+01:00'], $read['texts_changed']['plan']);
+        $this->assertNull($read['texts_changed']['report']);
+    }
+
     public function test_cancelling_with_a_version_refuses_a_change_made_since(): void
     {
         $maintenance = $this->planned();
@@ -192,7 +236,7 @@ class MaintenanceChangeToolsTest extends TestCase
     {
         $maintenance = $this->planned([$field => str_repeat('a', Serializer::MAX_TEXT + 1)]);
 
-        $this->assertSame('Deze tekst is langer dan een agent in zijn geheel leest: wijzig hem in Herdbook zelf.', $this->callToolError($this->token, 'update_maintenance', ['id' => $maintenance->id, 'version' => $maintenance->version(), $field => 'Short']));
+        $this->assertSame("{$field}: Deze tekst is langer dan een agent in zijn geheel leest: wijzig hem in Herdbook zelf.", $this->callToolError($this->token, 'update_maintenance', ['id' => $maintenance->id, 'version' => $maintenance->version(), $field => 'Short']));
         $this->update($maintenance, ['title' => 'Other']);
 
         $this->assertSame(Serializer::MAX_TEXT + 1, mb_strlen($maintenance->refresh()->{$field}));
@@ -202,7 +246,7 @@ class MaintenanceChangeToolsTest extends TestCase
     {
         $cancelled = $this->planned(['status' => MaintenanceStatus::Cancelled]);
 
-        $this->assertSame('Dit onderhoud is afgeblazen. Vraag een mens het in Herdbook terug te zetten op gepland.', $this->callToolError($this->token, 'update_maintenance', ['id' => $cancelled->id, 'version' => $cancelled->version(), 'title' => 'Again']));
+        $this->assertSame('Dit onderhoud is afgelast. Vraag een mens het in Herdbook terug te zetten op gepland.', $this->callToolError($this->token, 'update_maintenance', ['id' => $cancelled->id, 'version' => $cancelled->version(), 'title' => 'Again']));
         $this->assertSame('Er is geen onderhoud met id 999. list_maintenance vindt ze.', $this->callToolError($this->token, 'update_maintenance', ['id' => 999, 'version' => 'x']));
     }
 
@@ -220,8 +264,8 @@ class MaintenanceChangeToolsTest extends TestCase
     {
         $maintenance = $this->planned(['starts_at' => '2026-11-08 09:00:00', 'ends_at' => '2026-11-08 11:00:00']);
 
-        $this->assertSame('Wat al gedaan is, kan niet in de toekomst liggen.', $this->callToolError($this->token, 'complete_maintenance', ['id' => $maintenance->id, 'starts_at' => '2026-11-10T09:00']));
-        $this->assertSame('Het einde kan niet vóór het begin liggen.', $this->callToolError($this->token, 'complete_maintenance', ['id' => $maintenance->id, 'ends_at' => '2026-11-08T08:00']));
+        $this->assertSame('starts_at: Wat al gedaan is, kan niet in de toekomst liggen.', $this->callToolError($this->token, 'complete_maintenance', ['id' => $maintenance->id, 'starts_at' => '2026-11-10T09:00']));
+        $this->assertSame('ends_at: Het einde kan niet vóór het begin liggen.', $this->callToolError($this->token, 'complete_maintenance', ['id' => $maintenance->id, 'ends_at' => '2026-11-08T08:00']));
         $this->assertSame(MaintenanceStatus::Planned, $maintenance->refresh()->status);
 
         // Null: no end, where leaving it out keeps the planned end that has passed.
@@ -233,17 +277,32 @@ class MaintenanceChangeToolsTest extends TestCase
     {
         $maintenance = $this->planned(['report' => "Don't reboot db-1!"]);
 
-        $this->assertSame('Het veld version is verplicht wanneer report aanwezig is.', $this->callToolError($this->token, 'complete_maintenance', ['id' => $maintenance->id, 'report' => 'All done.']));
-        $this->assertSame("Don't reboot db-1!", $maintenance->refresh()->report);
+        $refused = 'Een rapport vervangt het bestaande: geef de "version" die je las met get_maintenance.';
+        $this->assertSame($refused, $this->callToolError($this->token, 'complete_maintenance', ['id' => $maintenance->id, 'report' => 'All done.']));
+        // Null clears the report: the same.
+        $this->assertSame($refused, $this->callToolError($this->token, 'complete_maintenance', ['id' => $maintenance->id, 'report' => null, 'version' => null]));
+        $this->assertSame([MaintenanceStatus::Planned, "Don't reboot db-1!"], [$maintenance->refresh()->status, $maintenance->report]);
 
         $this->callToolSuccessfully($this->token, 'complete_maintenance', ['id' => $maintenance->id, 'version' => $maintenance->version(), 'report' => 'All done, db-1 left alone.']);
         $this->assertSame([MaintenanceStatus::Done, 'All done, db-1 left alone.'], [$maintenance->refresh()->status, $maintenance->report]);
     }
 
+    public function test_completing_again_after_a_lost_answer_returns_it_and_anything_else_is_refused(): void
+    {
+        $maintenance = $this->planned(['starts_at' => '2026-11-08 21:00:00']);
+        $call = ['id' => $maintenance->id, 'version' => $maintenance->version(), 'starts_at' => '2026-11-08T22:30', 'report' => 'All done.'];
+
+        $first = $this->callToolSuccessfully($this->token, 'complete_maintenance', $call);
+        $this->assertSame($first['maintenance'], $this->callToolSuccessfully($this->token, 'complete_maintenance', $call)['maintenance']);
+
+        $this->assertSame('Dit onderhoud is al gedaan. Wijzig het met update_maintenance.', $this->callToolError($this->token, 'complete_maintenance', [...$call, 'report' => 'Something else.']));
+        $this->assertSame('All done.', $maintenance->refresh()->report);
+    }
+
     public function test_completing_refuses_a_long_report_and_a_version_that_changed(): void
     {
         $long = $this->planned(['report' => str_repeat('a', Serializer::MAX_TEXT + 1)]);
-        $this->assertSame('Deze tekst is langer dan een agent in zijn geheel leest: wijzig hem in Herdbook zelf.', $this->callToolError($this->token, 'complete_maintenance', ['id' => $long->id, 'version' => $long->version(), 'report' => 'Short']));
+        $this->assertSame('report: Deze tekst is langer dan een agent in zijn geheel leest: wijzig hem in Herdbook zelf.', $this->callToolError($this->token, 'complete_maintenance', ['id' => $long->id, 'version' => $long->version(), 'report' => 'Short']));
 
         $changed = $this->planned();
         $read = $changed->version();
@@ -259,7 +318,7 @@ class MaintenanceChangeToolsTest extends TestCase
 
         $this->assertSame($first['maintenance'], $this->callToolSuccessfully($this->token, 'complete_maintenance', ['id' => $maintenance->id])['maintenance']);
         $this->assertSame('Dit onderhoud is al gedaan. Wijzig het met update_maintenance.', $this->callToolError($this->token, 'complete_maintenance', ['id' => $maintenance->id, 'version' => $first['maintenance']['version'], 'report' => 'Again.']));
-        $this->assertSame('Dit onderhoud is afgeblazen. Leg het werk vast met log_maintenance, of vraag een mens het in Herdbook terug te zetten op gepland.', $this->callToolError($this->token, 'complete_maintenance', ['id' => $this->planned(['status' => MaintenanceStatus::Cancelled])->id]));
+        $this->assertSame('Dit onderhoud is afgelast. Leg het werk vast met log_maintenance, of vraag een mens het in Herdbook terug te zetten op gepland.', $this->callToolError($this->token, 'complete_maintenance', ['id' => $this->planned(['status' => MaintenanceStatus::Cancelled])->id]));
     }
 
     public function test_cancelling_twice_is_once_and_done_work_stays_done(): void
@@ -271,7 +330,7 @@ class MaintenanceChangeToolsTest extends TestCase
         $this->assertSame(1, Activity::query()->where('subject_type', 'maintenance')->where('subject_id', $maintenance->id)->where('event', 'updated')->count());
 
         $done = Maintenance::factory()->create();
-        $this->assertSame('Dit onderhoud is gedaan en kan niet worden afgeblazen.', $this->callToolError($this->token, 'cancel_maintenance', ['id' => $done->id]));
+        $this->assertSame('Dit onderhoud is gedaan en kan niet worden afgelast.', $this->callToolError($this->token, 'cancel_maintenance', ['id' => $done->id]));
     }
 
     public function test_the_activity_log_names_the_agent(): void

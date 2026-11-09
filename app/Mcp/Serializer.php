@@ -13,6 +13,7 @@ use App\Models\Project;
 use App\Models\Server;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
+use Spatie\Activitylog\Models\Activity;
 
 /**
  * What the MCP tools show an agent, field by field: a new column never
@@ -83,7 +84,8 @@ final class Serializer
 
     /**
      * maintenance() with its plan and report, each cut at MAX_TEXT; "truncated"
-     * names the ones that were longer.
+     * names the ones that were longer, and "texts_changed" who last changed
+     * each since it was created (null: nobody).
      *
      * @return array<string, mixed>
      */
@@ -95,6 +97,11 @@ final class Serializer
             ...self::maintenance($maintenance),
             ...array_map(fn (?string $text): ?string => $text === null ? null : mb_substr($text, 0, self::MAX_TEXT), $texts),
             'truncated' => array_keys(array_filter($texts, fn (?string $text): bool => mb_strlen((string) $text) > self::MAX_TEXT)),
+            'texts_changed' => array_map(fn (?Activity $change): ?array => $change === null ? null : [
+                'by' => $change->causer?->name,
+                'via' => $change->properties?->get('via'),
+                'at' => self::time($change->created_at),
+            ], $maintenance->lastTextChanges()),
         ];
     }
 

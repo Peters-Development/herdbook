@@ -104,8 +104,8 @@ class MaintenanceReadToolsTest extends TestCase
     {
         $server = Server::factory()->create();
 
-        $this->assertSame('Geen server heeft id 998, 999. search_inventory vindt de id\'s.', $this->callToolError($this->token, 'list_maintenance', ['server_ids' => [$server->id, 998, 999]]));
-        $this->assertSame('Geen project heeft id 997. search_inventory vindt de id\'s.', $this->callToolError($this->token, 'list_maintenance', ['project_ids' => [997]]));
+        $this->assertSame('server_ids: Geen server heeft id 998, 999. search_inventory vindt de id\'s.', $this->callToolError($this->token, 'list_maintenance', ['server_ids' => [$server->id, 998, 999]]));
+        $this->assertSame('project_ids: Geen project heeft id 997. search_inventory vindt de id\'s.', $this->callToolError($this->token, 'list_maintenance', ['project_ids' => [997]]));
     }
 
     public function test_blank_arguments_count_as_left_out(): void
@@ -166,7 +166,7 @@ class MaintenanceReadToolsTest extends TestCase
 
         $found = $this->callToolSuccessfully($this->token, 'get_maintenance', ['id' => $maintenance->id]);
 
-        $this->assertSame([...array_keys(Serializer::maintenance($maintenance)), 'plan', 'report', 'truncated'], array_keys($found));
+        $this->assertSame([...array_keys(Serializer::maintenance($maintenance)), 'plan', 'report', 'truncated', 'texts_changed'], array_keys($found));
         $this->assertSame(['1. Drain the queue', 'All went well.', []], [$found['plan'], $found['report'], $found['truncated']]);
     }
 

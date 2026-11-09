@@ -14,7 +14,7 @@ trait FindsMaintenance
 {
     protected function idSchema(JsonSchema $schema): Type
     {
-        return $schema->integer()->min(1)->required()->description('From list_maintenance.');
+        return $schema->integer()->min(1)->required()->description('From list_maintenance, or an earlier answer.');
     }
 
     /**

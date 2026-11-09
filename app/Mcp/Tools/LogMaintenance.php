@@ -26,9 +26,9 @@ class LogMaintenance extends Tool
     public function description(): string
     {
         return 'Write down maintenance that has been done: the work, when it started (default now; not in the future), what was done in markdown, and the servers and projects it concerns (ids from search_inventory; at least one). '
-            .'One maintenance may cover many servers. If the work was planned, complete that one with complete_maintenance instead. '
+            .'One maintenance may cover many servers. '
             .self::textsSentence('The report')
-            .self::checkFirst().self::answerSentence();
+            .self::checkFirst('complete that one with complete_maintenance instead').self::answerSentence();
     }
 
     public function schema(JsonSchema $schema): array

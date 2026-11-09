@@ -29,11 +29,10 @@ trait ValidatesArguments
 
     /**
      * @param  array<string, mixed>  $rules
-     * @param  array<string, string>  $messages
      * @param  (Closure(ValidatorInstance): void)|null  $after  checks on the valid arguments as a whole
      * @return array<string, mixed>
      */
-    protected function validated(Request $request, array $rules, array $messages = [], ?Closure $after = null): array
+    protected function validated(Request $request, array $rules, ?Closure $after = null): array
     {
         $arguments = collect($request->all())
             ->reject(fn (mixed $value): bool => is_string($value) && trim($value) === '')
@@ -56,15 +55,34 @@ trait ValidatesArguments
         // runs on every item, so an array of a million ids is refused by its
         // size before that. Then the items, then the arguments as a whole.
         $outer = array_filter($rules, fn (string $key): bool => ! str_contains($key, '*'), ARRAY_FILTER_USE_KEY);
-        $valid = Validator::make($arguments, $outer, $messages, $attributes)->validate();
-
-        $validator = Validator::make($arguments, array_diff_key($rules, $outer), $messages, $attributes);
+        $validator = Validator::make($arguments, array_diff_key($rules, $outer), [], $attributes);
 
         if ($after !== null) {
             $validator->after(fn (ValidatorInstance $validator) => $validator->errors()->isEmpty() ? $after($validator) : null);
         }
 
-        return [...$valid, ...$validator->validate()];
+        try {
+            return [...Validator::make($arguments, $outer, [], $attributes)->validate(), ...$validator->validate()];
+        } catch (ValidationException $exception) {
+            throw self::named($exception);
+        }
+    }
+
+    /**
+     * The package joins the messages into one string without their keys, so
+     * a message that doesn't name its argument (one of Herdbook's own, such
+     * as "This looks like a password or token") gets it in front: with a
+     * title, a plan and a report, the agent would have to guess.
+     */
+    protected static function named(ValidationException $exception): ValidationException
+    {
+        $errors = collect($exception->errors())->map(function (array $messages, string $key): array {
+            $argument = Str::before($key, '.');
+
+            return array_map(fn (string $message): string => $key === 'arguments' || str_contains($message, $argument) ? $message : "{$argument}: {$message}", $messages);
+        });
+
+        return ValidationException::withMessages($errors->all());
     }
 
     /**
@@ -95,7 +113,7 @@ trait ValidatesArguments
     {
         return function (string $attribute, mixed $ids, Closure $fail) use ($model, $message): void {
             // Wrong items have a message of their own (server_ids.*).
-            if (! is_array($ids) || collect($ids)->contains(fn (mixed $id): bool => filter_var($id, FILTER_VALIDATE_INT) === false)) {
+            if (! is_array($ids) || collect($ids)->contains(fn (mixed $id): bool => is_bool($id) || filter_var($id, FILTER_VALIDATE_INT) === false)) {
                 return;
             }
 

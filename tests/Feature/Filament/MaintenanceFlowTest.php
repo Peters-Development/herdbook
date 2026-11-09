@@ -9,6 +9,7 @@ use App\Filament\Resources\Incidents\Pages\ViewIncident;
 use App\Filament\Resources\Incidents\RelationManagers\TimelineEntriesRelationManager;
 use App\Filament\Resources\Maintenances\MaintenanceResource;
 use App\Filament\Resources\Maintenances\Pages\CreateMaintenance;
+use App\Filament\Resources\Maintenances\Pages\EditMaintenance;
 use App\Filament\Resources\Maintenances\Pages\ListMaintenances;
 use App\Filament\Resources\Maintenances\Pages\ViewMaintenance;
 use App\Filament\Resources\Maintenances\Schemas\MaintenanceForm;
@@ -546,6 +547,38 @@ class MaintenanceFlowTest extends TestCase
         $typed->update(['tasks' => ['updates', 'reboot']]);
 
         $this->assertSame(['Updates en herstart', 'apt upgrade'], [$quick->title, $typed->title]);
+    }
+
+    public function test_after_a_save_the_form_shows_the_title_the_work_made_and_a_second_save_keeps_it(): void
+    {
+        $this->signIn();
+        $maintenance = Maintenance::factory()->planned()->create(['tasks' => ['updates'], 'starts_at' => '2026-11-20 20:00:00']);
+        $maintenance->servers()->attach(Server::factory()->create());
+
+        $form = Livewire::test(EditMaintenance::class, ['record' => $maintenance->getRouteKey()])
+            ->fillForm(['tasks' => ['updates', 'reboot']])
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertSchemaStateSet(['title' => 'Updates en herstart']);
+
+        $form->fillForm(['plan' => 'Reboot last.'])->call('save')->assertHasNoFormErrors();
+
+        $this->assertSame(['Updates en herstart', 'Reboot last.'], [$maintenance->refresh()->title, $maintenance->plan]);
+    }
+
+    public function test_the_activity_log_lists_changes_in_the_order_of_the_form_whatever_order_they_were_stored_in(): void
+    {
+        $maintenance = Maintenance::factory()->create(['tasks' => ['updates']]);
+        $maintenance->update(['tasks' => ['updates', 'reboot']]);
+        $activity = Activity::query()->where('event', 'updated')->sole();
+
+        // As MySQL stores JSON: its keys sorted by length.
+        $activity->attribute_changes = collect([
+            'attributes' => ['tasks' => ['updates', 'reboot'], 'title' => 'Updates en herstart'],
+            'old' => ['tasks' => ['updates'], 'title' => 'Updates'],
+        ]);
+
+        $this->assertSame("Titel: Updates → Updates en herstart\nWerk: Updates → Updates, Herstart", ActivityPresenter::changes($activity));
     }
 
     public function test_called_off_is_not_overdue_and_cannot_be_completed(): void

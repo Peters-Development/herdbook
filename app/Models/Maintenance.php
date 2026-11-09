@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Spatie\Activitylog\Models\Activity;
 
 /**
  * Work on servers and projects, planned ahead or written down afterwards:
@@ -48,7 +49,7 @@ class Maintenance extends Model
             // The forms refuse done work in the future, but a local time in the
             // hour that occurs twice (end of summer time) can still land there.
             if ($maintenance->status === MaintenanceStatus::Done && $maintenance->starts_at?->isFuture()) {
-                $maintenance->starts_at = now();
+                $maintenance->starts_at = now()->startOfMinute();
             }
 
             $generated = $maintenance->exists && $maintenance->isDirty('tasks')
@@ -104,7 +105,7 @@ class Maintenance extends Model
     public function completionDefaults(): array
     {
         return [
-            'starts_at' => $this->starts_at->isFuture() ? now() : $this->starts_at,
+            'starts_at' => $this->starts_at->isFuture() ? now()->startOfMinute() : $this->starts_at,
             'ends_at' => $this->ends_at?->isPast() ? $this->ends_at : null,
             'report' => $this->report,
         ];
@@ -172,6 +173,7 @@ class Maintenance extends Model
      */
     public function updateWhileStill(MaintenanceStatus $status, array|Closure $attributes, ?string $version = null): bool
     {
+        // Again on a deadlock (see locked()), when it is the outermost transaction.
         return DB::transaction(function () use ($status, $attributes, $version): bool {
             $current = self::locked($this->getKey());
 
@@ -189,14 +191,17 @@ class Maintenance extends Model
             }
 
             return $this->fill(value($attributes))->save();
-        });
+        }, attempts: 3);
     }
 
     /**
      * The row and its links, locked: what a save over it compares its
      * version() with. Inside a transaction. The links with a locking read
      * too: MySQL's plain reads see the transaction's first snapshot, which
-     * an earlier query in it (a form's options) may have fixed already.
+     * an earlier query in it (a form's options) may have fixed already. Its
+     * gap locks can make two saves that both add links deadlock: one fails
+     * whole, which beats a link change undone in silence, and the agent
+     * tools try again.
      */
     public static function locked(int|string $id): ?self
     {
@@ -210,14 +215,15 @@ class Maintenance extends Model
      * A fingerprint of everything a person or an agent can change, its links
      * included: compared before saving over it, so a change made meanwhile
      * (an agent, another tab) isn't undone. Not updated_at: that counts in
-     * seconds, and linking a server doesn't touch it. Loads servers and
+     * seconds, and linking a server doesn't touch it. Keyed, as it covers the
+     * whole of a plan an agent only reads the start of. Loads servers and
      * projects if they aren't.
      */
     public function version(): string
     {
         $this->loadMissing(['servers', 'projects']);
 
-        return substr(hash('sha256', json_encode([
+        return substr(hash_hmac('sha256', json_encode([
             $this->title,
             $this->tasks,
             $this->status->value,
@@ -227,7 +233,25 @@ class Maintenance extends Model
             $this->report,
             collect($this->servers->modelKeys())->sort()->values()->all(),
             collect($this->projects->modelKeys())->sort()->values()->all(),
-        ], JSON_THROW_ON_ERROR)), 0, 16);
+        ], JSON_THROW_ON_ERROR), (string) config('app.key')), 0, 16);
+    }
+
+    /**
+     * The last change to the plan and to the report since it was created
+     * (null: none), from the activity log, which records who changed a text
+     * and through which agent, but not the text: so a plan someone rewrote
+     * doesn't pass for its creator's.
+     *
+     * @return array{plan: ?Activity, report: ?Activity}
+     */
+    public function lastTextChanges(): array
+    {
+        $updates = $this->activitiesAsSubject()->where('event', 'updated')->with('causer')->latest('id')->limit(100)->get();
+
+        return [
+            'plan' => $updates->first(fn (Activity $activity): bool => in_array('plan', (array) $activity->properties?->get('texts'), true)),
+            'report' => $updates->first(fn (Activity $activity): bool => in_array('report', (array) $activity->properties?->get('texts'), true)),
+        ];
     }
 
     /**

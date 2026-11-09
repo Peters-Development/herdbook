@@ -37,13 +37,13 @@ class CancelMaintenance extends Tool
     {
         return [
             'id' => $this->idSchema($schema),
-            'version' => $this->versionSchema($schema, 'Its "version" from get_maintenance or list_maintenance.'),
+            'version' => $this->versionSchema($schema, 'optional.'),
         ];
     }
 
     public function handle(Request $request): Response|ResponseFactory
     {
-        $input = $this->validated($request, ['id' => $this->idRules(), 'version' => ['nullable', 'string', 'max:64']]);
+        $input = $this->validated($request, ['id' => $this->idRules(), 'version' => $this->versionRules()]);
         $maintenance = $this->findMaintenance((int) $input['id']);
 
         if (! $maintenance instanceof Maintenance) {
@@ -58,7 +58,7 @@ class CancelMaintenance extends Tool
             // Cancelled already: called again, it gets the same answer.
             $maintenance->status === MaintenanceStatus::Cancelled => $this->answer($maintenance),
             $maintenance->status === MaintenanceStatus::Planned => $this->changedSince($maintenance),
-            default => Response::error(__('This maintenance is done and can\'t be cancelled.')),
+            default => Response::error(__('This maintenance is done and can\'t be called off.')),
         };
     }
 }

@@ -56,6 +56,9 @@ class EditMaintenance extends EditRecord
 
     protected function afterSave(): void
     {
+        // The saving hook may have made the title or moved the start: the
+        // form shows what is stored, so a second save doesn't write it back.
+        $this->refreshFormData(['title', 'starts_at']);
         $this->filledVersion = Maintenance::locked($this->getRecord()->getKey())?->version();
     }
 }

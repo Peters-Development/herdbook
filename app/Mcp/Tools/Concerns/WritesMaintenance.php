@@ -140,9 +140,11 @@ trait WritesMaintenance
      */
     protected function parseWork(array $input): array
     {
+        // In minutes, as the pickers in the panel: they would drop the
+        // seconds at the next save there, and log that as a change.
         foreach (['starts_at', 'ends_at'] as $field) {
             if (array_key_exists($field, $input)) {
-                $input[$field] = Moment::parse($input[$field]);
+                $input[$field] = Moment::parse($input[$field])?->startOfMinute();
             }
         }
 
@@ -200,7 +202,7 @@ trait WritesMaintenance
         $this->checkWork($validator, $work, $status);
 
         if ($validator->errors()->isNotEmpty()) {
-            throw new ValidationException($validator);
+            throw self::named(new ValidationException($validator));
         }
     }
 
@@ -213,7 +215,7 @@ trait WritesMaintenance
      */
     protected function validatedNewWork(Request $request, array $rules, MaintenanceStatus $status): array
     {
-        $now = CarbonImmutable::now();
+        $now = CarbonImmutable::now()->startOfMinute();
         $rules = [...$this->workRules(), ...$rules];
 
         if ($status === MaintenanceStatus::Planned) {
@@ -299,11 +301,12 @@ trait WritesMaintenance
     }
 
     /**
-     * What a description of a new maintenance tells an agent to check first.
+     * What a description of a new maintenance tells an agent to check first,
+     * and what to do with the planned one it finds.
      */
-    protected static function checkFirst(): string
+    protected static function checkFirst(string $ifThere = 'change that one with update_maintenance'): string
     {
-        return 'Check first with list_maintenance (status planned, the same server_ids or project_ids) whether the work is already there, and if it is, change that one with update_maintenance: nothing written can be deleted by an agent. ';
+        return 'Check first with list_maintenance (status planned, the same server_ids or project_ids) whether the work is already there, and if it is, '.$ifThere.': nothing written can be deleted by an agent. ';
     }
 
     /**
