@@ -247,8 +247,8 @@ Then store the new token with the [same command](#the-token-in-your-keychain) as
 
 - **A token is a key without a second factor.** Treat it like a password.
 - **What an agent reads leaves your network.** Everything a tool returns becomes part of the conversation, which goes to the agent's model provider and stays in its local history (for Claude Code, under `~/.claude`). That is why tools return no addresses, notes or contact details, and mask the addresses in what they do return; names, plans, reports and incidents are otherwise sent as written.
-- **Plans and reports are written by people and other agents.** Herdbook tells agents to treat them as data, to act on a plan only when you ask, and to tell you when a plan was changed by someone other than its creator, but that is no guarantee: a text can try to steer an agent. Don't let an agent that carries out a plan run without asking for permission, so you see each command before it reaches your servers.
-- **An agent acts within its token.** A misled agent with a write token can plan, change, complete or call off maintenance, and open incidents and add to them: an open SEV1 colours the dashboard and the status screen red. It can't delete anything, and the activity log names it and keeps the plans and reports it replaced, but changes to its servers and projects aren't logged.
+- **Plans, reports and incidents are written by people, other agents and Herdbook's checks** (which can quote what a checked site sent). Herdbook tells agents to treat them as data, to act on a plan only when you ask, and to tell you when a plan was changed by someone other than its creator, but that is no guarantee: a text can try to steer an agent. Don't let an agent that carries out a plan run without asking for permission, so you see each command before it reaches your servers.
+- **An agent acts within its token.** A misled agent with a write token can plan, change, complete or call off maintenance, and open, change and resolve incidents: an open SEV1 colours the dashboard and the status screen red, and a resolved one turns them green again. It can't delete anything, and the activity log names it and keeps the plans, reports and root causes it replaced, but changes to its servers and projects aren't logged.
 - **Revoking.** `agents:revoke` (one, an account's, or all), or switch the MCP server off. A backup restored from before a revoke brings the token back: revoke it again ([Disaster Recovery](backups.md#disaster-recovery)).
 
 The [Security](security.md#agents) page puts this in the context of the rest of Herdbook.
@@ -282,5 +282,8 @@ A tool's errors come in the language of the token's account; a refused connectio
 | 429 | More than 120 requests a minute, or too many wrong tokens; it passes within a minute. |
 | A certificate error | See [The Certificate](#the-certificate). |
 | A tool is missing | The token can only read: revoke it and create it again with `--write` ([Renewing a Token](#renewing-a-token)). |
-| "This maintenance changed since you read it" | A person, another agent or a form changed it after the agent read it. The agent reads it again with `get_maintenance` and decides again. |
-| "This text is longer than an agent reads whole" | The plan or report is over 10,000 characters: change it in Herdbook itself. |
+| "This maintenance changed since you read it", "This incident changed since you read it" | A person, another agent, monitoring or a form changed it after the agent read it. The agent reads it again with `get_maintenance` or `get_incident` and decides again. |
+| "This text is longer than an agent reads whole" | The plan, report, impact or root cause is over 10,000 characters: change it in Herdbook itself. |
+| "Herdbook could not mask this text for agents" | The agent read it as `[text hidden]`, so it doesn't write over it: change it in Herdbook itself. |
+| "This holds a mask such as [address of app-1]" | The agent tried to write back a text it read with masks. It writes one of its own, or asks you to change it in Herdbook. |
+| "Another call of this agent is still writing" | One call of an agent writes at a time, and the one before took longer than ten seconds. Try again. |

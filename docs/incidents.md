@@ -68,7 +68,7 @@ Markdown is never rendered as raw HTML, so a pasted or imported report cannot in
 
 The **Timeline** tab of an incident is a list of events: when, what, and who wrote it down. Use it during an incident to keep track of what you tried, and afterwards to reconstruct what happened. Entries are sorted by time, so you can add one you forgot later. The time defaults to now.
 
-Monitoring adds entries by itself to the draft incidents it opens, for example "Check HTTP shop.example.com went down: HTTP 503" and "Up again: HTTP shop.example.com".
+Monitoring adds entries by itself to the draft incidents it opens, and to the incidents it joins, for example "Check HTTP shop.example.com went down: HTTP 503", "Also down: HTTP shop.example.com" and "Up again: HTTP shop.example.com".
 
 <a name="action-items"></a>
 ## Action Items
@@ -114,7 +114,7 @@ The title and timeline entries are written in the default language of the instal
 <a name="from-an-agent"></a>
 ## From an Agent
 
-An agent such as Claude Code can keep incidents through Herdbook's MCP server ([Agents](agents.md)). It reads the unresolved ones of a project or a server, the way the overviews count them, and one incident with its report, timeline and action items. During an outage it looks for an unresolved incident first (a draft from a check, for instance) and writes on its timeline what it tries and finds; it opens an incident only when there is none. It can add action items and mark them done, change an incident, and resolve it once it is over, with its root cause. A change it makes over what monitoring or a person changed meanwhile is refused, as is an edit form of yours over its change; the activity log keeps a root cause or report it replaced. What it writes shows who it wrote it for, through which agent: "Ada via deploy-agent". Addresses in what it reads are masked.
+An agent such as Claude Code can keep incidents through Herdbook's MCP server ([Agents](agents.md)). It lists the incidents of a project (the way the overviews count them) or a server, unresolved ones by default, and reads one incident with its report, timeline and action items. During an outage it looks for an unresolved incident first (a draft from a check, for instance) and writes on its timeline what it tries and finds; it opens an incident only when there is none. It can add action items and mark them done, change an incident, and resolve it once it is over, with its root cause. A change it makes over what monitoring or a person changed meanwhile is refused, as is an edit form of yours over its change; the activity log keeps a root cause or report it replaced. What it writes shows the account it acts for, and through which agent: "Ada via deploy-agent" under **By**; an incident it opens has the source *By hand*. Monitoring joins an incident it opened as it joins any other. Addresses in what it reads are masked.
 
 <a name="importing-existing-reports"></a>
 ## Importing Existing Reports

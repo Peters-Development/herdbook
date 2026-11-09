@@ -33,7 +33,7 @@ Some text is written by Herdbook itself and stored, rather than translated each 
 
 | Text | Written in |
 |---|---|
-| Titles and timeline entries of [draft incidents](incidents.md#draft-incidents-from-checks) | the default language (they are created by the scheduler) |
+| Titles and timeline entries of [draft incidents](incidents.md#draft-incidents-from-checks), and the entries monitoring adds to the incidents it joins | the default language (they are created by the scheduler) |
 | Errors of check results, such as "HTTP 503, expected 200" | the default language, also when you press **Check now** |
 | Names of checks made by **Turn on monitoring**, or left empty | the language of whoever created them; a default name still follows a changed redirect in any language |
 | Titles of maintenance that you left empty, such as "Updates and reboot" | the language of whoever saved it; such a title still follows the work when someone changes it in another language |

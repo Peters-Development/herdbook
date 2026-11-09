@@ -122,7 +122,7 @@ docker compose exec app ./vendor/bin/pint --dirty
 
 | Path | Contents |
 |---|---|
-| `app/Models` | Eloquent models. `Concerns/` holds the shared behavior: `HasRenewal`, `HasCost`, `Linkable` and `LinksToInventory` (the "related to" links), `GuardsChanges` (no lost updates: `version()`, `locked()`, `saveWhile()`), `RecordsAuthor` (who wrote it down, and through which agent), `RecordsActivity` (the activity log; `attributesNotLogged()` keeps long texts out, and a change to one is logged by name, labelled in `ActivityPresenter::textLabels()`; a change made through an agent stores `via` and `agent_token_id`, shown by `ActivityPresenter::causer()`, and, for a model that opts in with `keepsReplacedTexts()`, the long texts it replaced, `previous_texts`, shown by the activity table's **Previous text**). `Contracts/Renewable` is the interface of everything that renews. |
+| `app/Models` | Eloquent models. `Concerns/` holds the shared behavior: `HasRenewal`, `HasCost`, `Linkable` and `LinksToInventory` (the "related to" links), `GuardsChanges` (no lost updates: `version()`, `locked()`, `saveWhile()`), `RecordsAuthor` (who wrote it down, and through which agent; what monitoring writes goes through `Authorship::without()`, so it has no author), `RecordsActivity` (the activity log; `attributesNotLogged()` keeps long texts out, and a change to one is logged by name, labelled in `ActivityPresenter::textLabels()`; a change made through an agent stores `via` and `agent_token_id`, shown by `ActivityPresenter::causer()`, and, for a model that opts in with `keepsReplacedTexts()`, the long texts it replaced, `previous_texts`, shown by the activity table's **Previous text**). `Contracts/Renewable` is the interface of everything that renews. |
 | `app/Enums` | Backed enums (mostly strings) with a label (`HasLabel`) and often a color (`HasColor`). |
 | `app/Services/Checks` | The monitoring engine: `CheckRunner`, `CheckStateMachine`, `ConnectivityGuard`, `DefaultChecks`, `DnsExpectation`, `NetworkProbe` and its real implementation `SocketProbe`, `CheckHistory`, `CheckIncidents`, `MonitoringPulse`, `Uptime`. |
 | `app/Services/Alerts` | `AlertChannels`, the Pushover, ntfy and mail channels, `CheckAlerts` (alerts for check events), `AlertMessage`. |
@@ -164,7 +164,7 @@ A few questions are answered in exactly one place. Everything that needs the ans
 | What does an agent see? | `Mcp\Serializer`, field by field: every tool answers through it. |
 | Did a maintenance or an incident change since it was read? | `version()`, compared under `locked()` (`Models\Concerns\GuardsChanges`): the MCP tools, the edit forms (`Resources\Concerns\GuardsConcurrentEdits`) and the **Complete** modal. |
 
-`ProjectHealth`, `ProjectIncidents`, `RecurringCosts` and `RenewalAttention` load what they need once and are bound as **scoped** singletons in `AppServiceProvider`: one instance per request or queue job, so a dashboard asks the database once, not once per tile.
+`ProjectHealth`, `ProjectIncidents`, `RecurringCosts`, `RenewalAttention` and `Mcp\HiddenValues` load what they need once and are bound as **scoped** singletons in `AppServiceProvider`: one instance per request or queue job, so a dashboard asks the database once, not once per tile.
 
 <a name="rules-of-the-codebase"></a>
 ## Rules of the Codebase
@@ -282,7 +282,7 @@ Tests call the tools over HTTP with `Tests\Concerns\ActsAsAgent` (`agentToken()`
 ### Adding a Tool
 
 1. A class in `app/Mcp/Tools` with its `Name` and its annotations, listed in `HerdbookServer::$tools`.
-2. A tool that writes uses `RequiresWriteAccess`, and deletes nothing. Text it writes gets `WritesTexts::textRules()` (or `plainTextRules()`), and it doesn't overwrite a text longer than `Serializer::MAX_TEXT` or one with other links (`WritesTexts::checkTexts()` on the locked row).
+2. A tool that writes uses `RequiresWriteAccess`, and deletes nothing. Text it writes gets `WritesTexts::textRules()` (or `plainTextRules()`), and it doesn't overwrite a text longer than `Serializer::MAX_TEXT` or one it read hidden, and adds no links to other sites but those of the text it replaces (`WritesTexts::checkTexts()` on the locked row).
 3. A tool that changes existing maintenance or an incident takes its `version` and saves through `GuardsChanges::saveWhile()` (maintenance: `updateWhileStill()`, `complete()` or `cancel()`). A tool that adds to an incident, or opens one, writes through `WritesIncidents::once()`, so a call tried again writes nothing twice.
 4. Its arguments through `ValidatesArguments`, its answer through `Serializer`, with a test that it returns no field an agent never gets. New kinds of data also go into the lists in [Agents](agents.md#what-it-gets) and [Security](security.md#agents).
 5. Its errors in `__()`, with their Dutch in `lang/nl.json`.

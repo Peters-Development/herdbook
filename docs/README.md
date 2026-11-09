@@ -25,7 +25,7 @@ These pages explain how to get Herdbook running, how to use it day to day, and h
 - [Costs](costs.md): what everything costs per year and per month, and for which project or client.
 - [Dashboard and Map](dashboard.md): the dashboard, the status page of a project, and the map.
 - [Status Screen](status-screen.md): a wall display for a TV or a Raspberry Pi.
-- [Agents](agents.md): let an agent such as Claude Code find your servers and plan and log maintenance, through the MCP server.
+- [Agents](agents.md): let an agent such as Claude Code find your servers, plan and log maintenance, and keep incidents, through the MCP server.
 
 ## Reference
 
