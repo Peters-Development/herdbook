@@ -265,7 +265,10 @@ class DomainFlowTest extends TestCase
 
         Livewire::test(EditDomain::class, ['record' => $domain->getRouteKey()])
             ->assertFormFieldVisible('dns_provider_id')
+            ->assertSee('Alleen als de DNS draait op een server die je hebt toegevoegd')
             ->fillForm(['dns_server_id' => $package->id])
+            // The explanation stays next to what the app reports.
+            ->assertSee('Alleen als de DNS draait op een server die je hebt toegevoegd')
             ->assertFormFieldHidden('dns_provider_id')
             ->assertSee('DNS bij: Packager, de leverancier van deze server.')
             ->call('save')

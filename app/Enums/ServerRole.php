@@ -32,7 +32,7 @@ enum ServerRole: string implements HasLabel
             self::Proxy => __('Proxy'),
             self::Worker => __('Worker'),
             self::Other => __('Other'),
-            self::Dns => 'DNS',
+            self::Dns => __('DNS'),
         };
     }
 

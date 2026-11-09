@@ -88,7 +88,8 @@ class DomainForm
         return self::serverField('dns_server_id', __('DNS server'))
             ->live()
             ->explain(__('Only when the DNS runs on a server you added, such as a hosting package or a nameserver of your own. Its provider becomes the DNS host, and an outage there counts for the projects of the domain.'))
-            ->helperText(function (Get $get): ?string {
+            // State, so a hint: the helper text is the explanation's (explain()).
+            ->hint(function (Get $get): ?string {
                 if (blank($get('dns_server_id'))) {
                     return null;
                 }
