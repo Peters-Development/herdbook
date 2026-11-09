@@ -23,6 +23,8 @@
     - [Nothing From Third Parties](#nothing-from-third-parties)
     - [Look and Feel](#look-and-feel)
 - [Adding a Renewable Model](#adding-a-renewable-model)
+- [The MCP Server](#the-mcp-server)
+    - [Adding a Tool](#adding-a-tool)
 - [The Data Model](#the-data-model)
 - [Code Conventions](#code-conventions)
 
@@ -134,9 +136,10 @@ docker compose exec app ./vendor/bin/pint --dirty
 | `app/Filament/Widgets` | The dashboard. |
 | `app/Filament/Support` | Schemas and actions shared between resources: `RenewalSchema`, `CostSchema`, `LinkSchema`, `MaintenanceSchema`, `CheckActions`, `ImpactSchema`, `DeleteConsequences`, `ActivityPresenter`. |
 | `app/Filament/RelationManagers` | Relation managers shared between resources (incidents, documents, credentials, maintenance, checks, activity). |
-| `app/Http` | `SecurityHeaders`, `SetUserLocale`, and the status screen's controller and token middleware. |
-| `app/Rules` | `NoSecretMaterial`, `DistinctItems`, `Subnet`; for what agents write, also `NoCredentials` (token shapes, passwords) and `NoImagesOrHtml` (markdown without images or HTML). |
-| `routes/` | `web.php`, `screen.php` (the status screen and its API, outside the `web` group: no session), `console.php` (the schedule). |
+| `app/Http` | `SecurityHeaders`, `SetUserLocale`, the status screen's controller and token middleware, and `AuthenticateAgent` (the MCP server's tokens). |
+| `app/Mcp` | The MCP server for agents ([The MCP Server](#the-mcp-server)): `Servers/HerdbookServer`, `Tools/` with their shared `Concerns/`, and `Serializer`, what a tool shows. |
+| `app/Rules` | `NoSecretMaterial`, `DistinctItems`, `Subnet`; for what agents write, also `NoCredentials` (token shapes, passwords), `NoImagesOrHtml` (markdown without images or HTML) and `Moment` (an ISO 8601 time). |
+| `routes/` | `web.php`, `screen.php` (the status screen and its API, outside the `web` group: no session), `ai.php` (the MCP server, also outside it), `console.php` (the schedule). |
 | `config/herdbook.php` | Herdbook's own settings. |
 | `lang/` | `nl.json`, and the formats and Laravel messages per language. |
 | `resources/` | The stylesheet, the map script, and Blade views for the widgets, pages, mail and status screen. |
@@ -158,6 +161,8 @@ A few questions are answered in exactly one place. Everything that needs the ans
 | How does an alert get out? | `Services\Alerts\AlertChannels`: the first channel that is set up and delivers. Never call a channel directly. |
 | How do checks reach the network? | `Services\Checks\NetworkProbe` (TCP, TLS, DNS, ping, reachability) and the `Http` facade. Nothing else opens connections, so tests can fake all of it. |
 | Do the checks still run? Is the backup recent? | `MonitoringPulse` and `BackupFreshness`: the dashboard, the heartbeat, the status screen and `backups:check` use the same rules. |
+| What does an agent see? | `Mcp\Serializer`, field by field: every tool answers through it. |
+| Did a maintenance change since it was read? | `Maintenance::version()`, compared under `Maintenance::locked()`: the MCP tools, the edit form and the **Complete** modal. |
 
 `ProjectHealth`, `ProjectIncidents`, `RecurringCosts` and `RenewalAttention` load what they need once and are bound as **scoped** singletons in `AppServiceProvider`: one instance per request or queue job, so a dashboard asks the database once, not once per tile.
 
@@ -259,6 +264,31 @@ Domains, servers, subscriptions and networks share the renewal and cost behavior
 
 The dashboard, the renewal calendar, the digest and the costs page then pick it up by themselves.
 
+<a name="the-mcp-server"></a>
+## The MCP Server
+
+Agents reach Herdbook through an MCP server ([laravel/mcp](https://github.com/laravel/mcp)) at `/mcp`. The package loads `routes/ai.php` by itself, outside the `web` group; the server is off unless `herdbook.mcp.enabled` is set. What it offers is in [Agents](agents.md); how it is built:
+
+- **Authentication.** `AuthenticateAgent` answers 404 while the server is off, refuses browsers (an `Origin` header), finds the token by its hash (`AgentToken::findByToken()`), limits the rate, refuses an expired token or an account without two-factor authentication, and signs the account in for the request without a session (`Auth::setUser()`). `SetUserLocale` runs after it, so a tool's errors come in the account's language; the middleware's own refusals come in `APP_LOCALE`. The account knows its agent for that request (`User::currentAgentToken()`): that is how `RecordsActivity` logs `via` and `agent_token_id`, how `recorded_via` is filled, and how `RequiresWriteAccess` decides.
+- **One class per tool** in `app/Mcp/Tools`, listed in `HerdbookServer::$tools`, with its annotations (`IsReadOnly`, `IsDestructive`, `IsIdempotent`, `IsOpenWorld`) on the class itself: the package doesn't inherit them. The server's instructions are set in `HerdbookServer::boot()`, as they name the display timezone.
+- **Arguments** go through `ValidatesArguments`: a blank string counts as absent, an argument the tool doesn't take is refused, and a `ValidationException` becomes an error the agent reads. The rules are the forms' rules; text an agent writes also gets `NoCredentials` and `NoImagesOrHtml` (`WritesMaintenance::textRules()`), and times `Moment`.
+- **Answers** are built by `Serializer`, field by field: a new column never reaches an agent by itself. Add a field there only if an agent needs it and it may leave your network. A field an agent never gets may be searched on only when compared whole (`SearchInventory`; a provider hostname's first label counts as whole), never in part: a match on part of it would spell it out.
+- **Saving over a change.** A tool that changes existing maintenance takes the `version` the agent read, and saves through `Maintenance::updateWhileStill()`, `complete()` or `cancel()`: they lock the row (`Maintenance::locked()`), compare its status and `version()`, and only then save. A form in the panel that saves over maintenance does the same (`EditMaintenance::beforeSave()`, the **Complete** modal), so neither undoes what the other did meanwhile. A plan or report longer than `Serializer::MAX_TEXT` is never overwritten by an agent, which couldn't read it whole.
+- **Language.** Tool names, descriptions, the server's instructions and the argument names are English, and not translated: they are written for a model. What an agent passes on to a person (errors and validation messages) is translated.
+
+Tests call the tools over HTTP with `Tests\Concerns\ActsAsAgent` (`agentToken()`, `callToolSuccessfully()`, `callToolError()`, `mcp()`), so the middleware, the routes and the package's JSON-RPC are part of every test.
+
+<a name="adding-a-tool"></a>
+### Adding a Tool
+
+1. A class in `app/Mcp/Tools` with its `Name` and its annotations, listed in `HerdbookServer::$tools`.
+2. A tool that writes uses `RequiresWriteAccess`, and deletes nothing. Text it writes gets `WritesMaintenance::textRules()`, and it doesn't overwrite a text longer than `Serializer::MAX_TEXT` (`refuseCutTexts()`).
+3. A tool that changes existing maintenance takes its `version` and saves through `updateWhileStill()`, `complete()` or `cancel()`.
+4. Its arguments through `ValidatesArguments`, its answer through `Serializer`, with a test that it returns no field an agent never gets. New kinds of data also go into the lists in [Agents](agents.md#what-it-gets) and [Security](security.md#agents).
+5. Its errors in `__()`, with their Dutch in `lang/nl.json`.
+6. A feature test through `ActsAsAgent`.
+7. A row in the table of [Agents](agents.md#what-an-agent-can-do), and in the permissions example there.
+
 <a name="the-data-model"></a>
 ## The Data Model
 
@@ -266,10 +296,10 @@ The project is the center; see [Inventory](inventory.md#the-model-at-a-glance) f
 
 | Area | Tables |
 |---|---|
-| Accounts | `users` (with two-factor columns, `locale`, `pushover_user_key`, `receives_critical_alerts`, `receives_alert_mail`), `sessions` |
+| Accounts | `users` (with two-factor columns, `locale`, `pushover_user_key`, `receives_critical_alerts`, `receives_alert_mail`), `sessions`, `agent_tokens` (an agent of an account: only a SHA-256 hash of its token, `access`, `expires_at` as a `dateTime`) |
 | Inventory | `clients`, `providers` (`kinds` as JSON), `projects`, `environments`, `servers`, `environment_server` (with `role`), `server_dependencies` (`server_id` needs `depends_on_id`, with a `kind`), `networks`, `network_addresses`, `domains`, `domain_prices` (a registrar's price per extension, unique on `provider_id` + `extension`), `hostnames`, `subscriptions` |
 | Monitoring | `checks` (on a hostname or a server; `settings` as JSON), `check_results` (raw), `check_stats` (`hour` and `day`), `check_events` (switches between up and down, with notification and incident bookkeeping) |
-| Knowledge | `incidents`, `incident_timeline_entries`, `incident_actions`, `documents`, `document_revisions`, `credential_references`, `maintenances` |
+| Knowledge | `incidents`, `incident_timeline_entries`, `incident_actions`, `documents`, `document_revisions`, `credential_references`, `maintenances` (`recorded_via`: the agent it was written through) |
 | Links | `incidentables`, `documentables`, `credentialables`, `maintainables`: one pivot per kind, polymorphic on the inventory side |
 | Other | `status_screens` (only a SHA-256 hash of each token), `activity_log` (spatie/laravel-activitylog), and Laravel's own tables for the cache, the queue and failed jobs |
 
@@ -279,6 +309,6 @@ Renewable tables (`domains`, `servers`, `subscriptions`, `networks`) share the r
 ## Code Conventions
 
 - **English** for identifiers, file names, comments, PHPDoc, test method names, log messages, and the descriptions and output of Artisan commands.
-- **Translatable** for everything a user reads: Filament labels, notifications, validation messages, enum labels, emails, alerts and the status screen. Write the English text in `__('…')` and add the Dutch to `lang/nl.json` in the same change. See [Translations](translations.md#writing-translatable-code).
+- **Translatable** for everything a user reads: Filament labels, notifications, validation messages, enum labels, emails, alerts, the status screen, and the errors the MCP tools return. Tool descriptions and the MCP server's instructions are English only ([The MCP Server](#the-mcp-server)). Write the English text in `__('…')` and add the Dutch to `lang/nl.json` in the same change. See [Translations](translations.md#writing-translatable-code).
 - Comments explain *why*, not what the next line does.
 - One subject per pull request, with a test. See [CONTRIBUTING.md](../CONTRIBUTING.md).

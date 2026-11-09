@@ -8,6 +8,7 @@
 - [Completing or Calling Off](#completing-or-calling-off)
 - [One Maintenance, Several Servers](#one-maintenance-several-servers)
 - [When Was This Last Done?](#when-was-this-last-done)
+- [From an Agent](#from-an-agent)
 - [On the Dashboard and the Status Page](#on-the-dashboard-and-the-status-page)
 
 <a name="introduction"></a>
@@ -34,7 +35,7 @@ A maintenance consists of one or more kinds of **work**:
 
 The **title** is optional. Leave it empty and Herdbook makes one from the work, such as "Updates and reboot". A generated title follows along when you change the work later; a title you typed yourself stays as it is. Because generated titles repeat, search results and the list you pick from when linking show the date next to them.
 
-A maintenance can be linked to **projects and servers** (not to domains, networks or clients). The person who wrote it down is recorded with it.
+A maintenance can be linked to **projects and servers** (not to domains, networks or clients). The person who wrote it down is recorded with it, and the agent if it came through one.
 
 <a name="logging-work-you-did"></a>
 ## Logging Work You Did
@@ -91,6 +92,13 @@ From the maintenance that is done, Herdbook knows when each kind of work last ha
 
 Only maintenance linked to the server itself counts here: work logged on a project does not tell which of its servers was updated.
 
+<a name="from-an-agent"></a>
+## From an Agent
+
+An agent such as Claude Code can do most of this for you through Herdbook's MCP server: find a server by its hostname, see when it was last updated, plan an upgrade with a work plan, write down what it did, and complete or call off what was planned ([Agents](agents.md)). It needs a token of its own, created on the host with `agents:create`.
+
+Maintenance an agent creates shows "Ada via deploy-agent" in the list and on the maintenance. What an agent may write: [Agents](agents.md#what-it-may-write); how it avoids saving over your changes: [Changes Made Meanwhile](agents.md#changes-made-meanwhile).
+
 <a name="on-the-dashboard-and-the-status-page"></a>
 ## On the Dashboard and the Status Page
 
@@ -98,7 +106,7 @@ When anything is planned, the dashboard shows a **Planned maintenance** table: w
 
 The [status page](dashboard.md#the-project-status-page) of a project draws maintenance as a band over its window above the uptime bars: blue, dashed while it is planned, orange when it is overdue. It shows the maintenance of the project and of the servers its production needs, so an update of a shared database server shows up on every project that uses it.
 
-The activity log records the changes to a maintenance and who made them, but not its links to servers and projects. Of its plan and report, which are long texts, it only records that they changed.
+The activity log records the changes to a maintenance, who made them and through which agent, but not its links to servers and projects. Of its plan and report, which are long texts, it only records that they changed.
 
 > [!NOTE]
 > Alerts are not silenced during a planned maintenance window: a check that goes down during your work still alerts as usual. Pause the checks involved if you expect downtime (see [Monitoring](monitoring.md#creating-a-check-by-hand)).

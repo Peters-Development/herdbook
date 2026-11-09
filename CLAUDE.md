@@ -6,7 +6,7 @@ Guidance for Claude Code working in this repository.
 
 **Herdbook** is an open-source (AGPL-3.0-or-later), self-hosted overview of everything a team or freelancer runs: projects, their environments, the servers they run on, networks, domains and hostnames, incident reports, runbooks, references to credentials, maintenance, uptime checks with notifications, and what it all costs (subscriptions included). The UI speaks English and Dutch (see "Language boundary"). Laravel 13 + Filament 5 (one panel, at `/`), MySQL 8.4, PHP 8.5.
 
-- **One organization, no tenancy.** One database, one panel. Every account is an administrator; there is no registration (`php artisan users:create`). Two-factor authentication is required.
+- **One organization, no tenancy.** One database, one panel. Every account is an administrator; there is no registration (`php artisan users:create`). Two-factor authentication is required; the one exception is an agent token (MCP), which only an account with two-factor authentication gets.
 - **The project is the center.** Project → Environment (production, staging, …) → Server (with a role). Everything else links to it.
 - **Not a CRM.** A client is a name, an external link (to whatever invoicing or CRM tool the user has) and an outage contact.
 - **Runs on the user's own machine ("the host")** on a private network: over Tailscale (`tailscale serve` → `https://herdbook.<tailnet>.ts.net`, no published port), on the local network (Caddy, HTTPS with its own CA), or both: `COMPOSE_PROFILES` in `docker/box.env` (`tailscale`, `lan`, `vaultwarden`).
@@ -42,6 +42,8 @@ Overview: how a project, environment, server or hostname is doing comes from `Pr
 
 Costs: domains, servers, subscriptions and networks (their internet line) are `Renewable` (`HasRenewal` + `HasCost`; amounts excluding VAT). What they cost per year, per month and per provider, project or client comes from `RecurringCosts` (scoped), for the cost page (`Pages\Costs`), the cost section on project and client pages (`CostSchema::ownerSection()`) and anything else that shows a total: never derive it elsewhere. What an item costs is `costAmount()`/`costPeriod()`, never the columns: a domain without an amount of its own takes its registrar's price list (`DomainPrice`, per extension; eager-load `costAmountRelations()`, in SQL `yearlyCostSql()`/`missingCost()`). Money is `BcMath\Number` and formatted with `Money` (separators and symbol follow the language and `config('herdbook.currency_symbol')`), never a float. A new renewable model implements `Renewable` (incl. `costProjects()`/`costClients()`/`costRelations()`) and goes into `Renewable::MODELS` and `RenewalSchema::resource()`/`icon()`/`mono()`.
 
+Agents: an MCP server (`laravel/mcp`) at `/mcp` for agents such as Claude Code (`routes/ai.php`, loaded by the package outside the `web` group; off unless `HERDBOOK_MCP_ENABLED`; `docs/agents.md`). A token per agent (`agents:create`, only its hash stored; read or write), checked by `AuthenticateAgent`, which signs the account in for the request without a session; a tool knows its agent from `$request->user()?->currentAgentToken()`. A tool is a class in `app/Mcp/Tools`, listed in `HerdbookServer::$tools`, with its annotations on the class itself; a write tool uses `RequiresWriteAccess`, and no tool deletes anything. Arguments go through `ValidatesArguments`; text an agent writes gets `NoCredentials` and `NoImagesOrHtml`. Answers go through `Mcp\Serializer`, field by field: never return a model as it is, and search a field an agent never gets only when compared whole, never in part. Maintenance an agent creates gets `recorded_via`; `RecordsActivity` adds `via` and `agent_token_id` to every change it makes. Saving over existing maintenance compares `Maintenance::version()` under `Maintenance::locked()`: the change tools take the version the agent read, and the edit form and the Complete modal do the same, so neither undoes the other's change. Tests go through `Tests\Concerns\ActsAsAgent`; a new tool also goes into `docs/agents.md` ("Adding a Tool" in `docs/development.md`).
+
 ---
 
 ## Hot rules
@@ -74,9 +76,9 @@ The brand is the ear tag ("oormerk"): a yellow tag on ink, IBM Plex.
 
 ## Language boundary
 
-**English**: identifiers, file names, comments and PHPDoc, test method names, log messages, artisan descriptions and command output, docs, commit messages, pull requests and issues, and the source text of everything a user reads.
+**English**: identifiers, file names, comments and PHPDoc, test method names, log messages, artisan descriptions and command output, docs, commit messages, pull requests and issues, MCP tool descriptions and the MCP server's instructions (written for a model, not translated), and the source text of everything a user reads.
 
-**Translated**: everything a user reads (Filament labels, notifications, validation messages, enum labels, mails, alerts, the status screen) is an English string in `__('…')` / `trans_choice()`, with its Dutch in `lang/nl.json` in the same change.
+**Translated**: everything a user reads (Filament labels, notifications, validation messages, enum labels, mails, alerts, the status screen, the errors MCP tools return) is an English string in `__('…')` / `trans_choice()`, with its Dutch in `lang/nl.json` in the same change.
 - The languages are `config('herdbook.locales')`; `APP_LOCALE` is the default (sign-in page, alerts, digests, status screen), each account picks its own in its profile (`SetUserLocale`). Date and money formats per language: `lang/<locale>/formats.php`.
 - Filament's static label properties cannot call `__()`: use the methods (`getModelLabel()`, `getTitle()`, …). Menu groups: `App\Enums\NavigationGroup`.
 - `TranslationsTest` fails on a string without a Dutch translation, an unused translation, or mismatched placeholders. The suite runs in Dutch, so its assertions read the Dutch UI. How to add a language: `docs/translations.md`.

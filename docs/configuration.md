@@ -122,7 +122,7 @@ Use an SMTP server that doesn't run on the servers Herdbook watches: otherwise t
 
 | Setting | Default | Purpose |
 |---|---|---|
-| `HERDBOOK_MCP_ENABLED` | `false` | The MCP server at `/mcp`, through which agents such as Claude Code look up and record maintenance. Each agent also needs a token of its own (`agents:create`). Off: `/mcp` answers 404, which shuts every agent out at once and keeps their tokens for when it is back on. See [Agents](agents.md). |
+| `HERDBOOK_MCP_ENABLED` | `false` | The MCP server at `/mcp`, through which agents such as Claude Code look up inventory, and plan and record maintenance. Each agent also needs a token of its own (`agents:create`). Off: `/mcp` answers 404, which shuts every agent out at once and keeps their tokens for when it is back on. See [Agents](agents.md). |
 
 <a name="database-sessions-queue-and-cache"></a>
 ### Database, Sessions, Queue and Cache
