@@ -553,6 +553,7 @@
     "On the map": "Op de kaart",
     "On the status screen": "Op het statusscherm",
     "Ongoing incidents": "Lopende incidenten",
+    "Only a resolved incident has a resolution time: give status resolved too, or use resolve_incident.": "Alleen een opgelost incident heeft een oplostijd: geef ook status resolved, of gebruik resolve_incident.",
     "Only if this name sends visitors elsewhere, like www to the name without www. Monitoring then checks the redirect.": "Alleen als deze naam bezoekers doorstuurt, zoals www naar de naam zonder www. De bewaking controleert dan de doorverwijzing.",
     "Only in your local DNS, such as home.arpa: no registrar, costs or renewal (they are cleared), and every name under it is local.": "Alleen in je lokale DNS, zoals home.arpa: geen registrar, kosten of verlenging (die worden gewist), en elke naam eronder is lokaal.",
     "Only in your local DNS, with a self-signed certificate or one of your own CA (such as Caddy's). Turning on monitoring then creates just a page check that accepts its certificate.": "Alleen in je lokale DNS, met een zelfondertekend certificaat of een van een eigen CA (zoals die van Caddy). Bewaking aanzetten maakt dan alleen een check van de pagina die het certificaat accepteert.",

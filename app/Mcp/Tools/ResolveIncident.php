@@ -67,10 +67,10 @@ class ResolveIncident extends Tool
         $given = $this->parseChanges($input);
 
         $resolved = $incident->saveWhile(fn (Incident $current): bool => $current->status !== IncidentStatus::Resolved, function () use ($incident, $given): array {
-            $changes = ['resolved_at' => $given['resolved_at'] ?? CarbonImmutable::now()->startOfMinute(), ...$given];
+            $changes = ['status' => IncidentStatus::Resolved->value, 'resolved_at' => $given['resolved_at'] ?? CarbonImmutable::now()->startOfMinute(), ...$given];
             $this->checkChanges($incident, $changes);
 
-            return ['status' => IncidentStatus::Resolved, ...$changes];
+            return $changes;
         }, $input['version']);
 
         return match (true) {

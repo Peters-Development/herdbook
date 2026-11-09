@@ -119,6 +119,13 @@ trait ChangesIncident
             }
         }
 
+        // Only a resolved incident has a resolution time.
+        $status = array_key_exists('status', $changes) ? IncidentStatus::from($changes['status']) : $incident->status;
+
+        if (($changes['resolved_at'] ?? null) !== null && $status !== IncidentStatus::Resolved && ! $validator->errors()->has('resolved_at')) {
+            $validator->errors()->add('resolved_at', __('Only a resolved incident has a resolution time: give status resolved too, or use resolve_incident.'));
+        }
+
         // Its links as they will be, when they change: one server or project at least.
         if (array_key_exists('server_ids', $changes) || array_key_exists('project_ids', $changes)) {
             $servers = $changes['server_ids'] ?? $incident->servers->modelKeys();

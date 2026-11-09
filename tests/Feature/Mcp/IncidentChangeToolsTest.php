@@ -116,6 +116,14 @@ class IncidentChangeToolsTest extends TestCase
         $this->update($incident, ['status' => 'open']);
         $this->assertSame([IncidentStatus::Open, null], [$incident->refresh()->status, $incident->resolved_at]);
 
+        // Only a resolved incident has one.
+        foreach ([[], ['status' => 'monitoring']] as $status) {
+            $this->assertSame(
+                'resolved_at: Alleen een opgelost incident heeft een oplostijd: geef ook status resolved, of gebruik resolve_incident.',
+                $this->callToolError($this->token, 'update_incident', ['id' => $incident->id, 'version' => $incident->version(), 'resolved_at' => '2026-11-09T12:30', ...$status]),
+            );
+        }
+
         $this->update($incident, ['status' => 'resolved']);
         $this->assertSame([IncidentStatus::Resolved, '2026-11-09 12:00:00'], [$incident->refresh()->status, $incident->resolved_at->toDateTimeString()]);
     }

@@ -37,7 +37,7 @@ class UpdateIncident extends Tool
     {
         return 'Change an incident: its title, severity, status (open, monitoring or resolved; to resolve it, resolve_incident also sets when), the day it is filed under, when it started, was detected and was resolved, its impact, root cause and report, or the servers and projects it concerns. '
             .'Read it first with get_incident and give its "version": as this overwrites what people, monitoring or other agents wrote, the change is refused when someone changed it since. '
-            .'Give only what changes; what you leave out stays, and an empty string counts as left out. Null clears a time, the impact, the root cause or the report; server_ids or project_ids replace the links of that kind (its domains, networks and clients stay; one server or project at least). Reopened (status open or monitoring) it has no resolution time any more, unless you give one. '
+            .'Give only what changes; what you leave out stays, and an empty string counts as left out. Null clears a time, the impact, the root cause or the report; server_ids or project_ids replace the links of that kind (its domains, networks and clients stay; one server or project at least). Reopened (status open or monitoring) it has no resolution time any more; resolved_at is refused for an incident that isn\'t, or doesn\'t become, resolved. '
             .'A text you read with masks such as [address of app-1] can\'t be written back with them: write one of your own. '
             .self::cutTextsSentence('An impact, root cause or report', 'get_incident')
             .self::textsSentence('A root cause or report').'The impact is plain text. '
