@@ -120,14 +120,16 @@ final class CheckIncidents
                 $incident->projects()->attach(array_diff($check->affectedProjects()->pluck('id')->all(), $incident->projects->modelKeys()));
                 $incident->servers()->attach(array_diff($check->affectedServers()->pluck('id')->all(), $incident->servers->modelKeys()));
 
-                if ($incident->status === IncidentStatus::Monitoring) {
-                    $incident->update(['status' => IncidentStatus::Open]);
-                }
+                // Open again, and a critical production outage is SEV1, also in
+                // what a person or an agent wrote down as less: the overviews
+                // go by it. One change, so one entry in the activity log.
+                $raised = $incident->severity !== IncidentSeverity::Sev1;
+                $incident->update([
+                    'status' => $incident->status === IncidentStatus::Monitoring ? IncidentStatus::Open : $incident->status,
+                    'severity' => IncidentSeverity::Sev1,
+                ]);
 
-                // A critical production outage is SEV1, also in what a person
-                // or an agent wrote down as less: the overviews go by it.
-                if ($incident->severity !== IncidentSeverity::Sev1) {
-                    $incident->update(['severity' => IncidentSeverity::Sev1]);
+                if ($raised) {
                     $incident->timelineEntries()->create([
                         'occurred_at' => $event->occurred_at,
                         'note' => __('Raised to SEV1: a critical production check is down.'),
