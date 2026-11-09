@@ -323,7 +323,7 @@ trait WritesMaintenance
      */
     protected static function textsSentence(string $what = 'A plan or report'): string
     {
-        return $what.' is markdown of at most '.number_format(Serializer::MAX_TEXT).' characters, and refuses passwords, tokens, private keys, images, HTML and links to other sites (put tags, placeholders and web addresses between backticks; links into Herdbook, those already in the text you replace, and email addresses such as deploy@app-1 in an ssh command may stay). ';
+        return $what.' is markdown of at most '.number_format(Serializer::MAX_TEXT).' characters, and refuses passwords, tokens, private keys, images, HTML and links to other sites (put tags, placeholders and web addresses between backticks; link into Herdbook with a path, such as [app-1](/servers/1); links already in the text you replace, and email addresses such as deploy@app-1.example.com in an ssh command, may stay). ';
     }
 
     /**

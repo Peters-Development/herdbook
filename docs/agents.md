@@ -58,7 +58,7 @@ The same rules as the forms apply, with the same messages: work that is done can
 - links what it writes to at least one server or project;
 - writes no passwords, tokens or private keys: text that looks like one is refused (a long value after `DB_PASSWORD=` or `Authorization: Bearer`, known token formats, a password in a URL). This guards against accidents, such as pasted command output, not against an agent that means to get a secret through;
 - writes no images or HTML in plans and reports: an image would be loaded the moment a person opens or edits the page, and could carry data along in its address;
-- links to no other site: a link could lead somewhere else than it says. Links into Herdbook (`APP_URL`) pass, and so do the links of the text it replaces, so an agent can add a step to your plan without breaking your links. A web address between backticks is fine, and so is an email address, as in `ssh deploy@app-1.example.com`. An agent can still move one of your links under other words;
+- links to no other site: a link could lead somewhere else than it says. Links into Herdbook pass (a path such as `/servers/1`, or `APP_URL`), and so do the links of the text it replaces, so an agent can add a step to your plan without breaking your links. A web address between backticks is fine, and so is an email address, as in `ssh deploy@app-1.example.com`. An agent can still move one of your links under other words;
 - writes at most 10,000 characters per plan or report, and doesn't overwrite a plan or report that is longer, whoever wrote it: it would lose what it couldn't read;
 - changes the status only by completing or calling off, and doesn't change maintenance that was called off.
 

@@ -12,6 +12,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 use Spatie\Activitylog\Models\Activity;
 
 /**
@@ -104,9 +105,11 @@ class ActivityRelationManager extends RelationManager
                         ->map(fn (string $text, string $attribute): TextEntry => TextEntry::make("previous_{$attribute}")
                             ->label(ActivityPresenter::textLabel($record, $attribute))
                             ->state($text)
+                            // The class on the text alone: around it is the template's whitespace.
+                            ->formatStateUsing(fn (string $state): HtmlString => new HtmlString('<span class="hb-as-written">'.e($state).'</span>'))
                             ->fontFamily(FontFamily::Mono)
-                            ->extraAttributes(['class' => 'hb-as-written'])
-                            ->copyable())
+                            ->copyable()
+                            ->copyableState($text))
                         ->values()
                         ->all()),
             ]);

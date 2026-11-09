@@ -94,11 +94,12 @@ class NoNewLinks implements ValidationRule
     }
 
     /**
-     * An email address that reads as itself: mailto: and its text the same.
+     * One plain email address that reads as itself, as GFM autolinks one:
+     * no subject or body to fill in, no other recipients.
      */
     private static function showsItsAddress(Link $link): bool
     {
-        if (! str_starts_with(strtolower($link->getUrl()), 'mailto:')) {
+        if (preg_match('/^mailto:[^\s?,&%\/:@]+@[^\s?,&%\/:@]+\z/i', $link->getUrl()) !== 1) {
             return false;
         }
 

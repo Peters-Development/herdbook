@@ -10,6 +10,7 @@ use App\Filament\Resources\Maintenances\Pages\ViewMaintenance;
 use App\Filament\Support\ActivityPresenter;
 use App\Mcp\Serializer;
 use App\Models\AgentToken;
+use App\Models\Incident;
 use App\Models\Maintenance;
 use App\Models\Project;
 use App\Models\Server;
@@ -387,7 +388,8 @@ class MaintenanceChangeToolsTest extends TestCase
 
     public function test_the_activity_log_keeps_the_text_an_agent_replaced_to_put_it_back(): void
     {
-        $maintenance = $this->planned(['plan' => 'The plan Bob wrote.']);
+        $bob = 'The plan Bob wrote: <b>x</b>, [the docs](https://elsewhere.example).';
+        $maintenance = $this->planned(['plan' => $bob]);
         $this->update($maintenance, ['plan' => 'Something else entirely.']);
         $this->update($maintenance, ['report' => 'A first report.']);
         $this->update($maintenance, ['report' => null]);
@@ -395,7 +397,7 @@ class MaintenanceChangeToolsTest extends TestCase
         $maintenance->refresh()->update(['plan' => 'By hand.']);
 
         [$replaced, $added, $cleared, $byHand] = Activity::query()->where('subject_type', 'maintenance')->where('subject_id', $maintenance->id)->where('event', 'updated')->orderBy('id')->get()->all();
-        $this->assertSame(['plan' => 'The plan Bob wrote.'], $replaced->properties['previous_texts']);
+        $this->assertSame(['plan' => $bob], $replaced->properties['previous_texts']);
         $this->assertSame(['report' => 'A first report.'], $cleared->properties['previous_texts']);
         // Nothing replaced, or not by an agent: nothing kept.
         $this->assertArrayNotHasKey('previous_texts', $added->properties->all());
@@ -405,7 +407,22 @@ class MaintenanceChangeToolsTest extends TestCase
             ->assertActionHidden(TestAction::make('previousTexts')->table($added))
             ->assertActionHidden(TestAction::make('previousTexts')->table($byHand))
             ->mountAction(TestAction::make('previousTexts')->table($replaced))
-            ->assertMountedActionModalSee(['Wat de agent verving.', 'Plan', 'The plan Bob wrote.']);
+            ->assertMountedActionModalSee(['Wat de agent verving.', 'Plan'])
+            // As written: escaped, not rendered as markdown.
+            ->assertMountedActionModalSeeHtml('<span class="hb-as-written">The plan Bob wrote: &lt;b&gt;x&lt;/b&gt;, [the docs](https://elsewhere.example).</span>')
+            ->assertMountedActionModalDontSeeHtml('<a href="https://elsewhere.example');
+    }
+
+    public function test_only_a_model_that_opts_in_keeps_the_texts_an_agent_replaced(): void
+    {
+        $this->actingAs($this->user->withAgentToken($this->agent));
+        $incident = Incident::factory()->create(['body' => 'The report Bob wrote.']);
+
+        $incident->update(['body' => 'Rewritten.']);
+
+        $activity = Activity::query()->where('subject_type', 'incident')->where('subject_id', $incident->id)->where('event', 'updated')->sole();
+        $this->assertSame(['body'], $activity->properties['texts']);
+        $this->assertArrayNotHasKey('previous_texts', $activity->properties->all());
     }
 
     public function test_a_change_by_hand_names_no_agent(): void
