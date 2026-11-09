@@ -60,7 +60,7 @@ class CompleteMaintenance extends Tool
             'version' => $this->versionRules(),
             'starts_at' => ['sometimes', 'required', new Moment],
             'ends_at' => ['nullable', new Moment],
-            'report' => $this->textRules(replacing: true),
+            'report' => $this->textRules(linksCheckedOnLockedRow: true),
         ], after: function (Validator $validator): void {
             // A null report clears the one there is: as a text given, only
             // over the one the agent read (required_with lets null through).

@@ -28,12 +28,13 @@ class NoNewLinksTest extends TestCase
             'an autolink' => ['See <https://elsewhere.example>.'],
             'a bare address' => ['See https://elsewhere.example/x.'],
             'www' => ['See www.elsewhere.example/x?d=1.'],
-            'an email address' => ['Mail ops@elsewhere.example when done.'],
-            'mailto' => ['[Mail us](mailto:ops@elsewhere.example)'],
+            'mailto under other words' => ['[Mail us](mailto:ops@elsewhere.example)'],
             'a reference' => ["[here][1]\n\n[1]: https://elsewhere.example/x"],
             'protocol-relative' => ['[here](//elsewhere.example/x)'],
             'javascript' => ['[here](javascript:alert(1))'],
             'Herdbook over plain http elsewhere' => ['[here](http://elsewhere.example/maintenances/1)'],
+            'Herdbook\'s host on another port' => ['[here](https://herdbook.example.com:8443/x)'],
+            'Herdbook\'s host over plain http' => ['[here](http://herdbook.example.com/x)'],
         ];
     }
 
@@ -56,6 +57,9 @@ class NoNewLinksTest extends TestCase
             'a link into Herdbook' => ['See [the plan](https://herdbook.example.com/maintenances/5).'],
             'a link into Herdbook by an address in capitals' => ['See [the plan](https://HERDBOOK.example.com/maintenances/5).'],
             'no link at all' => ['Run apt upgrade, then reboot.'],
+            'an email address as itself' => ['Mail ops@elsewhere.example when done.'],
+            'ssh to a user at a host' => ['Run ssh deploy@app-1.example.com and check the logs.'],
+            'Herdbook\'s own port written out' => ['See [the plan](https://herdbook.example.com:443/maintenances/5).'],
         ];
     }
 
@@ -73,10 +77,11 @@ class NoNewLinksTest extends TestCase
         $this->assertTrue(Validator::make(['plan' => $replaced."\n3. See [this](https://elsewhere.example/other)."], ['plan' => [new NoNewLinks($replaced)]])->fails());
     }
 
-    public function test_a_link_on_the_host_an_agent_reaches_herdbook_on_passes(): void
+    public function test_a_host_a_request_names_is_not_herdbook(): void
     {
-        $this->app['request']->headers->set('HOST', 'herdbook.home.arpa');
+        $this->app['request']->headers->set('HOST', 'elsewhere.example');
+        $this->app['request']->headers->set('X-Forwarded-Host', 'elsewhere.example');
 
-        $this->assertFalse(Validator::make(['plan' => '[plan](https://herdbook.home.arpa/maintenances/5)'], ['plan' => [new NoNewLinks]])->fails());
+        $this->assertTrue(Validator::make(['plan' => '[plan](https://elsewhere.example/steal?d=1)'], ['plan' => [new NoNewLinks]])->fails());
     }
 }

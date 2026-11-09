@@ -2,13 +2,12 @@
 
 namespace App\Rules;
 
+use App\Rules\Concerns\ParsesMarkdown;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use League\CommonMark\Extension\CommonMark\Node\Block\HtmlBlock;
 use League\CommonMark\Extension\CommonMark\Node\Inline\HtmlInline;
 use League\CommonMark\Extension\CommonMark\Node\Inline\Image;
-use League\CommonMark\GithubFlavoredMarkdownConverter;
-use League\CommonMark\Parser\MarkdownParser;
 
 /**
  * Markdown from agents without images or HTML. An image loads the moment a
@@ -24,6 +23,8 @@ use League\CommonMark\Parser\MarkdownParser;
  */
 class NoImagesOrHtml implements ValidationRule
 {
+    use ParsesMarkdown;
+
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if (! is_string($value)) {
@@ -37,9 +38,7 @@ class NoImagesOrHtml implements ValidationRule
             return;
         }
 
-        $document = (new MarkdownParser((new GithubFlavoredMarkdownConverter)->getEnvironment()))->parse($value);
-
-        foreach ($document->iterator() as $node) {
+        foreach (self::parseMarkdown($value)->iterator() as $node) {
             if ($node instanceof Image || $node instanceof HtmlInline || $node instanceof HtmlBlock) {
                 $fail(__('No images or HTML: put tags and placeholders between backticks.'));
 

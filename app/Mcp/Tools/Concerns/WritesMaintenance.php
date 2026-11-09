@@ -123,15 +123,16 @@ trait WritesMaintenance
     /**
      * Markdown that agents may write: what MAX_TEXT allows (first: the other
      * checks take time on a long text), no private keys or credentials, no
-     * images or HTML, and for a new text no links to other sites. A text
-     * that replaces one may keep the links of the one it replaces: the tools
-     * check that on the locked row (ChangesMaintenance::checkTexts()).
+     * images or HTML, and no links to other sites. A text that replaces one
+     * may keep the links of the one it replaces, which only the locked row
+     * tells: a tool that passes $linksCheckedOnLockedRow must call
+     * ChangesMaintenance::checkTexts() there.
      *
      * @return list<mixed>
      */
-    protected function textRules(bool $replacing = false): array
+    protected function textRules(bool $linksCheckedOnLockedRow = false): array
     {
-        return ['bail', 'nullable', 'string', 'max:'.Serializer::MAX_TEXT, new NoSecretMaterial, new NoCredentials, new NoImagesOrHtml, ...($replacing ? [] : [new NoNewLinks])];
+        return ['bail', 'nullable', 'string', 'max:'.Serializer::MAX_TEXT, new NoSecretMaterial, new NoCredentials, new NoImagesOrHtml, ...($linksCheckedOnLockedRow ? [] : [new NoNewLinks])];
     }
 
     /**
@@ -322,7 +323,7 @@ trait WritesMaintenance
      */
     protected static function textsSentence(string $what = 'A plan or report'): string
     {
-        return $what.' is markdown of at most '.number_format(Serializer::MAX_TEXT).' characters, and refuses passwords, tokens, private keys, images, HTML and links to other sites (put tags, placeholders and addresses between backticks; links into Herdbook, and those already in the text you replace, may stay). ';
+        return $what.' is markdown of at most '.number_format(Serializer::MAX_TEXT).' characters, and refuses passwords, tokens, private keys, images, HTML and links to other sites (put tags, placeholders and web addresses between backticks; links into Herdbook, those already in the text you replace, and email addresses such as deploy@app-1 in an ssh command may stay). ';
     }
 
     /**

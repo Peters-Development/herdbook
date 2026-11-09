@@ -25,7 +25,7 @@
 
 An agent such as [Claude Code](https://code.claude.com) can look things up in Herdbook and keep its maintenance log, without clicking through the panel: find a server, see when it was last updated, plan work, and write down what it did. It talks to Herdbook's MCP server (the [Model Context Protocol](https://modelcontextprotocol.io)) at `/mcp`, with a token of its own.
 
-Herdbook remains the place where people work: an agent sees less than a person and may do less. Maintenance an agent creates is signed with its account and its name, such as "Ada via deploy-agent", and the activity log names the agent for every change it makes to a maintenance (not to its links, which aren't logged for people either).
+Herdbook remains the place where people work: an agent sees less than a person and may do less. Maintenance an agent creates is signed with its account and its name, such as "Ada via deploy-agent", and the activity log names the agent for every change it makes to a maintenance (not to which servers and projects it is linked to, which isn't logged for people either).
 
 <a name="what-an-agent-can-do"></a>
 ## What an Agent Can Do
@@ -58,7 +58,7 @@ The same rules as the forms apply, with the same messages: work that is done can
 - links what it writes to at least one server or project;
 - writes no passwords, tokens or private keys: text that looks like one is refused (a long value after `DB_PASSWORD=` or `Authorization: Bearer`, known token formats, a password in a URL). This guards against accidents, such as pasted command output, not against an agent that means to get a secret through;
 - writes no images or HTML in plans and reports: an image would be loaded the moment a person opens or edits the page, and could carry data along in its address;
-- links to no other site: a link could lead somewhere else than it says. Links into Herdbook pass, and so do the links of the text it replaces, so an agent can add a step to your plan without breaking your links. An address between backticks is fine;
+- links to no other site: a link could lead somewhere else than it says. Links into Herdbook (`APP_URL`) pass, and so do the links of the text it replaces, so an agent can add a step to your plan without breaking your links. A web address between backticks is fine, and so is an email address, as in `ssh deploy@app-1.example.com`. An agent can still move one of your links under other words;
 - writes at most 10,000 characters per plan or report, and doesn't overwrite a plan or report that is longer, whoever wrote it: it would lose what it couldn't read;
 - changes the status only by completing or calling off, and doesn't change maintenance that was called off.
 
@@ -67,7 +67,7 @@ Times are ISO 8601, such as `2026-11-12T22:00`, in minutes as in the forms: seco
 <a name="changes-made-meanwhile"></a>
 ### Changes Made Meanwhile
 
-Every maintenance an agent reads comes with a `version`, a fingerprint of everything that can be changed, its links included. To change a maintenance, or to complete it with a report (or clear its report), the agent gives that version back. If someone changed the maintenance since, the agent is told to read it again, and nothing is saved. Completing without a report, and calling off, only need the maintenance to be still planned.
+Every maintenance an agent reads comes with a `version`, a fingerprint of everything that can be changed, its servers and projects included. To change a maintenance, or to complete it with a report (or clear its report), the agent gives that version back. If someone changed the maintenance since, the agent is told to read it again, and nothing is saved. Completing without a report, and calling off, only need the maintenance to be still planned.
 
 It works the other way too. An edit form or a **Complete** modal left open in the panel doesn't undo what an agent (or another tab) did meanwhile: saving refuses, keeps what the agent wrote, and says the maintenance was changed meanwhile, or that it is no longer planned.
 
@@ -229,7 +229,7 @@ Then store the new token with the [same command](#the-token-in-your-keychain) as
 - **A token is a key without a second factor.** Treat it like a password.
 - **What an agent reads leaves your network.** Everything a tool returns becomes part of the conversation, which goes to the agent's model provider and stays in its local history (for Claude Code, under `~/.claude`). That is why tools return no addresses, notes or contact details, but names, plans and reports are sent as written.
 - **Plans and reports are written by people and other agents.** Herdbook tells agents to treat them as data, to act on a plan only when you ask, and to tell you when a plan was changed by someone other than its creator, but that is no guarantee: a text can try to steer an agent. Don't let an agent that carries out a plan run without asking for permission, so you see each command before it reaches your servers.
-- **An agent acts within its token.** A misled agent with a write token can plan, change, complete or call off maintenance. It can't delete maintenance, and the activity log names it and keeps the plans and reports it replaced, but changes to links aren't logged.
+- **An agent acts within its token.** A misled agent with a write token can plan, change, complete or call off maintenance. It can't delete maintenance, and the activity log names it and keeps the plans and reports it replaced, but changes to its servers and projects aren't logged.
 - **Revoking.** `agents:revoke` (one, an account's, or all), or switch the MCP server off. A backup restored from before a revoke brings the token back: revoke it again ([Disaster Recovery](backups.md#disaster-recovery)).
 
 The [Security](security.md#agents) page puts this in the context of the rest of Herdbook.

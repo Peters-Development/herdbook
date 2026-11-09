@@ -239,8 +239,8 @@ class Maintenance extends Model
     /**
      * The last logged change to the plan and to the report (null: none),
      * from the activity log, which records who changed a text and through
-     * which agent, but not the text: so a plan someone rewrote doesn't pass
-     * for its creator's. Changes from before Herdbook logged them ("texts")
+     * which agent: so a plan someone rewrote doesn't pass for its
+     * creator's. Changes from before Herdbook logged them ("texts")
      * aren't there.
      *
      * @return array{plan: ?Activity, report: ?Activity}
@@ -312,6 +312,14 @@ class Maintenance extends Model
     protected function linkMorphName(): string
     {
         return 'maintainable';
+    }
+
+    /**
+     * The agent tools write over a plan or report only whole.
+     */
+    protected function keepsReplacedTexts(): bool
+    {
+        return true;
     }
 
     /** @return list<string> */

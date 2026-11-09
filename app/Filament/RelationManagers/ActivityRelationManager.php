@@ -6,6 +6,8 @@ use App\Filament\Support\ActivityPresenter;
 use Filament\Actions\Action;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Support\Enums\FontFamily;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -92,7 +94,7 @@ class ActivityRelationManager extends RelationManager
                 // What an agent replaced (RecordsActivity keeps it): to copy back.
                 Action::make('previousTexts')
                     ->label(__('Previous text'))
-                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->icon(Heroicon::OutlinedArrowUturnLeft)
                     ->visible(fn (Activity $record): bool => ActivityPresenter::previousTexts($record) !== [])
                     ->modalHeading(__('Previous text'))
                     ->modalDescription(__('What the agent replaced. To restore it, copy it into the edit form.'))
@@ -101,24 +103,12 @@ class ActivityRelationManager extends RelationManager
                     ->schema(fn (Activity $record): array => collect(ActivityPresenter::previousTexts($record))
                         ->map(fn (string $text, string $attribute): TextEntry => TextEntry::make("previous_{$attribute}")
                             ->label(ActivityPresenter::textLabel($record, $attribute))
-                            ->state(self::asCode($text))
-                            ->markdown()
-                            ->copyable()
-                            ->copyableState($text))
+                            ->state($text)
+                            ->fontFamily(FontFamily::Mono)
+                            ->extraAttributes(['class' => 'hb-as-written'])
+                            ->copyable())
                         ->values()
                         ->all()),
             ]);
-    }
-
-    /**
-     * Markdown shown as written, in a code block: a fence longer than any
-     * run of backticks in it.
-     */
-    private static function asCode(string $text): string
-    {
-        preg_match_all('/`+/', $text, $runs);
-        $fence = str_repeat('`', max(3, max(0, ...array_map(strlen(...), $runs[0] ?: [''])) + 1));
-
-        return "{$fence}\n{$text}\n{$fence}";
     }
 }

@@ -58,8 +58,8 @@ class UpdateMaintenance extends Tool
             'id' => $this->idRules(),
             'version' => $this->versionRules(required: true),
             ...$this->workRules(partial: true),
-            'plan' => $this->textRules(replacing: true),
-            'report' => $this->textRules(replacing: true),
+            'plan' => $this->textRules(linksCheckedOnLockedRow: true),
+            'report' => $this->textRules(linksCheckedOnLockedRow: true),
         ]);
         $maintenance = $this->findMaintenance((int) $input['id']);
 

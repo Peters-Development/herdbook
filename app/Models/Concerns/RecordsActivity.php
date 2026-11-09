@@ -32,9 +32,10 @@ trait RecordsActivity
      * page of what this model belongs to, even after it was deleted; which
      * long texts changed ("texts"); and the agent that acted for the causer
      * ("via", "agent_token_id": its name may be reused once it is revoked).
-     * A long text an agent replaced is kept ("previous_texts"): a misled
-     * agent's change can then be undone from the log. An agent only writes
-     * over texts it can read whole, so what is kept stays short.
+     * A long text an agent replaced is kept ("previous_texts") when the
+     * model says so (keepsReplacedTexts()): a misled agent's change can then
+     * be undone from the log. Only for texts the agent tools write over
+     * whole, which they read whole: so what is kept stays short.
      */
     public function beforeActivityLogged(Model $activity, string $eventName): void
     {
@@ -48,7 +49,7 @@ trait RecordsActivity
         if ($eventName === 'updated' && ($texts = $this->changedTextsNotLogged()) !== []) {
             $context['texts'] = $texts;
 
-            if (isset($context['via']) && ($previous = array_filter(array_intersect_key($this->getOriginal(), array_flip($texts)), filled(...))) !== []) {
+            if (isset($context['via']) && $this->keepsReplacedTexts() && ($previous = array_filter(array_intersect_key($this->getRawOriginal(), array_flip($texts)), filled(...))) !== []) {
                 $context['previous_texts'] = $previous;
             }
         }
@@ -89,6 +90,16 @@ trait RecordsActivity
     protected function activityContext(): array
     {
         return [];
+    }
+
+    /**
+     * Whether the log keeps the long texts an agent replaced: only for a
+     * model whose agent tools refuse to write over a text longer than they
+     * read (ChangesMaintenance::checkTexts()).
+     */
+    protected function keepsReplacedTexts(): bool
+    {
+        return false;
     }
 
     /**
