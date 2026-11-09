@@ -281,7 +281,10 @@ class IncidentReadToolsTest extends TestCase
             'a MAC written the Cisco way' => ['nas 0011.2233.4455', 'nas [adres van nas]'],
             'a provider hostname glued to what comes before it' => ['%2Fvps-123.provider.example', '%2F[adres van app-1]'],
             'a provider hostname glued to what comes after it' => ['in /var/log/nginx/vps-123.provider.example-access.log', 'in /var/log/nginx/[adres van app-1]-access.log'],
+            'a provider hostname and a dashed address glued after it' => ['vps-123.provider.example-192-0-2-10.log', '[adres van app-1]-[adres van app-1].log'],
+            'a provider hostname between letters outside ASCII' => ['服务器vps-123.provider.example已重启, vps-123.provider.exampleé', '服务器[adres van app-1]已重启, [adres van app-1]é'],
             'not code with two colons' => ['Cache::add() failed in std::cafe and Foo::bar::baz', 'Cache::add() failed in std::cafe and Foo::bar::baz'],
+            'a short IPv6 after a word and a colon' => ['addr:fd00::5 ip:fd00::5', 'addr:[adres van db-1] ip:[adres van db-1]'],
             'not a provider hostname that is a name, or numbers that are no address' => ['hz-1 ran out of disk on 6.8.0-45-generic, call 06-12-34-56-78 on 2026-11-09', 'hz-1 ran out of disk on 6.8.0-45-generic, call 06-12-34-56-78 on 2026-11-09'],
         ];
     }
@@ -291,6 +294,7 @@ class IncidentReadToolsTest extends TestCase
     {
         Server::factory()->create(['name' => 'app-1', 'public_ipv4' => '192.0.2.10', 'public_ipv6' => '2001:db8::10', 'provider_hostname' => 'vps-123.provider.example']);
         Server::factory()->create(['name' => 'hz-1', 'provider_hostname' => 'hz-1']);
+        Server::factory()->create(['name' => 'db-1', 'public_ipv6' => 'fd00::5']);
         Network::factory()->create(['name' => 'Office', 'subnet' => '10.20.0.0/16', 'gateway' => '192.168.1.1']);
         Network::factory()->create(['name' => 'Home', 'gateway' => '192.168.1.1']);
         NetworkAddress::query()->create(['network_id' => Network::query()->firstWhere('name', 'Office')->id, 'name' => 'nas', 'address' => '10.20.0.9', 'mac_address' => '00:11:22:33:44:55']);
@@ -312,13 +316,18 @@ class IncidentReadToolsTest extends TestCase
         Server::factory()->create(['name' => 'port', 'provider_hostname' => 'vps-1.host.example:2222']);
         Server::factory()->create(['name' => 'path', 'provider_hostname' => 'vps-2.host.example/vm/7']);
         Server::factory()->create(['name' => 'user', 'provider_hostname' => 'root@vps-3.host.example']);
+        Server::factory()->create(['name' => 'hindi', 'provider_hostname' => 'उदाहरण.परीक्षा']);
+        Server::factory()->create(['name' => 'thai', 'provider_hostname' => 'ตัวอย่าง.example']);
 
         $this->assertSame(
             '[adres van trail], [adres van panel] and [adres van idn]; [adres van port], [adres van path], [adres van user]',
             app(HiddenValues::class)->mask('trail.host.example, panel.host.example and xn--bcher-kva.example; vps-1.host.example, vps-2.host.example, vps-3.host.example'),
         );
-        // An internationalised one also as written, in any case.
-        $this->assertSame('[adres van idn] and https://[adres van idn]/ are down', app(HiddenValues::class)->mask('bücher.example and https://BÜCHER.example/ are down'));
+        // An internationalised one also as written, in any case and script; the others still when letters are glued to them.
+        $this->assertSame(
+            '[adres van idn] and https://[adres van idn]/ are down, as are [adres van hindi] and [adres van thai]; 服务器[adres van port]已重启',
+            app(HiddenValues::class)->mask('bücher.example and https://BÜCHER.example/ are down, as are उदाहरण.परीक्षा and ตัวอย่าง.example; 服务器vps-1.host.example已重启'),
+        );
     }
 
     public function test_no_mask_is_masked_again(): void
@@ -353,6 +362,11 @@ class IncidentReadToolsTest extends TestCase
         $found = $this->callToolSuccessfully($this->token, 'get_incident', ['id' => $incident->id]);
 
         $this->assertStringStartsWith('[adres van server-1499] and [adres van server-1499] went down; ſ a.a.', $found['impact']);
+
+        // Labels full of dashes cost no more than a few: no name ends beyond the first 63 characters of one.
+        $started = microtime(true);
+        app(HiddenValues::class)->mask(str_repeat('a.', 11).str_repeat('a-', 16000).'a');
+        $this->assertLessThan(2, microtime(true) - $started);
     }
 
     public function test_when_masking_fails_the_text_is_hidden_not_shown(): void

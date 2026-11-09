@@ -16,10 +16,11 @@ use App\Models\Server;
  * Token by token, not with one pattern of every value: a pattern that size
  * stops compiling at a few hundred servers. In turn: MAC addresses, IPv6
  * addresses, runs of dotted numbers (IPv4, also with leading zeros or glued
- * to what comes before it, "%2F192.0.2.10"), and runs of labels (names, an
- * internationalised one also as written, a known one also inside a longer
- * name or glued to what comes before or after it, and IPv4 addresses
- * spelled with dashes in cloud hostnames). Each looked up in
+ * to what comes before it, "%2F192.0.2.10"), runs of labels in any script
+ * when Herdbook knows an internationalised name (as written), and runs of
+ * labels (names, a known one also inside a longer name, glued to what comes
+ * before it or after it with a dash, and IPv4 addresses spelled with dashes
+ * in cloud hostnames). Each looked up in
  * a table, so ports, URLs and user@host fall away. Each pass writes
  * placeholders, so no mask is masked again. A time such as 12:30:45 is no
  * address. Best effort: an address in a form nothing here expects (octal,
@@ -34,7 +35,20 @@ class HiddenValues
 
     private const string IPV4 = '/(?<![0-9])\d+(?:\.\d{1,3}){3,}(?![0-9])/';
 
-    private const string LABELS = '/[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?(?:\.[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?)*+/u';
+    private const string LABELS = '/[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*+/';
+
+    /**
+     * Labels in any script, marks included (Hindi, Thai): only when an
+     * internationalised name is known, and before LABELS, which would cut it
+     * at its first letter outside ASCII. Not instead of LABELS: letters glued
+     * to a name ("服务器vps-1.example") would hide it.
+     */
+    private const string UNICODE_LABELS = '/[\p{L}\p{N}](?:[\p{L}\p{M}\p{N}-]*[\p{L}\p{M}\p{N}])?(?:\.[\p{L}\p{N}](?:[\p{L}\p{M}\p{N}-]*[\p{L}\p{M}\p{N}])?)*+/u';
+
+    /**
+     * The longest a DNS label is: no known name ends further into one.
+     */
+    private const int MAX_LABEL = 63;
 
     /**
      * The most labels a value has (an FQDN): no part of a longer run is
@@ -47,6 +61,9 @@ class HiddenValues
 
     /** @var array<string, array<string, string>> a known name without its first label => first label => mask */
     private array $tails = [];
+
+    /** Whether a known name is internationalised (written outside ASCII). */
+    private bool $unicode = false;
 
     /** @var list<string> the masks of the text being masked, by placeholder number */
     private array $masks = [];
@@ -61,6 +78,11 @@ class HiddenValues
         $masked = $this->replace(self::MAC, $text, fn (array $m): string => $this->mac($m[0]));
         $masked = $this->replace(self::IPV6, $masked, fn (array $m): string => $m[1].$this->ipv6($m[2], glued: $m[1] !== ''));
         $masked = $this->replace(self::IPV4, $masked, fn (array $m): string => $this->ipv4($m[0]));
+
+        if ($masked !== null && $this->knowsUnicodeNames()) {
+            $masked = $this->replace(self::UNICODE_LABELS, $masked, fn (array $m): string => $this->labels($m[0]));
+        }
+
         $masked = $this->replace(self::LABELS, $masked, fn (array $m): string => $this->labels($m[0]));
 
         if ($masked === null) {
@@ -143,16 +165,17 @@ class HiddenValues
 
     /**
      * What looks like an IPv6 address: masked when it is one, with or
-     * without a leading colon ("addr:2001:db8::10"). Glued to letters before
-     * it, two groups are code, not an address ("Cache::add", "std::cafe").
+     * without a leading colon ("addr:fd00::5"). With letters glued to its
+     * first group, two groups are code, not an address ("Cache::add",
+     * "std::cafe").
      */
     private function ipv6(string $token, bool $glued): string
     {
-        foreach ([$token, ltrim($token, ':')] as $candidate) {
-            if ($glued && count(array_filter(explode(':', $candidate), fn (string $group): bool => $group !== '')) < 3) {
-                continue;
-            }
+        if ($glued && ! str_starts_with($token, ':') && count(array_filter(explode(':', $token), fn (string $group): bool => $group !== '')) < 3) {
+            return $token;
+        }
 
+        foreach ([$token, ltrim($token, ':')] as $candidate) {
             if (filter_var($candidate, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false) {
                 $mask = $this->known()[$this->normalized($candidate)] ?? '['.__('address').']';
 
@@ -240,7 +263,7 @@ class HiddenValues
             $label = (string) $label;
 
             if (mb_strlen($first) > mb_strlen($label) && str_ends_with(mb_strtolower($first), $label)) {
-                return mb_substr($first, 0, mb_strlen($first) - mb_strlen($label)).$this->hold($mask);
+                return $this->ipInLabel(mb_substr($first, 0, mb_strlen($first) - mb_strlen($label))).$this->hold($mask);
             }
         }
 
@@ -248,19 +271,19 @@ class HiddenValues
     }
 
     /**
-     * $labels are a known name, but for what follows a dash in the last.
+     * $labels are a known name, but for what follows a dash in the last:
+     * the longest such name, within the first MAX_LABEL characters.
      *
      * @param  list<string>  $labels
      */
     private function suffixed(array $labels): ?string
     {
-        $parts = explode('-', (string) array_pop($labels));
+        $last = (string) array_pop($labels);
+        $head = implode('.', $labels).'.';
 
-        for ($kept = count($parts) - 1; $kept > 0; $kept--) {
-            $name = implode('.', [...$labels, implode('-', array_slice($parts, 0, $kept))]);
-
-            if (($mask = $this->known()[mb_strtolower($name)] ?? null) !== null) {
-                return $this->hold($mask).'-'.implode('-', array_slice($parts, $kept));
+        for ($dash = strrpos(substr($last, 0, self::MAX_LABEL + 1), '-'); $dash !== false && $dash > 0; $dash = strrpos(substr($last, 0, $dash), '-')) {
+            if (($mask = $this->known()[mb_strtolower($head.substr($last, 0, $dash))] ?? null) !== null) {
+                return $this->hold($mask).$this->ipInLabel(substr($last, $dash));
             }
         }
 
@@ -289,6 +312,13 @@ class HiddenValues
         $packed = @inet_pton($ipv6);
 
         return $packed === false ? strtolower($ipv6) : (string) inet_ntop($packed);
+    }
+
+    private function knowsUnicodeNames(): bool
+    {
+        $this->known();
+
+        return $this->unicode;
     }
 
     /**
@@ -344,6 +374,8 @@ class HiddenValues
             fn (array $names): string => count($names) === 1 ? '['.__('address of :name', ['name' => array_key_first($names)]).']' : '['.__('address').']',
             $owners,
         );
+
+        $this->unicode = preg_grep('/[^\x00-\x7F]/', array_map(strval(...), array_keys($this->known))) !== [];
 
         foreach ($this->known as $value => $mask) {
             if (str_contains($value, '.') && ! filter_var($value, FILTER_VALIDATE_IP)) {
