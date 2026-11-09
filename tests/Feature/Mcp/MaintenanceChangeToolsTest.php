@@ -326,8 +326,8 @@ class MaintenanceChangeToolsTest extends TestCase
 
     public function test_true_is_no_id(): void
     {
-        $maintenance = $this->planned();
-        $this->assertSame(1, $maintenance->id);
+        // Id 1 by name: MySQL doesn't start counting again for every test.
+        $maintenance = $this->planned(['id' => 1]);
 
         foreach (['get_maintenance', 'update_maintenance', 'complete_maintenance', 'cancel_maintenance'] as $tool) {
             $this->assertSame('Het veld id moet een getal zijn.', $this->callToolError($this->token, $tool, ['id' => true, ...($tool === 'update_maintenance' ? ['version' => $maintenance->version(), 'title' => 'x'] : [])]), $tool);
