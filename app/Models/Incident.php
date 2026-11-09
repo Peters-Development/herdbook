@@ -8,12 +8,12 @@ use App\Enums\IncidentStatus;
 use App\Models\Concerns\GuardsChanges;
 use App\Models\Concerns\LinksToInventory;
 use App\Models\Concerns\RecordsActivity;
+use App\Models\Concerns\RecordsAuthor;
 use Carbon\CarbonInterval;
 use Database\Factories\IncidentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -26,36 +26,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Incident extends Model
 {
     /** @use HasFactory<IncidentFactory> */
-    use GuardsChanges, HasFactory, LinksToInventory, RecordsActivity;
+    use GuardsChanges, HasFactory, LinksToInventory, RecordsActivity, RecordsAuthor;
 
     protected $attributes = [
         'source' => 'manual',
     ];
-
-    protected static function booted(): void
-    {
-        static::creating(function (Incident $incident): void {
-            $incident->user_id ??= auth()->id();
-        });
-    }
-
-    /**
-     * Who wrote it down; null when monitoring opened it or it was imported.
-     *
-     * @return BelongsTo<User, $this>
-     */
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
-    }
-
-    /**
-     * Who wrote it down, and through which agent: "Ada via deploy-agent".
-     */
-    public function recordedBy(): ?string
-    {
-        return AgentToken::byline($this->user?->name, $this->recorded_via);
-    }
 
     /**
      * What the edit form and the agent tools can change; not where it came

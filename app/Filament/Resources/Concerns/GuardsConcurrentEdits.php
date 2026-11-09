@@ -11,7 +11,9 @@ use Livewire\Attributes\Locked;
  * An edit page that doesn't undo a change made since it was filled (an
  * agent, monitoring, another tab): it compares the record's version() on
  * the locked row before it saves (GuardsChanges). For a record whose model
- * uses GuardsChanges.
+ * uses GuardsChanges. It takes the page's beforeFill, beforeSave and
+ * afterSave hooks: a page that needs one of its own aliases this one
+ * (use GuardsConcurrentEdits { afterSave as guardAfterSave; }) and calls it.
  */
 trait GuardsConcurrentEdits
 {

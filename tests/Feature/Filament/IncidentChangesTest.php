@@ -49,6 +49,10 @@ class IncidentChangesTest extends TestCase
         $this->assertEqualsCanonicalizing(array_keys($changes), Incident::versionedAttributes());
         $this->assertEqualsCanonicalizing([...Incident::versionedAttributes(), 'source', 'imported_from', 'user_id'], (new Incident)->getFillable());
 
+        // Stable: the same in memory, read plainly and read under the lock.
+        $incident = $this->incident();
+        $this->assertSame([$incident->version(), $incident->version()], [$incident->fresh()->version(), Incident::locked($incident->id)->version()]);
+
         foreach ($changes as $field => $value) {
             $incident = $this->incident();
             $version = $incident->version();

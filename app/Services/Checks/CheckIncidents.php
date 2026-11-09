@@ -47,14 +47,18 @@ final class CheckIncidents
             ->orderBy('id')
             ->get();
 
-        foreach ($events as $event) {
-            DB::transaction(function () use ($event, &$opened): void {
+        foreach ($events as $listed) {
+            $opened += DB::transaction(function () use ($listed): int {
                 // Under the same lock RunChecks records with: a check that just
                 // came back up gets no incident, and its recovery is not missed.
-                $check = Check::query()->lockForUpdate()->with(['hostname.environment.project', 'server'])->find($event->check_id);
+                $check = Check::query()->lockForUpdate()->with(['hostname.environment.project', 'server'])->find($listed->check_id);
 
-                if (CheckEvent::query()->whereKey($event->id)->value('incident_evaluated_at') !== null) {
-                    return;
+                // Read again in every attempt: one that was rolled back (a
+                // deadlock, tried again) leaves its changes on the models.
+                $event = CheckEvent::query()->find($listed->id);
+
+                if ($event === null || $event->incident_evaluated_at !== null) {
+                    return 0;
                 }
 
                 $event->update(['incident_evaluated_at' => now()]);
@@ -66,38 +70,43 @@ final class CheckIncidents
                     || ! $check->enabled
                     || $check->alert_level !== AlertLevel::Critical
                     || ! $check->watchesProduction()) {
-                    return;
+                    return 0;
                 }
 
                 $event->setRelation('check', $check);
-                $existing = $this->openIncidentFor($check);
-                // Locked before its timeline gets a row: two checks of one
-                // incident handled at once must not deadlock on it. Read
-                // again under the lock: resolved meanwhile, it is not joined.
-                $existing = $existing ? Incident::query()->lockForUpdate()->find($existing->id) : null;
+                $found = $this->openIncidentFor($check);
+                // Locked, its links with it (as the edit form and the agent
+                // tools lock it), before its timeline gets a row: two checks
+                // of one incident handled at once must not deadlock on it.
+                // Read again under the lock: resolved meanwhile, it is not joined.
+                $existing = $found ? Incident::locked($found->id) : null;
                 $incident = $existing !== null && $existing->status !== IncidentStatus::Resolved ? $existing : $this->createIncident($event);
-                $opened += $incident->wasRecentlyCreated ? 1 : 0;
 
                 $event->update(['incident_id' => $incident->id]);
 
-                if (! $incident->wasRecentlyCreated) {
-                    $incident->timelineEntries()->create([
-                        'occurred_at' => $event->occurred_at,
-                        'note' => $event->error
-                            ? __('Also down: :check (:error)', ['check' => $event->check->name, 'error' => $event->error])
-                            : __('Also down: :check', ['check' => $event->check->name]),
-                    ]);
-
-                    // What this check reaches belongs to the incident too: a storage
-                    // server joining an app's incident also takes the other projects
-                    // that mount it.
-                    $incident->projects()->syncWithoutDetaching($check->affectedProjects()->pluck('id')->all());
-                    $incident->servers()->syncWithoutDetaching($check->affectedServers()->pluck('id')->all());
-
-                    if ($incident->status === IncidentStatus::Monitoring) {
-                        $incident->update(['status' => IncidentStatus::Open]);
-                    }
+                if ($incident->wasRecentlyCreated) {
+                    return 1;
                 }
+
+                $incident->timelineEntries()->create([
+                    'occurred_at' => $event->occurred_at,
+                    'note' => $event->error
+                        ? __('Also down: :check (:error)', ['check' => $check->name, 'error' => $event->error])
+                        : __('Also down: :check', ['check' => $check->name]),
+                ]);
+
+                // What this check reaches belongs to the incident too: a storage
+                // server joining an app's incident also takes the other projects
+                // that mount it. Its links as locked() read them: a plain read
+                // could miss one linked meanwhile, and add it twice.
+                $incident->projects()->attach(array_diff($check->affectedProjects()->pluck('id')->all(), $incident->projects->modelKeys()));
+                $incident->servers()->attach(array_diff($check->affectedServers()->pluck('id')->all(), $incident->servers->modelKeys()));
+
+                if ($incident->status === IncidentStatus::Monitoring) {
+                    $incident->update(['status' => IncidentStatus::Open]);
+                }
+
+                return 0;
             }, attempts: 3);
         }
 

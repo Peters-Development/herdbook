@@ -7,6 +7,7 @@ use App\Enums\MaintenanceTask;
 use App\Models\Concerns\GuardsChanges;
 use App\Models\Concerns\LinksToInventory;
 use App\Models\Concerns\RecordsActivity;
+use App\Models\Concerns\RecordsAuthor;
 use Carbon\CarbonImmutable;
 use Closure;
 use Database\Factories\MaintenanceFactory;
@@ -14,7 +15,6 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Arr;
 use Spatie\Activitylog\Models\Activity;
 
@@ -26,7 +26,7 @@ use Spatie\Activitylog\Models\Activity;
 class Maintenance extends Model
 {
     /** @use HasFactory<MaintenanceFactory> */
-    use GuardsChanges, HasFactory, LinksToInventory, RecordsActivity;
+    use GuardsChanges, HasFactory, LinksToInventory, RecordsActivity, RecordsAuthor;
 
     /**
      * What complete() takes from its caller.
@@ -39,10 +39,6 @@ class Maintenance extends Model
 
     protected static function booted(): void
     {
-        static::creating(function (Maintenance $maintenance): void {
-            $maintenance->user_id ??= auth()->id();
-        });
-
         // A quick entry needs no title: "Updates and reboot". One made that
         // way follows the work when it changes; a typed one stays.
         static::saving(function (Maintenance $maintenance): void {
@@ -59,25 +55,6 @@ class Maintenance extends Model
                 $maintenance->title = MaintenanceTask::describe($maintenance->tasks ?? []);
             }
         });
-    }
-
-    /**
-     * Who wrote it down.
-     *
-     * @return BelongsTo<User, $this>
-     */
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
-    }
-
-    /**
-     * Who wrote it down, and through which agent ("Ada via deploy-agent").
-     * Eager-load: user.
-     */
-    public function recordedBy(): ?string
-    {
-        return AgentToken::byline($this->user?->name, $this->recorded_via);
     }
 
     /**

@@ -179,7 +179,7 @@ class CheckIncidentsTest extends TestCase
         // (the query for an open check incident), before it locked it.
         $resolved = false;
         DB::listen(function (QueryExecuted $query) use (&$resolved): void {
-            if (! $resolved && str_contains($query->sql, '"source" = ?') && Incident::query()->exists()) {
+            if (! $resolved && str_starts_with(strtolower($query->sql), 'select') && str_contains($query->sql, 'detected_at') && Incident::query()->exists()) {
                 $resolved = true;
                 DB::table('incidents')->update(['status' => IncidentStatus::Resolved->value]);
             }

@@ -205,12 +205,7 @@ final class MaintenanceSchema
      */
     public static function changedMeanwhile(): void
     {
-        Notification::make()
-            ->warning()
-            ->title(__('This maintenance was changed meanwhile.'))
-            ->body(__('Reload the page to see the change; yours was not saved.'))
-            ->persistent()
-            ->send();
+        ChangedMeanwhile::notify(__('This maintenance was changed meanwhile.'));
     }
 
     /**
