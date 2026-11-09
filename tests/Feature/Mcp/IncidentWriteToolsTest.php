@@ -203,6 +203,7 @@ class IncidentWriteToolsTest extends TestCase
         return [
             'no links' => [['server_ids' => []], 'Koppel het aan minstens één server of project'],
             'no title' => [['title' => null], 'Het veld title is verplicht.'],
+            'a title of spaces in any script' => [['title' => "\u{00A0}\u{3000} "], 'Het veld title is verplicht.'],
             'a future start' => [['started_at' => '2026-11-10T09:00'], 'started_at: Het kan niet in de toekomst liggen.'],
             'detected before the start' => [['started_at' => '2026-11-08T21:00', 'detected_at' => '2026-11-08T20:00'], 'detected_at: Het kan niet vóór het begin liggen.'],
             'before 1970' => [['started_at' => '1969-12-31T10:00'], 'started_at: Kies een moment tussen 1970 en 2038.'],

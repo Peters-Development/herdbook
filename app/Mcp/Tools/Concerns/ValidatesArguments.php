@@ -37,7 +37,8 @@ trait ValidatesArguments
     protected function validated(Request $request, array $rules, ?Closure $after = null): array
     {
         $arguments = collect($request->all())
-            ->reject(fn (mixed $value): bool => is_string($value) && trim($value) === '')
+            // Blank in any script: a title of no-break spaces would be squished to nothing.
+            ->reject(fn (mixed $value): bool => is_string($value) && Str::squish($value) === '')
             ->all();
 
         $known = array_values(array_filter(array_keys($rules), fn (string $key): bool => ! str_contains($key, '.')));
