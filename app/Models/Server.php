@@ -60,9 +60,10 @@ class Server extends Model implements Renewable
             }
 
             // Its provider is the DNS host of the domains whose DNS runs here
-            // (Domain::booted()). Through Eloquent, so each is logged.
+            // (Domain::booted(), which takes it from this server rather than
+            // asking again). Through Eloquent, so each is logged.
             if ($server->wasChanged('provider_id')) {
-                $server->dnsDomains()->get()->each->update(['dns_provider_id' => $server->provider_id]);
+                $server->dnsDomains()->get()->each(fn (Domain $domain) => $domain->setRelation('dnsServer', $server)->update(['dns_provider_id' => $server->provider_id]));
             }
         });
     }

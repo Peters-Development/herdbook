@@ -6,6 +6,7 @@ use App\Models\Domain;
 use App\Models\Provider;
 use App\Models\Server;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\Models\Activity;
 use Tests\TestCase;
 
@@ -66,6 +67,19 @@ class DnsServerTest extends TestCase
         $domain->update(['dns_server_id' => null]);
 
         $this->assertSame($package->provider_id, $domain->fresh()->dns_provider_id);
+    }
+
+    public function test_a_provider_change_does_not_ask_for_the_server_again_per_domain(): void
+    {
+        $package = Server::factory()->create(['provider_id' => Provider::factory()->create()->id]);
+        $domains = Domain::factory()->count(3)->create(['dns_server_id' => $package->id]);
+        $other = Provider::factory()->create();
+
+        DB::enableQueryLog();
+        $package->update(['provider_id' => $other->id]);
+
+        $this->assertSame([$other->id], $domains->map(fn (Domain $domain): ?int => $domain->fresh()->dns_provider_id)->unique()->values()->all());
+        $this->assertSame([], collect(DB::getQueryLog())->pluck('query')->filter(fn (string $query): bool => str_contains($query, 'select "provider_id" from "servers"'))->values()->all());
     }
 
     public function test_the_dns_host_follows_when_the_server_moves_to_another_provider(): void

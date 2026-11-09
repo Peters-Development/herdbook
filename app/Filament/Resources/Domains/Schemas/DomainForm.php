@@ -167,7 +167,7 @@ class DomainForm
 
                 $extension = Domain::extensionOf($domain->name);
 
-                DomainPrice::query()->firstOrCreate(
+                $price = DomainPrice::query()->firstOrCreate(
                     ['provider_id' => $domain->registrar_id, 'extension' => $extension],
                     ['cost_amount' => $data['cost_amount']],
                 );
@@ -179,6 +179,17 @@ class DomainForm
 
                 if ($cleared) {
                     $schemaSet('cost_amount', null);
+                }
+
+                // Added meanwhile (another tab): its price stays, the one typed is not used.
+                if (! $price->wasRecentlyCreated) {
+                    Notification::make()
+                        ->warning()
+                        ->title(__('.:extension was in the price list already, at :amount.', ['extension' => $extension, 'amount' => Money::format($price->cost_amount)]))
+                        ->body(__('Change it on the form of the registrar.'))
+                        ->send();
+
+                    return;
                 }
 
                 Notification::make()

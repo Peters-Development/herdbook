@@ -53,7 +53,18 @@ class Provider extends Model
      */
     public function domainsAtListPrice(): Collection
     {
-        return $this->registeredDomains()->atListPrice()->orderBy('name')->get();
+        return $this->domainsAtListPriceQuery()->orderBy('name')->get();
+    }
+
+    /**
+     * domainsAtListPrice() as a query: running ones only, as the counts of
+     * its price list.
+     *
+     * @return HasMany<Domain, $this>
+     */
+    public function domainsAtListPriceQuery(): HasMany
+    {
+        return $this->registeredDomains()->atListPrice()->whereNull('renewal_stopped_at');
     }
 
     /** @return HasMany<Domain, $this> */

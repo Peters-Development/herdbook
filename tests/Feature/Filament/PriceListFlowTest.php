@@ -118,6 +118,37 @@ class PriceListFlowTest extends TestCase
             ->assertActionHidden('usePriceList');
     }
 
+    public function test_a_cancelled_domain_is_not_moved_onto_the_price_list(): void
+    {
+        $this->price('com', '9.95');
+        $cancelled = $this->domain('gone.com', ['cost_amount' => '9.95', 'cost_period' => CostPeriod::Year, 'renewal_stopped_at' => now()]);
+
+        // As the price list on the page, which counts it nowhere.
+        Livewire::test(ViewProvider::class, ['record' => $this->registrar->getRouteKey()])
+            ->assertActionHidden('usePriceList');
+
+        $this->assertSame([], $this->registrar->domainsAtListPrice()->modelKeys());
+        $this->assertSame('9.95', $cancelled->fresh()->cost_amount);
+    }
+
+    public function test_an_extension_added_meanwhile_keeps_its_price_and_says_so(): void
+    {
+        $domain = $this->domain('example.nl', ['cost_amount' => '7.50', 'cost_period' => CostPeriod::Year]);
+
+        $form = Livewire::test(EditDomain::class, ['record' => $domain->getRouteKey()])
+            ->mountAction(TestAction::make('addToPriceList')->schemaComponent('cost_amount', schema: 'form'));
+
+        // Another tab adds it first.
+        $this->price('nl', '5.00');
+
+        $form->setActionData(['cost_amount' => '7.50'])
+            ->callMountedAction()
+            ->assertNotified('.nl stond al in de prijslijst, voor € 5,00.')
+            ->assertFormSet(['cost_amount' => '7.50']);
+
+        $this->assertSame('5.00', $this->registrar->domainPrices()->sole()->cost_amount);
+    }
+
     public function test_the_domain_form_shows_the_list_price_or_its_absence(): void
     {
         $this->price('com', '9.95');
@@ -167,6 +198,42 @@ class PriceListFlowTest extends TestCase
         $this->assertSame('nl', $com->fresh()->extension);
         $this->assertSame('com', $nl->fresh()->extension);
         $this->assertSame('+31 20 000 0000', $this->registrar->fresh()->support_phone);
+    }
+
+    public function test_removing_or_renaming_a_line_that_domains_use_says_so(): void
+    {
+        $com = $this->price('com', '9.95');
+        $nl = $this->price('nl', '6.50');
+        $this->domain('a.com');
+        $this->domain('b.com');
+        $this->domain('c.nl');
+        $this->domain('own.com', ['cost_amount' => '12.00', 'cost_period' => CostPeriod::Year]);
+
+        // The com line removed (set: fillForm() would merge the lines).
+        Livewire::test(EditProvider::class, ['record' => $this->registrar->getRouteKey()])
+            ->set('data.domainPrices', ["record-{$nl->id}" => ['extension' => 'nl', 'cost_amount' => '6.50']])
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertNotified('2 domeinen hebben geen prijs meer uit de prijslijst: ze tellen nergens meer mee.');
+
+        $this->assertNull($com->fresh());
+
+        Livewire::test(EditProvider::class, ['record' => $this->registrar->getRouteKey()])
+            ->set('data.domainPrices', ["record-{$nl->id}" => ['extension' => 'net', 'cost_amount' => '6.50']])
+            ->call('save')
+            ->assertNotified('1 domein heeft geen prijs meer uit de prijslijst: het telt nergens meer mee.');
+    }
+
+    public function test_a_change_of_price_alone_says_nothing_more_than_saved(): void
+    {
+        $com = $this->price('com', '9.95');
+        $this->domain('a.com');
+
+        Livewire::test(EditProvider::class, ['record' => $this->registrar->getRouteKey()])
+            ->fillForm(['domainPrices' => ["record-{$com->id}" => ['extension' => 'com', 'cost_amount' => '11.00']]])
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertNotNotified('1 domein heeft geen prijs meer uit de prijslijst: het telt nergens meer mee.');
     }
 
     public function test_a_registrar_is_created_with_its_price_list(): void
