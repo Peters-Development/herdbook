@@ -7,13 +7,16 @@ use App\Enums\IncidentSeverity;
 use App\Enums\IncidentSource;
 use App\Enums\IncidentStatus;
 use App\Mcp\Serializer;
+use App\Models\AgentToken;
 use App\Models\Incident;
 use App\Models\IncidentAction;
 use App\Models\Project;
 use App\Models\Server;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Sleep;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\ActsAsAgent;
 use Tests\TestCase;
@@ -156,6 +159,23 @@ class IncidentWriteToolsTest extends TestCase
         IncidentAction::retrieved(fn (IncidentAction $read) => IncidentAction::query()->whereKey($read->id)->delete());
 
         $this->assertSame("Er is geen actiepunt met id {$action->id}. get_incident noemt ze.", $this->callToolError($this->token, 'complete_incident_action', ['id' => $action->id]));
+    }
+
+    public function test_a_call_waits_for_the_one_before_of_the_same_agent_and_says_so_when_that_takes_too_long(): void
+    {
+        Sleep::fake(syncWithCarbon: true);
+        $busy = Cache::lock('mcp-write:'.$this->user->id.':'.AgentToken::query()->sole()->id, 60);
+        $busy->get();
+
+        $this->assertSame(
+            'Een andere aanroep van deze agent schrijft nog. Probeer het zo opnieuw.',
+            $this->callToolError($this->token, 'open_incident', ['title' => 'Uploads fail', 'server_ids' => [$this->server->id]]),
+        );
+        $this->assertSame(0, Incident::count());
+
+        $busy->release();
+        $this->callToolSuccessfully($this->token, 'open_incident', ['title' => 'Uploads fail', 'server_ids' => [$this->server->id]]);
+        $this->assertSame(1, Incident::count());
     }
 
     public function test_the_day_it_is_filed_under_is_the_start_in_the_display_timezone(): void

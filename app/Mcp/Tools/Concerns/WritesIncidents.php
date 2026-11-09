@@ -17,10 +17,11 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
 
 /**
- * What the tools that write incidents share: moments that happened (not in
- * the future, within what the columns hold, not before the start), and an
- * answer that names the unresolved incidents sharing a server or project,
- * so an agent joins one rather than opening another.
+ * What the tools that write incidents share: a call tried again writes
+ * nothing twice (once()), moments that happened (not in the future, within
+ * what the columns hold, not before the start), and an answer that names
+ * the unresolved incidents sharing a server or project, so an agent joins
+ * one rather than opening another.
  */
 trait WritesIncidents
 {
