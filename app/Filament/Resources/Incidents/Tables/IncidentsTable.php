@@ -32,7 +32,7 @@ class IncidentsTable
                     ->description(fn (Incident $record): ?string => $record->projects->map(fn (Project $project): string => $project->name)->implode(', ') ?: null),
                 TextColumn::make('severity')->label(__('Severity'))->badge(),
                 TextColumn::make('status')->label(__('Status'))->badge(),
-                RecordedBy::column()->toggledHiddenByDefault(),
+                RecordedBy::column()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('status')->label(__('Status'))->options(IncidentStatus::class),

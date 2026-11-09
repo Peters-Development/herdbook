@@ -50,7 +50,7 @@ class ActionsRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('description')->label(__('Action'))->wrap(),
                 TextColumn::make('due_on')->label(__('Due'))->date(__('formats.date'))->placeholder('—'),
-                RecordedBy::column()->toggledHiddenByDefault(),
+                RecordedBy::column()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('done_at')->label(__('Completed'))->dateTime(__('formats.date'))->placeholder(__('Open')),
                 TextColumn::make('completedBy.name')->label(__('Completed by'))->state(fn (IncidentAction $record): ?string => $record->completedByline())->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
             ])

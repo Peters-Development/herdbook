@@ -110,10 +110,6 @@ final class MaintenanceSchema
             ->rules([new NoSecretMaterial]);
     }
 
-    /**
-     * Who wrote it down, and through which agent. Named after user.name, so
-     * Filament loads the user with the table.
-     */
     public static function tasksColumn(): TextColumn
     {
         return TextColumn::make('tasks')
