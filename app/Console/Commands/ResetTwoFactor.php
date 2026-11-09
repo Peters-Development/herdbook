@@ -13,13 +13,15 @@ use Illuminate\Support\Str;
  *
  * Every session and remember-me cookie of the account is revoked too: the
  * setup page asks for no password, so a lost phone that is still signed in
- * must not be the device that sets up the new authenticator.
+ * must not be the device that sets up the new authenticator. Its agent
+ * tokens are revoked as well: they would work again as soon as the new
+ * authenticator is set up, and the account may have been compromised.
  */
 class ResetTwoFactor extends Command
 {
     protected $signature = 'users:reset-two-factor {email : Email address of the account}';
 
-    protected $description = 'Remove the two-factor setup of an account and sign it out everywhere';
+    protected $description = 'Remove the two-factor setup of an account, sign it out everywhere and revoke its agent tokens';
 
     public function handle(): int
     {
@@ -38,9 +40,11 @@ class ResetTwoFactor extends Command
             $user->save();
 
             DB::table(config('session.table', 'sessions'))->where('user_id', $user->getKey())->delete();
+
+            $user->revokeAgentTokens();
         });
 
-        $this->components->info("Two-factor authentication of {$user->email} removed and all its sessions signed out. It is set up again at the next sign-in.");
+        $this->components->info("Two-factor authentication of {$user->email} removed, all its sessions signed out and its agent tokens revoked. It is set up again at the next sign-in.");
 
         return self::SUCCESS;
     }

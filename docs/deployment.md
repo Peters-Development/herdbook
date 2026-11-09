@@ -416,7 +416,7 @@ docker/compose.sh exec app php artisan users:create
 docker/compose.sh exec app php artisan users:reset-two-factor you@example.com
 ```
 
-This removes the account's two-factor setup and signs it out everywhere. At the next sign-in, Herdbook asks for a new setup. Sign in soon after: until then, the password alone is enough to set up two-factor authentication.
+This removes the account's two-factor setup, signs it out everywhere and revokes its agent tokens. At the next sign-in, Herdbook asks for a new setup. Sign in soon after: until then, the password alone is enough to set up two-factor authentication.
 
 **A forgotten password.** There is no reset by email. Set a new one in Tinker (the password is hashed on save):
 

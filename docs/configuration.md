@@ -9,6 +9,7 @@
     - [Email](#email)
     - [The Vault](#the-vault)
     - [The Heartbeat](#the-heartbeat)
+    - [Agents](#agents)
     - [Database, Sessions, Queue and Cache](#database-sessions-queue-and-cache)
     - [Logging](#logging)
 - [The Herdbook Config File](#the-herdbook-config-file)
@@ -50,7 +51,7 @@ A plain restart is not enough. On the local stack, web requests pick up a change
 |---|---|---|
 | `APP_ENV` | `production` | `local` for the local stack, `production` on the host. `demo:reset` only runs in `local`. |
 | `APP_DEBUG` | `false` | Never `true` on the host: error pages would show code and settings. |
-| `APP_URL` | `http://localhost` | The address you open Herdbook on. Links in alerts, and the link `screens:create` prints, use it, so set it to the address people actually use. |
+| `APP_URL` | `http://localhost` | The address you open Herdbook on. Links in alerts, the link `screens:create` prints and the MCP address `agents:create` prints use it, so set it to the address people actually use. |
 | `APP_KEY` | none | Encrypts the two-factor secrets, the recovery codes and the sessions. Keep a copy offline ([Keeping `APP_KEY` Safe](deployment.md#keeping-app-key-safe)). |
 
 <a name="language-and-region"></a>
@@ -115,6 +116,13 @@ Use an SMTP server that doesn't run on the servers Herdbook watches: otherwise t
 | `HERDBOOK_HEARTBEAT_URL` | empty | Called every five minutes, as long as the checks keep running. An outside monitor (healthchecks.io, or a monitor of your own) then tells you when Herdbook goes quiet. Empty: off. |
 
 [Watching the Watcher](alerts.md#watching-the-watcher) explains why you want one. If the monitor lives on your tailnet, see [Services on Your Tailnet](networking.md#services-on-your-tailnet).
+
+<a name="agents"></a>
+### Agents
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `HERDBOOK_MCP_ENABLED` | `false` | The MCP server at `/mcp`, through which agents such as Claude Code look up and record maintenance. Each agent also needs a token of its own (`agents:create`). Off: `/mcp` answers 404, which shuts every agent out at once and keeps their tokens for when it is back on. See [Agents](agents.md). |
 
 <a name="database-sessions-queue-and-cache"></a>
 ### Database, Sessions, Queue and Cache

@@ -10,7 +10,8 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * The panel in the language of the signed-in account (its profile), or in the
  * default one (APP_LOCALE). Runs after Filament's Authenticate, and on every
- * Livewire request too (persistent auth middleware).
+ * Livewire request too (persistent auth middleware). The MCP server runs it
+ * after AuthenticateAgent, so agents get the account's language too.
  */
 class SetUserLocale
 {

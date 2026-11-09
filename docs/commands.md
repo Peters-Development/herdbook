@@ -63,7 +63,7 @@ The new account sets up two-factor authentication at its first sign-in. Sign in 
 php artisan users:reset-two-factor {email}
 ```
 
-The way back for an account that lost both its authenticator app and its recovery codes. It removes the account's two-factor setup, and signs it out everywhere: every session and every "remember me" cookie. The setup page asks for no password, so a lost phone that is still signed in must not be the device that sets up the new authenticator. At the next sign-in, Herdbook asks for a new setup.
+The way back for an account that lost both its authenticator app and its recovery codes. It removes the account's two-factor setup, and signs it out everywhere: every session and every "remember me" cookie. The setup page asks for no password, so a lost phone that is still signed in must not be the device that sets up the new authenticator. It also revokes the account's agent tokens, which work without a second factor. At the next sign-in, Herdbook asks for a new setup.
 
 <a name="status-screens"></a>
 ## Status Screens

@@ -37,7 +37,7 @@ Herdbook doesn't use the identity headers that `tailscale serve` adds: being on 
 - **No sign-up.** Accounts are created on the command line with `users:create`, never through the web.
 - **Two-factor authentication is required** for every account (TOTP, with recovery codes). It is enforced on every request, Livewire's included, so a page opened before two-factor was turned off stops working too. The secrets and recovery codes are encrypted with `APP_KEY`.
 - **Passwords** are at least 12 characters, and stored as a hash. Sign-in attempts are limited to five a minute. There is no password reset by email: a lost password or second factor is reset on the command line ([Accounts](deployment.md#accounts)).
-- **Resetting two-factor signs the account out everywhere**, every session and every "remember me" cookie, so a lost phone that is still signed in can't set up the new authenticator.
+- **Resetting two-factor signs the account out everywhere**, every session and every "remember me" cookie, so a lost phone that is still signed in can't set up the new authenticator. It also revokes the account's agent tokens.
 - **Every account is an administrator.** There are no roles or permissions: anyone with an account can see and change everything. Give accounts only to people you would give the keys to your infrastructure.
 - **Sessions** live in the database, encrypted, and the cookie is secure on the host (`SESSION_SECURE_COOKIE=true`).
 - **An activity log** records changes on every record, and who made them.

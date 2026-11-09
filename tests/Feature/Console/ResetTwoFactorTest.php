@@ -2,9 +2,12 @@
 
 namespace Tests\Feature\Console;
 
+use App\Enums\AgentAccess;
+use App\Models\AgentToken;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Spatie\Activitylog\Models\Activity;
 use Tests\TestCase;
 
 class ResetTwoFactorTest extends TestCase
@@ -61,5 +64,18 @@ class ResetTwoFactorTest extends TestCase
         $this->assertNotSame('old-remember-token', $user->fresh()->getRememberToken());
         $this->assertSame(0, DB::table('sessions')->where('user_id', $user->id)->count());
         $this->assertSame(1, DB::table('sessions')->where('user_id', $other->id)->count());
+    }
+
+    public function test_it_revokes_the_agent_tokens_of_the_account(): void
+    {
+        $user = User::factory()->withAppAuthentication()->create();
+        $other = User::factory()->withAppAuthentication()->create();
+        AgentToken::issue($user, 'deploy-agent', AgentAccess::Write, now()->addDay());
+        AgentToken::issue($other, 'other-agent', AgentAccess::Write, now()->addDay());
+
+        $this->artisan('users:reset-two-factor', ['email' => $user->email])->assertSuccessful();
+
+        $this->assertSame(['other-agent'], AgentToken::query()->pluck('name')->all());
+        $this->assertSame(1, Activity::query()->where('subject_type', 'agent_token')->where('event', 'deleted')->count(), 'Each revoke is logged.');
     }
 }
