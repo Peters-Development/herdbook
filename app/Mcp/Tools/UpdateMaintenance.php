@@ -58,8 +58,8 @@ class UpdateMaintenance extends Tool
             'id' => $this->idRules(),
             'version' => $this->versionRules(required: true),
             ...$this->workRules(partial: true),
-            'plan' => $this->textRules(),
-            'report' => $this->textRules(),
+            'plan' => $this->textRules(replacing: true),
+            'report' => $this->textRules(replacing: true),
         ]);
         $maintenance = $this->findMaintenance((int) $input['id']);
 
@@ -76,7 +76,7 @@ class UpdateMaintenance extends Tool
 
         $updated = DB::transaction(function () use ($maintenance, $changes, $status, $input): bool {
             $updated = $maintenance->updateWhileStill($status, function () use ($maintenance, $changes, $status): array {
-                $this->refuseCutTexts($maintenance, $changes);
+                $this->checkTexts($maintenance, $changes);
                 $this->checkMerged($maintenance, $changes, $status);
 
                 return Arr::only($changes, ['tasks', 'title', 'starts_at', 'ends_at', 'plan', 'report']);

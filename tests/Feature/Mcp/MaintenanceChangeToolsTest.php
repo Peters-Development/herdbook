@@ -367,6 +367,19 @@ class MaintenanceChangeToolsTest extends TestCase
             ->assertSee('Ada via deploy-agent');
     }
 
+    public function test_an_agent_keeps_the_links_a_person_wrote_but_adds_none(): void
+    {
+        $person = '1. Read [the changelog](https://elsewhere.example/changelog).';
+        $maintenance = $this->planned(['plan' => $person]);
+
+        $this->update($maintenance, ['plan' => $person."\n2. Upgrade."]);
+        $this->assertSame($person."\n2. Upgrade.", $maintenance->refresh()->plan);
+
+        $this->assertSame('plan: Geen links naar andere sites: zet adressen tussen backticks.', $this->callToolError($this->token, 'update_maintenance', ['id' => $maintenance->id, 'version' => $maintenance->version(), 'plan' => $maintenance->plan."\n3. See [this](https://elsewhere.example/other)."]));
+        $this->assertSame('report: Geen links naar andere sites: zet adressen tussen backticks.', $this->callToolError($this->token, 'complete_maintenance', ['id' => $maintenance->id, 'version' => $maintenance->version(), 'report' => 'Done, see www.elsewhere.example.']));
+        $this->assertSame([MaintenanceStatus::Planned, $person."\n2. Upgrade."], [$maintenance->refresh()->status, $maintenance->plan]);
+    }
+
     public function test_a_change_by_hand_names_no_agent(): void
     {
         $this->actingAs($this->user);

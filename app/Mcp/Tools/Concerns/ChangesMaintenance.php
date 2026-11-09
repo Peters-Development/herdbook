@@ -4,8 +4,10 @@ namespace App\Mcp\Tools\Concerns;
 
 use App\Mcp\Serializer;
 use App\Models\Maintenance;
+use App\Rules\NoNewLinks;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Laravel\Mcp\Response;
 
@@ -44,12 +46,33 @@ trait ChangesMaintenance
     }
 
     /**
+     * The plan and report given, on the locked row: not over a text the
+     * agent couldn't read whole, and with no links to other sites but those
+     * of the text it replaces.
+     *
+     * @param  array<string, mixed>  $changes
+     */
+    protected function checkTexts(Maintenance $maintenance, array $changes): void
+    {
+        $this->refuseCutTexts($maintenance, $changes);
+
+        $validator = Validator::make(
+            array_intersect_key($changes, ['plan' => true, 'report' => true]),
+            ['plan' => [new NoNewLinks($maintenance->plan)], 'report' => [new NoNewLinks($maintenance->report)]],
+        );
+
+        if ($validator->fails()) {
+            throw self::named(new ValidationException($validator));
+        }
+    }
+
+    /**
      * A plan or report longer than an agent reads whole (get_maintenance cuts
      * it) is not overwritten by one: what it didn't see would be lost.
      *
      * @param  array<string, mixed>  $changes
      */
-    protected function refuseCutTexts(Maintenance $maintenance, array $changes): void
+    private function refuseCutTexts(Maintenance $maintenance, array $changes): void
     {
         $messages = [];
 

@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Rules\Moment;
 use App\Rules\NoCredentials;
 use App\Rules\NoImagesOrHtml;
+use App\Rules\NoNewLinks;
 use App\Rules\NoSecretMaterial;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -122,13 +123,15 @@ trait WritesMaintenance
     /**
      * Markdown that agents may write: what MAX_TEXT allows (first: the other
      * checks take time on a long text), no private keys or credentials, no
-     * images or HTML.
+     * images or HTML, and for a new text no links to other sites. A text
+     * that replaces one may keep the links of the one it replaces: the tools
+     * check that on the locked row (ChangesMaintenance::checkTexts()).
      *
      * @return list<mixed>
      */
-    protected function textRules(): array
+    protected function textRules(bool $replacing = false): array
     {
-        return ['bail', 'nullable', 'string', 'max:'.Serializer::MAX_TEXT, new NoSecretMaterial, new NoCredentials, new NoImagesOrHtml];
+        return ['bail', 'nullable', 'string', 'max:'.Serializer::MAX_TEXT, new NoSecretMaterial, new NoCredentials, new NoImagesOrHtml, ...($replacing ? [] : [new NoNewLinks])];
     }
 
     /**
@@ -319,7 +322,7 @@ trait WritesMaintenance
      */
     protected static function textsSentence(string $what = 'A plan or report'): string
     {
-        return $what.' is markdown of at most '.number_format(Serializer::MAX_TEXT).' characters, and refuses passwords, tokens, private keys, images and HTML (put tags and placeholders between backticks). ';
+        return $what.' is markdown of at most '.number_format(Serializer::MAX_TEXT).' characters, and refuses passwords, tokens, private keys, images, HTML and links to other sites (put tags, placeholders and addresses between backticks; links into Herdbook, and those already in the text you replace, may stay). ';
     }
 
     /**

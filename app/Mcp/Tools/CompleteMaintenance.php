@@ -60,7 +60,7 @@ class CompleteMaintenance extends Tool
             'version' => $this->versionRules(),
             'starts_at' => ['sometimes', 'required', new Moment],
             'ends_at' => ['nullable', new Moment],
-            'report' => $this->textRules(),
+            'report' => $this->textRules(replacing: true),
         ], after: function (Validator $validator): void {
             // A null report clears the one there is: as a text given, only
             // over the one the agent read (required_with lets null through).
@@ -79,7 +79,7 @@ class CompleteMaintenance extends Tool
         $given = Arr::except($this->parseWork($input), ['id', 'version']);
 
         $completed = $maintenance->complete($given, function (array $attributes) use ($maintenance, $given): void {
-            $this->refuseCutTexts($maintenance, $given);
+            $this->checkTexts($maintenance, $given);
             $this->assertWork([
                 'starts_at' => CarbonImmutable::make($attributes['starts_at']),
                 'ends_at' => CarbonImmutable::make($attributes['ends_at']),

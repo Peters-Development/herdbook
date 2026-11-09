@@ -154,6 +154,7 @@ class MaintenanceWriteToolsTest extends TestCase
             'a password' => [['plan' => 'Set DB_PASSWORD=a1B2a1B2a1B2a1B2a1B2 in .env'], 'plan: Dit lijkt een wachtwoord of token.'],
             'a token in the title' => [['title' => 'Rotate DB_PASSWORD=a1B2a1B2a1B2a1B2a1B2'], 'title: Dit lijkt een wachtwoord of token.'],
             'an image' => [['plan' => '![x](https://elsewhere.example/x.png)'], 'plan: Geen afbeeldingen of HTML'],
+            'a link elsewhere' => [['plan' => 'Sign in at [the portal](https://elsewhere.example/login).'], 'plan: Geen links naar andere sites'],
         ];
     }
 
