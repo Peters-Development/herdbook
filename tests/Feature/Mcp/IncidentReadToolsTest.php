@@ -169,7 +169,7 @@ class IncidentReadToolsTest extends TestCase
             ['occurred_at' => '2026-11-08T22:20:00+01:00', 'note' => 'Restarted php-fpm, no effect.', 'truncated' => false, 'by' => 'Ada', 'via' => 'deploy-agent'],
         ], $found['timeline']);
         $this->assertFalse($found['more_timeline']);
-        $this->assertSame([['id' => $action->id, 'description' => 'Alert on NFS latency', 'due_on' => '2026-11-01', 'done_at' => null, 'overdue' => true]], $found['actions']);
+        $this->assertSame([['id' => $action->id, 'description' => 'Alert on NFS latency', 'due_on' => '2026-11-01', 'done_at' => null, 'overdue' => true, 'by' => null, 'via' => null, 'done_by' => null, 'done_via' => null]], $found['actions']);
     }
 
     public function test_a_long_timeline_shows_its_latest_entries_and_long_texts_are_cut(): void

@@ -9,6 +9,7 @@ use App\Filament\Resources\Incidents\Pages\ListIncidents;
 use App\Filament\Resources\Incidents\Pages\ViewIncident;
 use App\Filament\Resources\Incidents\RelationManagers\ActionsRelationManager;
 use App\Filament\Resources\Incidents\RelationManagers\TimelineEntriesRelationManager;
+use App\Filament\Widgets\OpenIncidentActions;
 use App\Models\Client;
 use App\Models\Domain;
 use App\Models\Incident;
@@ -16,6 +17,7 @@ use App\Models\Network;
 use App\Models\Project;
 use App\Models\Server;
 use App\Models\User;
+use Filament\Actions\Testing\TestAction;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
@@ -153,6 +155,31 @@ class IncidentChangesTest extends TestCase
         Livewire::test(ListIncidents::class)->toggleAllTableColumns()->assertSee('Ada via deploy-agent');
         Livewire::test(TimelineEntriesRelationManager::class, ['ownerRecord' => $incident, 'pageClass' => ViewIncident::class])->assertSee('Ada via deploy-agent');
         Livewire::test(ActionsRelationManager::class, ['ownerRecord' => $incident, 'pageClass' => ViewIncident::class])->toggleAllTableColumns()->assertSee('Ada via deploy-agent');
+    }
+
+    public function test_who_completed_an_action_item_is_kept_wherever_it_was_completed_and_cleared_when_it_is_reopened(): void
+    {
+        $user = $this->signIn();
+        $user->forceFill(['name' => 'Grace'])->save();
+        $incident = Incident::factory()->create();
+        // Two: a lazy load of who completed them would fail in strict mode.
+        $first = $incident->actions()->create(['description' => 'Alert on NFS latency']);
+        $second = $incident->actions()->create(['description' => 'Add a second NFS server']);
+        $first->forceFill(['user_id' => null])->save();
+        $second->forceFill(['user_id' => null])->save();
+
+        $manager = Livewire::test(ActionsRelationManager::class, ['ownerRecord' => $incident, 'pageClass' => ViewIncident::class])
+            ->callAction(TestAction::make('complete')->table($first));
+        Livewire::test(OpenIncidentActions::class)->callAction(TestAction::make('complete')->table($second));
+
+        foreach ([$first, $second] as $action) {
+            $this->assertSame(['2026-11-09 12:00:00', $user->id, null], [$action->refresh()->done_at?->toDateTimeString(), $action->completed_by_id, $action->completed_via]);
+        }
+
+        $manager->toggleAllTableColumns()->assertSee('Grace');
+
+        $manager->callAction(TestAction::make('reopen')->table($first));
+        $this->assertSame([null, null, null], [$first->refresh()->done_at, $first->completed_by_id, $first->completed_via]);
     }
 
     private function incident(): Incident

@@ -25,7 +25,7 @@
 
 An agent such as [Claude Code](https://code.claude.com) can look things up in Herdbook and keep its maintenance log, without clicking through the panel. It keeps incidents too: it sees what is going on and what happened last time, opens an incident when something breaks, and writes down what it tries and finds as it goes. It can find a server, see when it was last updated, plan work, and write down what it did. It talks to Herdbook's MCP server (the [Model Context Protocol](https://modelcontextprotocol.io)) at `/mcp`, with a token of its own.
 
-Herdbook remains the place where people work: an agent sees less than a person and may do less. What an agent creates (maintenance, incidents, timeline entries, action items) is signed with its account and its name, such as "Ada via deploy-agent", and the activity log names the agent for every change it makes to maintenance or an incident (not to which servers and projects they are linked to, which isn't logged for people either).
+Herdbook remains the place where people work: an agent sees less than a person and may do less. What an agent creates (maintenance, incidents, timeline entries, action items) is signed with its account and its name, such as "Ada via deploy-agent", as is an action item it completes, and the activity log names the agent for every change it makes to maintenance or an incident (not to which servers and projects they are linked to, which isn't logged for people either).
 
 <a name="what-an-agent-can-do"></a>
 ## What an Agent Can Do

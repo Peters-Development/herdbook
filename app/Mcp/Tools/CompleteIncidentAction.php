@@ -49,9 +49,8 @@ class CompleteIncidentAction extends Tool
             return Response::error(__('There is no action item with id :id. get_incident lists them.', ['id' => $id]));
         }
 
-        // Only if it isn't done yet: done twice, it keeps when it was done first.
-        $done = IncidentAction::query()->whereKey($action->id)->whereNull('done_at')->update(['done_at' => now()]) === 1;
+        $done = $action->complete();
 
-        return $this->answer($action->incident, ['action' => Serializer::incidentAction($action->refresh())], unchanged: ! $done);
+        return $this->answer($action->incident, ['action' => Serializer::incidentAction($action->load(['user', 'completedBy']))], unchanged: ! $done);
     }
 }

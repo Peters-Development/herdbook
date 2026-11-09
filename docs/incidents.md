@@ -73,7 +73,7 @@ Monitoring adds entries by itself to the draft incidents it opens, for example "
 <a name="action-items"></a>
 ## Action Items
 
-The **Action items** tab holds the follow-ups: what has to change so this does not happen again ("alert on NFS latency", "move backups off the app server"). Each has a description and an optional due date. **Complete** marks one as done; **Reopen** takes that back.
+The **Action items** tab holds the follow-ups: what has to change so this does not happen again ("alert on NFS latency", "move backups off the app server"). Each has a description and an optional due date. **Complete** marks one as done, here or on the dashboard, and keeps who did it (**Completed by**, one of the columns you can show, with the agent if it came through one); **Reopen** takes that back.
 
 Open action items of all incidents are listed on the dashboard, dated ones first, the earliest at the top. An item past its due date (counted in calendar days, in the display timezone) is shown in red, and can be completed from there.
 

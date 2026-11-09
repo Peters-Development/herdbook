@@ -39,7 +39,7 @@ class OpenIncidentActions extends TableWidget
                     ->label(__('Complete'))
                     ->icon(Heroicon::OutlinedCheck)
                     ->color('success')
-                    ->action(fn (IncidentAction $record) => $record->update(['done_at' => now()])),
+                    ->action(fn (IncidentAction $record) => $record->complete()),
             ]);
     }
 }

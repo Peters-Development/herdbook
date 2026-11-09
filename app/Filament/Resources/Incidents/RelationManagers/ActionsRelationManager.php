@@ -52,6 +52,7 @@ class ActionsRelationManager extends RelationManager
                 TextColumn::make('due_on')->label(__('Due'))->date(__('formats.date'))->placeholder('—'),
                 RecordedBy::column()->toggledHiddenByDefault(),
                 TextColumn::make('done_at')->label(__('Completed'))->dateTime(__('formats.date'))->placeholder(__('Open')),
+                TextColumn::make('completedBy.name')->label(__('Completed by'))->state(fn (IncidentAction $record): ?string => $record->completedByline())->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 TernaryFilter::make('open')
@@ -73,13 +74,13 @@ class ActionsRelationManager extends RelationManager
                     ->icon(Heroicon::OutlinedCheck)
                     ->color('success')
                     ->visible(fn (IncidentAction $record): bool => ! $record->isDone())
-                    ->action(fn (IncidentAction $record) => $record->update(['done_at' => now()])),
+                    ->action(fn (IncidentAction $record) => $record->complete()),
                 Action::make('reopen')
                     ->label(__('Reopen'))
                     ->icon(Heroicon::OutlinedArrowUturnLeft)
                     ->color('gray')
                     ->visible(fn (IncidentAction $record): bool => $record->isDone())
-                    ->action(fn (IncidentAction $record) => $record->update(['done_at' => null])),
+                    ->action(fn (IncidentAction $record) => $record->reopen()),
                 EditAction::make(),
                 DeleteAction::make(),
             ]);

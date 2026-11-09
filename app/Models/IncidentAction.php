@@ -34,6 +34,51 @@ class IncidentAction extends Model
     }
 
     /**
+     * Who completed it.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function completedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'completed_by_id');
+    }
+
+    /**
+     * Who completed it, and through which agent: "Ada via deploy-agent".
+     * Eager-load: completedBy.
+     */
+    public function completedByline(): ?string
+    {
+        return AgentToken::byline($this->completedBy?->name, $this->completed_via);
+    }
+
+    /**
+     * Done now, by the account signed in and its agent; only if it isn't
+     * done yet, so done twice it keeps who did it first and when.
+     *
+     * @return bool whether this call completed it
+     */
+    public function complete(): bool
+    {
+        $user = auth()->user();
+
+        $completed = self::query()->whereKey($this->getKey())->whereNull('done_at')->update([
+            'done_at' => now(),
+            'completed_by_id' => $user?->getAuthIdentifier(),
+            'completed_via' => $user instanceof User ? $user->currentAgentToken()?->name : null,
+        ]) === 1;
+
+        $this->refresh();
+
+        return $completed;
+    }
+
+    public function reopen(): void
+    {
+        $this->forceFill(['done_at' => null, 'completed_by_id' => null, 'completed_via' => null])->save();
+    }
+
+    /**
      * Past its due date, counted in calendar days in the display timezone.
      */
     public function isOverdue(): bool

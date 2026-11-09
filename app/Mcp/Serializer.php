@@ -47,7 +47,7 @@ final class Serializer
      * What incident() reads, to eager-load: who wrote it down, its links,
      * and its action items (counted; listed by incidentWithTexts()).
      */
-    public const array INCIDENT_RELATIONS = ['user', 'projects', 'servers', 'domains', 'networks', 'clients', 'actions'];
+    public const array INCIDENT_RELATIONS = ['user', 'projects', 'servers', 'domains', 'networks', 'clients', 'actions.user', 'actions.completedBy'];
 
     /**
      * How much of a timeline incidentWithTexts() shows: its latest entries,
@@ -157,7 +157,9 @@ final class Serializer
     }
 
     /**
-     * An action item; its id is what complete_incident_action takes.
+     * An action item, who wrote it down and who completed it (with the
+     * agents they came through); its id is what complete_incident_action
+     * takes. Eager-load: user, completedBy.
      *
      * @return array<string, mixed>
      */
@@ -169,6 +171,10 @@ final class Serializer
             'due_on' => $action->due_on?->toDateString(),
             'done_at' => self::time($action->done_at),
             'overdue' => $action->isOverdue(),
+            'by' => $action->user?->name,
+            'via' => $action->recorded_via,
+            'done_by' => $action->completedBy?->name,
+            'done_via' => $action->completed_via,
         ];
     }
 
