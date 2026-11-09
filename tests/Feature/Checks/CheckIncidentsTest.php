@@ -321,6 +321,34 @@ class CheckIncidentsTest extends TestCase
         $this->assertSame(3, $incident->timelineEntries()->count());
     }
 
+    public function test_an_outage_joins_monitorings_own_incident_before_a_later_one_and_no_smaller_problem(): void
+    {
+        [$first, $environment] = $this->criticalProductionOutage();
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+        $outage = Incident::query()->sole();
+
+        // Later, a person writes down a problem of the same project; and a smaller one.
+        $billing = Incident::factory()->create(['title' => 'Billing export wrong', 'severity' => IncidentSeverity::Sev2, 'detected_at' => now()]);
+        $billing->projects()->attach($environment->project_id);
+        $typo = Incident::factory()->create(['title' => 'Typo on the about page', 'severity' => IncidentSeverity::Sev3, 'detected_at' => now()]);
+        $typo->projects()->attach($environment->project_id);
+
+        [$second] = $this->criticalProductionOutage($environment);
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+
+        $this->assertSame($outage->id, $second->events()->sole()->incident_id);
+        $this->assertSame([IncidentSeverity::Sev2, IncidentSeverity::Sev3], [$billing->fresh()->severity, $typo->fresh()->severity]);
+        $this->assertSame(0, $billing->timelineEntries()->count() + $typo->timelineEntries()->count());
+
+        // A SEV3 alone is not joined either: the outage gets its own.
+        $billing->update(['status' => IncidentStatus::Resolved, 'resolved_at' => now()]);
+        $outage->update(['status' => IncidentStatus::Resolved, 'resolved_at' => now()]);
+        [$third] = $this->criticalProductionOutage($environment);
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+
+        $this->assertNotContains($third->events()->sole()->incident_id, [$outage->id, $billing->id, $typo->id]);
+    }
+
     public function test_an_imported_incident_is_not_joined(): void
     {
         [, $environment] = $this->criticalProductionOutage();

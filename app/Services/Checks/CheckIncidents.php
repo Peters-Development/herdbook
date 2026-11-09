@@ -182,9 +182,12 @@ final class CheckIncidents
 
     /**
      * The unresolved incident of the same projects or servers, detected in
-     * the last hours (without a detection time: written down in them),
-     * whoever opened it: a person or an agent that was there first wrote down
-     * the same outage. Not an imported one: that is a report of the past.
+     * the last hours (without a detection time: written down in them): one
+     * of monitoring's, or one a person or an agent opened as SEV1 or SEV2,
+     * who may have written down the same outage first (a SEV3 is a smaller
+     * problem, not an outage). Not an imported one: that is a report of the
+     * past. One monitoring already added to comes first, then the most
+     * severe, then the latest.
      */
     private function openIncidentFor(Check $check): ?Incident
     {
@@ -203,8 +206,13 @@ final class CheckIncidents
                 ->where('detected_at', '>=', $since)
                 ->orWhere(fn (Builder $query) => $query->whereNull('detected_at')->where('created_at', '>=', $since)))
             ->where(fn (Builder $query) => $query
+                ->where('source', IncidentSource::Check)
+                ->orWhereIn('severity', [IncidentSeverity::Sev1, IncidentSeverity::Sev2]))
+            ->where(fn (Builder $query) => $query
                 ->whereHas('projects', fn (Builder $projects) => $projects->whereKey($projectIds))
                 ->orWhereHas('servers', fn (Builder $servers) => $servers->whereKey($serverIds)))
+            ->orderByDesc(CheckEvent::query()->selectRaw('count(*)')->whereColumn('check_events.incident_id', 'incidents.id'))
+            ->orderBy('severity')
             ->latest('id')
             ->first();
     }
