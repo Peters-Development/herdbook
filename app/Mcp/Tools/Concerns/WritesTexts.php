@@ -4,15 +4,16 @@ namespace App\Mcp\Tools\Concerns;
 
 use App\Mcp\HiddenValues;
 use App\Mcp\Serializer;
+use App\Models\AgentToken;
 use App\Rules\NoAddressMasks;
 use App\Rules\NoCredentials;
 use App\Rules\NoImagesOrHtml;
 use App\Rules\NoNewLinks;
 use App\Rules\NoSecretMaterial;
-use Carbon\CarbonInterface;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\JsonSchema\Types\Type;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -25,6 +26,12 @@ use Illuminate\Validation\ValidationException;
 trait WritesTexts
 {
     use RequiresWriteAccess, ValidatesArguments;
+
+    /**
+     * How long a call is remembered: tried again within it (its answer
+     * lost), it writes nothing twice.
+     */
+    protected const int REPEAT_MINUTES = 10;
 
     protected static function momentFormat(): string
     {
@@ -119,23 +126,21 @@ trait WritesTexts
     }
 
     /**
-     * Whether what a call gives is what is stored: nothing, or a repeat of
-     * a call whose answer was lost.
+     * What this agent's call is remembered by, for REPEAT_MINUTES: what it
+     * does and what it gives, compared exactly. Never by what is stored:
+     * an answer that says whether a text is the stored one would confirm a
+     * guess of what a mask hides.
      *
-     * @param  array<string, mixed>  $given  as it would be stored
+     * @param  array<string, mixed>  $call
      */
-    protected function asStored(Model $record, array $given): bool
+    protected static function callKey(string $what, array $call): string
     {
-        foreach ($given as $field => $value) {
-            $stored = $record->{$field};
-            $same = $value instanceof CarbonInterface ? $stored instanceof CarbonInterface && $value->eq($stored) : $value === $stored;
+        return 'mcp-call:'.auth()->id().':'.AgentToken::current()?->getKey().':'.hash('sha256', $what."\n".json_encode($call, JSON_THROW_ON_ERROR));
+    }
 
-            if (! $same) {
-                return false;
-            }
-        }
-
-        return true;
+    protected static function rememberCall(string $key, mixed $result = true): void
+    {
+        Cache::put($key, $result, now()->addMinutes(self::REPEAT_MINUTES));
     }
 
     /**

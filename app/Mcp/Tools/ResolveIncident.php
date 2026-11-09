@@ -8,6 +8,8 @@ use App\Mcp\Tools\Concerns\ChangesIncident;
 use App\Models\Incident;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
@@ -65,10 +67,13 @@ class ResolveIncident extends Tool
         }
 
         $given = $this->parseChanges($input);
+        $call = self::callKey('resolve_incident', Arr::except($input, ['version']));
 
-        $resolved = $incident->saveWhile(fn (Incident $current): bool => $current->status !== IncidentStatus::Resolved, function () use ($incident, $given): array {
+        $resolved = $incident->saveWhile(fn (Incident $current): bool => $current->status !== IncidentStatus::Resolved, function () use ($incident, $given, $call): array {
             $changes = ['status' => IncidentStatus::Resolved->value, 'resolved_at' => $given['resolved_at'] ?? CarbonImmutable::now()->startOfMinute(), ...$given];
             $this->checkChanges($incident, $changes);
+            // Rolled back, it isn't resolved: what is remembered then counts for nothing.
+            self::rememberCall($call);
 
             return $changes;
         }, $input['version']);
@@ -76,8 +81,9 @@ class ResolveIncident extends Tool
         return match (true) {
             $resolved => $this->answer($incident),
             ! $incident->exists => $this->incidentNotFound($incident->getKey()),
-            // Resolved already: called again (its answer lost), it gets the same answer.
-            $incident->status === IncidentStatus::Resolved && $this->asStored($incident, $given) => $this->answer($incident, unchanged: true),
+            // Resolved already: the same call tried again (its answer lost),
+            // or one that gives nothing to change, gets the same answer.
+            $incident->status === IncidentStatus::Resolved && ($given === [] || Cache::get($call) === true) => $this->answer($incident, unchanged: true),
             $incident->status === IncidentStatus::Resolved => Response::error(__('This incident is resolved already. Change it, or reopen it, with update_incident.')),
             default => $this->changedSince($incident),
         };

@@ -34,12 +34,6 @@ trait WritesIncidents
     private const int OTHER_UNRESOLVED = 10;
 
     /**
-     * How long the same thing written again by the same agent counts as a
-     * call tried again after its answer was lost, not a second one.
-     */
-    private const int REPEAT_MINUTES = 10;
-
-    /**
      * Writes what $write writes, unless this agent made the same call
      * moments ago: then the answer is what that one wrote ("unchanged"), as
      * a call tried again after its answer was lost would write it twice, and
@@ -57,11 +51,10 @@ trait WritesIncidents
      */
     protected static function once(Builder $records, array $call, Closure $write, Closure $answer): Response|ResponseFactory
     {
-        $agent = auth()->id().':'.AgentToken::current()?->getKey();
-        $key = 'mcp-call:'.$agent.':'.hash('sha256', $records->getModel()->getTable()."\n".json_encode($call, JSON_THROW_ON_ERROR));
+        $key = self::callKey($records->getModel()->getTable(), $call);
 
         try {
-            [$record, $unchanged] = Cache::lock('mcp-write:'.$agent, 30)
+            [$record, $unchanged] = Cache::lock('mcp-write:'.auth()->id().':'.AgentToken::current()?->getKey(), 30)
                 ->betweenBlockedAttemptsSleepFor(50)
                 ->block(10, function () use ($records, $key, $write): array {
                     $id = Cache::get($key);
@@ -72,7 +65,7 @@ trait WritesIncidents
                     }
 
                     $record = $write();
-                    Cache::put($key, $record->getKey(), now()->addMinutes(self::REPEAT_MINUTES));
+                    self::rememberCall($key, $record->getKey());
 
                     return [$record, false];
                 });

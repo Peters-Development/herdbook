@@ -9,6 +9,7 @@ use App\Rules\Moment;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Validator;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -76,20 +77,24 @@ class CompleteMaintenance extends Tool
         }
 
         $given = Arr::except($this->parseWork($input), ['id', 'version']);
+        $call = self::callKey('complete_maintenance', Arr::except($input, ['version']));
 
-        $completed = $maintenance->complete($given, function (array $attributes) use ($maintenance, $given): void {
+        $completed = $maintenance->complete($given, function (array $attributes) use ($maintenance, $given, $call): void {
             $this->checkPlanAndReport($maintenance, $given);
             $this->assertWork([
                 'starts_at' => CarbonImmutable::make($attributes['starts_at']),
                 'ends_at' => CarbonImmutable::make($attributes['ends_at']),
             ], MaintenanceStatus::Done);
+            // Rolled back, it isn't done: what is remembered then counts for nothing.
+            self::rememberCall($call);
         }, $input['version'] ?? null);
 
         return match (true) {
             $completed => $this->answer($maintenance),
             ! $maintenance->exists => $this->notFound($maintenance->getKey()),
-            // Done already: called again (its answer lost), it gets the same answer.
-            $maintenance->status === MaintenanceStatus::Done && $this->asStored($maintenance, $given) => $this->answer($maintenance, unchanged: true),
+            // Done already: the same call tried again (its answer lost), or
+            // one that gives nothing to change, gets the same answer.
+            $maintenance->status === MaintenanceStatus::Done && ($given === [] || Cache::get($call) === true) => $this->answer($maintenance, unchanged: true),
             $maintenance->status === MaintenanceStatus::Done => Response::error(__('This maintenance is done already. Change it with update_maintenance.')),
             $maintenance->status === MaintenanceStatus::Cancelled => Response::error(__('This maintenance was called off. Write the work down with log_maintenance, or ask a person to set it back to planned in Herdbook.')),
             default => $this->changedSince($maintenance),

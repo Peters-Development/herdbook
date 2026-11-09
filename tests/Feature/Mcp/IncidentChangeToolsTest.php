@@ -191,6 +191,18 @@ class IncidentChangeToolsTest extends TestCase
         $this->assertSame('Dit incident is al opgelost. Wijzig of heropen het met update_incident.', $this->callToolError($this->token, 'resolve_incident', ['id' => $incident->id, 'version' => $incident->version(), 'root_cause' => 'Something else.']));
     }
 
+    public function test_resolving_again_tells_nothing_about_the_stored_texts(): void
+    {
+        // app-1 is at 192.0.2.10.
+        $incident = $this->incident(['status' => IncidentStatus::Resolved, 'resolved_at' => '2026-11-09 11:00:00', 'root_cause' => 'The line at 192.0.2.10 went down.']);
+
+        // A guess of what the mask hides is refused, right or wrong: the answer would confirm it.
+        foreach (['The line at 192.0.2.10 went down.', 'The line at 192.0.2.11 went down.'] as $guess) {
+            $this->assertSame('Dit incident is al opgelost. Wijzig of heropen het met update_incident.', $this->callToolError($this->token, 'resolve_incident', ['id' => $incident->id, 'version' => 'anything', 'root_cause' => $guess]));
+        }
+        $this->assertTrue($this->callToolSuccessfully($this->token, 'resolve_incident', ['id' => $incident->id, 'version' => 'anything'])['unchanged']);
+    }
+
     public function test_resolving_takes_a_time_that_has_passed_since_the_start(): void
     {
         $incident = $this->incident(['started_at' => '2026-11-09 10:00:00']);

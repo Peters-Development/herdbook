@@ -304,6 +304,18 @@ class MaintenanceChangeToolsTest extends TestCase
         $this->assertSame('All done.', $maintenance->refresh()->report);
     }
 
+    public function test_completing_again_tells_nothing_about_the_stored_report(): void
+    {
+        Server::factory()->create(['name' => 'app-1', 'public_ipv4' => '192.0.2.10']);
+        $maintenance = $this->planned(['status' => MaintenanceStatus::Done, 'ends_at' => '2026-11-08 23:00:00', 'report' => 'Rebooted 192.0.2.10.']);
+        $this->assertSame('Rebooted [adres van app-1].', $this->callToolSuccessfully($this->token, 'get_maintenance', ['id' => $maintenance->id])['report']);
+
+        // A guess of what the mask hides is refused, right or wrong: the answer would confirm it.
+        foreach (['Rebooted 192.0.2.10.', 'Rebooted 192.0.2.11.'] as $guess) {
+            $this->assertSame('Dit onderhoud is al gedaan. Wijzig het met update_maintenance.', $this->callToolError($this->token, 'complete_maintenance', ['id' => $maintenance->id, 'version' => 'anything', 'report' => $guess]));
+        }
+    }
+
     public function test_completing_refuses_a_long_report_and_a_version_that_changed(): void
     {
         $long = $this->planned(['report' => str_repeat('a', Serializer::MAX_TEXT + 1)]);
