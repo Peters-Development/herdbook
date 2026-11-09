@@ -49,8 +49,6 @@ final class MaintenanceSchema
     {
         return DateTimePicker::make($name)
             ->label($label)
-            ->native(false)
-            ->displayFormat(__('formats.datetime'))
             ->seconds(false);
     }
 

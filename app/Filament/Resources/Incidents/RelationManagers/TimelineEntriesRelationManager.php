@@ -30,8 +30,6 @@ class TimelineEntriesRelationManager extends RelationManager
             ->components([
                 DateTimePicker::make('occurred_at')
                     ->label(__('When'))
-                    ->native(false)
-                    ->displayFormat(__('formats.datetime'))
                     ->seconds(false)
                     ->default(fn () => now())
                     ->required(),

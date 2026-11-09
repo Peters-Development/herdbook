@@ -50,9 +50,7 @@ final class RenewalSchema
             ->columns(2)
             ->schema([
                 DatePicker::make('expires_on')
-                    ->label(__('Expiry date'))
-                    ->native(false)
-                    ->displayFormat(__('formats.date')),
+                    ->label(__('Expiry date')),
                 Select::make('renewal_period_months')
                     ->label(__('Term'))
                     // Plain options, not the enum: the column is an integer (HasRenewal).

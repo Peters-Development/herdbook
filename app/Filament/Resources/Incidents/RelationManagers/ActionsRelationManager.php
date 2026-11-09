@@ -36,7 +36,7 @@ class ActionsRelationManager extends RelationManager
             ->columns(2)
             ->components([
                 TextInput::make('description')->label(__('Action'))->required()->maxLength(255)->columnSpanFull(),
-                DatePicker::make('due_on')->label(__('Due'))->native(false)->displayFormat(__('formats.date')),
+                DatePicker::make('due_on')->label(__('Due')),
             ]);
     }
 
