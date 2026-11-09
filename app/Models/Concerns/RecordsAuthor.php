@@ -21,9 +21,8 @@ trait RecordsAuthor
                 return;
             }
 
-            $user = auth()->user();
-            $record->user_id ??= $user?->getAuthIdentifier();
-            $record->recorded_via ??= $user instanceof User ? $user->currentAgentToken()?->name : null;
+            $record->user_id ??= auth()->id();
+            $record->recorded_via ??= AgentToken::current()?->name;
         });
     }
 

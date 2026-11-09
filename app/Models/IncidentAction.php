@@ -60,12 +60,10 @@ class IncidentAction extends Model
      */
     public function complete(): bool
     {
-        $user = auth()->user();
-
         $completed = self::query()->whereKey($this->getKey())->whereNull('done_at')->update([
             'done_at' => now(),
-            'completed_by_id' => $user?->getAuthIdentifier(),
-            'completed_via' => $user instanceof User ? $user->currentAgentToken()?->name : null,
+            'completed_by_id' => auth()->id(),
+            'completed_via' => AgentToken::current()?->name,
         ]) === 1;
 
         $this->refresh();
