@@ -47,7 +47,7 @@ class AddIncidentAction extends Tool
         $input = $this->validated($request, [
             'id' => $this->idRules(),
             'description' => ['required', ...$this->plainTextRules(255)],
-            'due_on' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:1970-01-01', 'before_or_equal:2038-01-18'],
+            'due_on' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:1970-01-01'],
         ]);
 
         $incident = $this->findIncident((int) $input['id']);
