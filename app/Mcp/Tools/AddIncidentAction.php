@@ -30,7 +30,7 @@ class AddIncidentAction extends Tool
         return 'Add an action item to an incident: what has to change so it doesn\'t happen again, such as "Alert on NFS latency", with a due date if there is one. '
             .'Check get_incident first: it may be there already, and an agent can\'t delete one. '
             .'Plain text of at most 255 characters; it refuses passwords, tokens, private keys and masks such as [address of app-1]. '
-            .self::repeatSentence('description and due_on, while the first is open').self::answerSentence('in "action" the action item');
+            .self::repeatSentence('description and due_on', 'once the first is completed, the same call adds a new one').self::answerSentence('in "action" the action item');
     }
 
     public function schema(JsonSchema $schema): array

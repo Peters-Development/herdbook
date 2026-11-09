@@ -35,7 +35,7 @@ class UpdateIncident extends Tool
 
     public function description(): string
     {
-        return 'Change an incident: its title, severity, status (open, monitoring or resolved; to resolve it, resolve_incident also sets when), the day it is filed under, when it started, was detected and was resolved, its impact, root cause and report, or the servers and projects it concerns. '
+        return 'Change an incident: its title, severity, status (open, monitoring or resolved; resolving sets resolved_at to now unless you give it, as resolve_incident does, which also takes the root cause), the day it is filed under, when it started, was detected and was resolved, its impact, root cause and report, or the servers and projects it concerns. '
             .'Read it first with get_incident and give its "version": as this overwrites what people, monitoring or other agents wrote, the change is refused when someone changed it since. '
             .'Give only what changes; what you leave out stays, and an empty string counts as left out. Null clears a time, the impact, the root cause or the report; server_ids or project_ids replace the links of that kind (its domains, networks and clients stay; one server or project at least). Reopened (status open or monitoring) it has no resolution time any more; resolved_at is refused for an incident that isn\'t, or doesn\'t become, resolved. '
             .'A text you read with masks such as [address of app-1] can\'t be written back with them: write one of your own. '
