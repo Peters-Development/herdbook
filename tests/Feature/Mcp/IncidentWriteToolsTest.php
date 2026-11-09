@@ -204,7 +204,7 @@ class IncidentWriteToolsTest extends TestCase
         $answer = $this->callToolSuccessfully($this->token, 'add_timeline_entry', ['id' => $incident->id, 'note' => 'Restarted php-fpm: no effect.']);
         $this->callToolSuccessfully($this->token, 'add_timeline_entry', ['id' => $incident->id, 'note' => 'Noticed slow uploads.', 'occurred_at' => '2026-11-09T11:30']);
 
-        $this->assertSame(['occurred_at' => '2026-11-09T13:00:00+01:00', 'note' => 'Restarted php-fpm: no effect.', 'truncated' => false, 'by' => 'Ada', 'via' => 'deploy-agent'], $answer['entry']);
+        $this->assertSame(['occurred_at' => '2026-11-09T13:00:00+01:00', 'note' => 'Restarted php-fpm: no effect.', 'truncated' => false, 'created_by' => 'Ada', 'via' => 'deploy-agent'], $answer['entry']);
         $this->assertSame($incident->id, $answer['incident']['id']);
         $this->assertSame(['Noticed slow uploads.', 'Restarted php-fpm: no effect.'], $incident->timelineEntries()->pluck('note')->all());
     }
@@ -227,7 +227,7 @@ class IncidentWriteToolsTest extends TestCase
         $added = $this->callToolSuccessfully($this->token, 'add_incident_action', ['id' => $incident->id, 'description' => 'Alert on NFS latency', 'due_on' => '2026-11-20']);
         $action = $incident->actions()->sole();
         $this->assertSame(['Alert on NFS latency', '2026-11-20', $this->user->id, 'deploy-agent'], [$action->description, $action->due_on->toDateString(), $action->user_id, $action->recorded_via]);
-        $this->assertSame(['id' => $action->id, 'description' => 'Alert on NFS latency', 'due_on' => '2026-11-20', 'done_at' => null, 'overdue' => false, 'by' => 'Ada', 'via' => 'deploy-agent', 'done_by' => null, 'done_via' => null], $added['action']);
+        $this->assertSame(['id' => $action->id, 'description' => 'Alert on NFS latency', 'due_on' => '2026-11-20', 'done_at' => null, 'overdue' => false, 'created_by' => 'Ada', 'via' => 'deploy-agent', 'completed_by' => null, 'completed_via' => null], $added['action']);
         $this->assertSame(1, $added['incident']['open_actions']);
 
         $done = $this->callToolSuccessfully($this->token, 'complete_incident_action', ['id' => $action->id]);
@@ -235,7 +235,7 @@ class IncidentWriteToolsTest extends TestCase
         $again = $this->callToolSuccessfully($this->token, 'complete_incident_action', ['id' => $action->id]);
 
         $this->assertSame(['2026-11-09T13:00:30+01:00', null, '2026-11-09T13:00:30+01:00', true], [$done['action']['done_at'], $done['unchanged'] ?? null, $again['action']['done_at'], $again['unchanged']]);
-        $this->assertSame(['Ada', 'deploy-agent'], [$done['action']['done_by'], $done['action']['done_via']]);
+        $this->assertSame(['Ada', 'deploy-agent'], [$done['action']['completed_by'], $done['action']['completed_via']]);
         $this->assertSame([$this->user->id, 'deploy-agent'], [$action->refresh()->completed_by_id, $action->completed_via]);
         $this->assertSame(0, $again['incident']['open_actions']);
         $this->assertSame('Er is geen actiepunt met id 999. get_incident noemt ze.', $this->callToolError($this->token, 'complete_incident_action', ['id' => 999]));

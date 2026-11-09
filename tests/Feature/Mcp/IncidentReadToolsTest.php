@@ -165,11 +165,11 @@ class IncidentReadToolsTest extends TestCase
         $this->assertSame([...array_keys(Serializer::incident($incident->load(Serializer::INCIDENT_RELATIONS))), 'impact', 'root_cause', 'report', 'truncated', 'texts_changed', 'timeline', 'more_timeline', 'actions', 'more_actions'], array_keys($found));
         $this->assertSame(['Uploads failed for an hour.', 'NFS stalled.', 'The report.', [], ['root_cause' => null, 'report' => null]], [$found['impact'], $found['root_cause'], $found['report'], $found['truncated'], $found['texts_changed']]);
         $this->assertSame([
-            ['occurred_at' => '2026-11-08T22:05:00+01:00', 'note' => 'Check HTTP shop.example.com went down: HTTP 503', 'truncated' => false, 'by' => null, 'via' => null],
-            ['occurred_at' => '2026-11-08T22:20:00+01:00', 'note' => 'Restarted php-fpm, no effect.', 'truncated' => false, 'by' => 'Ada', 'via' => 'deploy-agent'],
+            ['occurred_at' => '2026-11-08T22:05:00+01:00', 'note' => 'Check HTTP shop.example.com went down: HTTP 503', 'truncated' => false, 'created_by' => null, 'via' => null],
+            ['occurred_at' => '2026-11-08T22:20:00+01:00', 'note' => 'Restarted php-fpm, no effect.', 'truncated' => false, 'created_by' => 'Ada', 'via' => 'deploy-agent'],
         ], $found['timeline']);
         $this->assertFalse($found['more_timeline']);
-        $this->assertSame([['id' => $action->id, 'description' => 'Alert on NFS latency', 'due_on' => '2026-11-01', 'done_at' => null, 'overdue' => true, 'by' => null, 'via' => null, 'done_by' => null, 'done_via' => null]], $found['actions']);
+        $this->assertSame([['id' => $action->id, 'description' => 'Alert on NFS latency', 'due_on' => '2026-11-01', 'done_at' => null, 'overdue' => true, 'created_by' => null, 'via' => null, 'completed_by' => null, 'completed_via' => null]], $found['actions']);
     }
 
     public function test_a_long_timeline_shows_its_latest_entries_and_long_texts_are_cut(): void

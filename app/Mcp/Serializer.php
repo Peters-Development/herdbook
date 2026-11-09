@@ -157,7 +157,7 @@ final class Serializer
             'occurred_at' => self::time($entry->occurred_at),
             'note' => mb_substr($note, 0, self::MAX_NOTE),
             'truncated' => mb_strlen($note) > self::MAX_NOTE,
-            'by' => $entry->user?->name,
+            'created_by' => $entry->user?->name,
             'via' => $entry->recorded_via,
         ];
     }
@@ -177,10 +177,10 @@ final class Serializer
             'due_on' => $action->due_on?->toDateString(),
             'done_at' => self::time($action->done_at),
             'overdue' => $action->isOverdue(),
-            'by' => $action->user?->name,
+            'created_by' => $action->user?->name,
             'via' => $action->recorded_via,
-            'done_by' => $action->completedBy?->name,
-            'done_via' => $action->completed_via,
+            'completed_by' => $action->completedBy?->name,
+            'completed_via' => $action->completed_via,
         ];
     }
 
