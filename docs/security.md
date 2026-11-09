@@ -91,7 +91,7 @@ The [status screen](status-screen.md) is the one page that needs no sign-in, so 
 <a name="agents"></a>
 ## Agents
 
-An agent such as Claude Code can read inventory, maintenance and incidents, and plan, change, complete or call off maintenance, through the MCP server at `/mcp` ([Agents](agents.md)). It is off until `HERDBOOK_MCP_ENABLED=true`; while off, `/mcp` answers 404.
+An agent such as Claude Code can read inventory, maintenance and incidents, plan, change, complete or call off maintenance, and open incidents and add to their timeline and action items, through the MCP server at `/mcp` ([Agents](agents.md)). It is off until `HERDBOOK_MCP_ENABLED=true`; while off, `/mcp` answers 404.
 
 - **A token per agent, for an account.** `hb_` and 48 random characters, shown once by `agents:create`; the database only keeps its SHA-256 hash. It reads only, unless it was created with `--write`, and it expires (after 90 days by default).
 - **A key without a second factor.** That is why only an account with two-factor authentication gets one, and why it stops working while the account has none. `users:reset-two-factor` revokes its tokens; turning two-factor off in the profile only pauses them. A new password neither revokes nor pauses them.

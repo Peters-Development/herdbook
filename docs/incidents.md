@@ -114,7 +114,7 @@ The title and timeline entries are written in the default language of the instal
 <a name="from-an-agent"></a>
 ## From an Agent
 
-An agent such as Claude Code can read incidents through Herdbook's MCP server: the unresolved ones of a project or a server, and one incident with its report, timeline and action items ([Agents](agents.md)). It finds them the way the overviews count them for a project, so also through the servers its production needs.
+An agent such as Claude Code can keep incidents through Herdbook's MCP server ([Agents](agents.md)). It reads the unresolved ones of a project or a server, the way the overviews count them, and one incident with its report, timeline and action items. During an outage it looks for an unresolved incident first (a draft from a check, for instance) and writes on its timeline what it tries and finds; it opens an incident only when there is none. It can add action items and mark them done. What it writes shows who it wrote it for, through which agent: "Ada via deploy-agent". Addresses in what it reads are masked.
 
 <a name="importing-existing-reports"></a>
 ## Importing Existing Reports
