@@ -285,6 +285,8 @@ class IncidentReadToolsTest extends TestCase
             'a provider hostname between letters outside ASCII' => ['服务器vps-123.provider.example已重启, vps-123.provider.exampleé', '服务器[adres van app-1]已重启, [adres van app-1]é'],
             'not code with two colons' => ['Cache::add() failed in std::cafe and Foo::bar::baz', 'Cache::add() failed in std::cafe and Foo::bar::baz'],
             'a short IPv6 after a word and a colon' => ['addr:fd00::5 ip:fd00::5', 'addr:[adres van db-1] ip:[adres van db-1]'],
+            'a known short IPv6 URL-encoded or glued to letters' => ['next=https%3A%2F%2F%5Bfd00::5%5D%2F ip%3Dfd00::5 srcfd00::5', 'next=https%3A%2F%2F%5B[adres van db-1]%5D%2F ip%3D[adres van db-1] src[adres van db-1]'],
+            'a provider hostname glued on both sides' => ['%2Fvar%2Flog%2Fvps-123.provider.example-access.log', '%2Fvar%2Flog%2F[adres van app-1]-access.log'],
             'not a provider hostname that is a name, or numbers that are no address' => ['hz-1 ran out of disk on 6.8.0-45-generic, call 06-12-34-56-78 on 2026-11-09', 'hz-1 ran out of disk on 6.8.0-45-generic, call 06-12-34-56-78 on 2026-11-09'],
         ];
     }
@@ -316,12 +318,21 @@ class IncidentReadToolsTest extends TestCase
         Server::factory()->create(['name' => 'port', 'provider_hostname' => 'vps-1.host.example:2222']);
         Server::factory()->create(['name' => 'path', 'provider_hostname' => 'vps-2.host.example/vm/7']);
         Server::factory()->create(['name' => 'user', 'provider_hostname' => 'root@vps-3.host.example']);
+        Server::factory()->create(['name' => 'notes', 'provider_hostname' => 'vps-7.host.example (rescue)']);
+        Server::factory()->create(['name' => 'two', 'provider_hostname' => 'vps-8.host.example, vps-9.host.example']);
+        Server::factory()->create(['name' => 'label', 'provider_hostname' => 'Hetzner: vps-10.host.example / panel']);
+        Server::factory()->create(['name' => 'plan', 'provider_hostname' => 'CX22 v2.1']);
         Server::factory()->create(['name' => 'hindi', 'provider_hostname' => 'उदाहरण.परीक्षा']);
         Server::factory()->create(['name' => 'thai', 'provider_hostname' => 'ตัวอย่าง.example']);
 
         $this->assertSame(
             '[adres van trail], [adres van panel] and [adres van idn]; [adres van port], [adres van path], [adres van user]',
             app(HiddenValues::class)->mask('trail.host.example, panel.host.example and xn--bcher-kva.example; vps-1.host.example, vps-2.host.example, vps-3.host.example'),
+        );
+        // Free text: every hostname in it, but no version.
+        $this->assertSame(
+            '[adres van notes], [adres van two], [adres van two] and [adres van label] run v2.1',
+            app(HiddenValues::class)->mask('vps-7.host.example, vps-8.host.example, vps-9.host.example and vps-10.host.example run v2.1'),
         );
         // An internationalised one also as written, in any case and script; the others still when letters are glued to them.
         $this->assertSame(
@@ -363,9 +374,10 @@ class IncidentReadToolsTest extends TestCase
 
         $this->assertStringStartsWith('[adres van server-1499] and [adres van server-1499] went down; ſ a.a.', $found['impact']);
 
-        // Labels full of dashes cost no more than a few: no name ends beyond the first 63 characters of one.
+        // Labels full of dashes, or names on a tail 1,500 servers share, cost no more than a few lookups each.
         $started = microtime(true);
         app(HiddenValues::class)->mask(str_repeat('a.', 11).str_repeat('a-', 16000).'a');
+        app(HiddenValues::class)->mask(str_repeat('x.provider.example ', 20000));
         $this->assertLessThan(2, microtime(true) - $started);
     }
 

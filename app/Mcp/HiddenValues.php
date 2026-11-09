@@ -31,7 +31,7 @@ class HiddenValues
 {
     private const string MAC = '/(?<![0-9A-Za-z])(?:[0-9A-Fa-f]{2}(?:[:-][0-9A-Fa-f]{2}){5,}|[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}|[0-9A-Fa-f]{12})(?![0-9A-Za-z])/';
 
-    private const string IPV6 = '/(?<![0-9A-Za-z])([0-9A-Za-z]*?)((?:[0-9A-Fa-f]{0,4}:){2,7}(?:[0-9A-Fa-f]{1,4}|\d{1,3}(?:\.\d{1,3}){3})?)(?![0-9A-Za-z]|\.\d)/';
+    private const string IPV6 = '/(?<![0-9A-Za-z])((?:%[0-9A-Fa-f]{2})*)([0-9A-Za-z]*?)((?:[0-9A-Fa-f]{0,4}:){2,7}(?:[0-9A-Fa-f]{1,4}|\d{1,3}(?:\.\d{1,3}){3})?)(?![0-9A-Za-z]|\.\d)/';
 
     private const string IPV4 = '/(?<![0-9])\d+(?:\.\d{1,3}){3,}(?![0-9])/';
 
@@ -76,7 +76,8 @@ class HiddenValues
 
         $this->masks = [];
         $masked = $this->replace(self::MAC, $text, fn (array $m): string => $this->mac($m[0]));
-        $masked = $this->replace(self::IPV6, $masked, fn (array $m): string => $m[1].$this->ipv6($m[2], glued: $m[1] !== ''));
+        // What is URL-encoded in front ("%5B") is no letters glued to it.
+        $masked = $this->replace(self::IPV6, $masked, fn (array $m): string => $m[1].$m[2].$this->ipv6($m[3], glued: $m[2] !== ''));
         $masked = $this->replace(self::IPV4, $masked, fn (array $m): string => $this->ipv4($m[0]));
 
         if ($masked !== null && $this->knowsUnicodeNames()) {
@@ -167,11 +168,12 @@ class HiddenValues
      * What looks like an IPv6 address: masked when it is one, with or
      * without a leading colon ("addr:fd00::5"). With letters glued to its
      * first group, two groups are code, not an address ("Cache::add",
-     * "std::cafe").
+     * "std::cafe"), unless Herdbook knows it.
      */
     private function ipv6(string $token, bool $glued): string
     {
-        if ($glued && ! str_starts_with($token, ':') && count(array_filter(explode(':', $token), fn (string $group): bool => $group !== '')) < 3) {
+        if ($glued && ! str_starts_with($token, ':') && count(array_filter(explode(':', $token), fn (string $group): bool => $group !== '')) < 3
+            && ! isset($this->known()[$this->normalized($token)])) {
             return $token;
         }
 
@@ -258,12 +260,21 @@ class HiddenValues
     private function glued(string $first, string $tail): ?string
     {
         $this->known();
+        $labels = $this->tails[mb_strtolower($tail)] ?? [];
 
-        foreach ($this->tails[mb_strtolower($tail)] ?? [] as $label => $mask) {
-            $label = (string) $label;
+        if ($labels === []) {
+            return null;
+        }
 
-            if (mb_strlen($first) > mb_strlen($label) && str_ends_with(mb_strtolower($first), $label)) {
-                return $this->ipInLabel(mb_substr($first, 0, mb_strlen($first) - mb_strlen($label))).$this->hold($mask);
+        // The longest known first label it ends with, looked up by its
+        // length (no label is longer than MAX_LABEL), not label by label: a
+        // tail can be shared by hundreds of servers.
+        $length = mb_strlen($first);
+        $end = mb_strtolower(mb_substr($first, -self::MAX_LABEL));
+
+        for ($size = min($length - 1, mb_strlen($end)); $size > 0; $size--) {
+            if (($mask = $labels[mb_substr($end, -$size)] ?? null) !== null) {
+                return $this->ipInLabel(mb_substr($first, 0, $length - $size)).$this->hold($mask);
             }
         }
 
@@ -271,19 +282,23 @@ class HiddenValues
     }
 
     /**
-     * $labels are a known name, but for what follows a dash in the last:
-     * the longest such name, within the first MAX_LABEL characters.
+     * $labels are a known name, but for what follows a dash in the last
+     * (the longest such name, within the first MAX_LABEL characters), and
+     * maybe what is glued to the first.
      *
      * @param  list<string>  $labels
      */
     private function suffixed(array $labels): ?string
     {
         $last = (string) array_pop($labels);
-        $head = implode('.', $labels).'.';
 
         for ($dash = strrpos(substr($last, 0, self::MAX_LABEL + 1), '-'); $dash !== false && $dash > 0; $dash = strrpos(substr($last, 0, $dash), '-')) {
-            if (($mask = $this->known()[mb_strtolower($head.substr($last, 0, $dash))] ?? null) !== null) {
-                return $this->hold($mask).$this->ipInLabel(substr($last, $dash));
+            $name = [...$labels, substr($last, 0, $dash)];
+            $mask = $this->known()[mb_strtolower(implode('.', $name))] ?? null;
+            $masked = $mask !== null ? $this->hold($mask) : $this->glued($name[0], implode('.', array_slice($name, 1)));
+
+            if ($masked !== null) {
+                return $masked.$this->ipInLabel(substr($last, $dash));
             }
         }
 
@@ -388,28 +403,33 @@ class HiddenValues
     }
 
     /**
-     * A provider hostname as names in text: the host of a URL, without a
-     * trailing dot; an internationalised one in punycode and as written. One
-     * without a dot is a name, often the server's own ("hz-1"), not an
+     * The hostnames in what was filled in as a provider hostname, free text
+     * ("vps-1.provider.example (rescue)", more than one): each the host of a
+     * URL, without a trailing dot; an internationalised one in punycode and
+     * as written. One without a dot is a name, often the server's own
+     * ("hz-1"), and one that ends in a number a version ("v2.1"), not an
      * address.
      *
      * @return list<string>
      */
     private static function hostnames(?string $value): array
     {
-        $value = trim((string) $value);
-        // The host of what may be a URL, or a host with a user, port or path.
-        $value = (string) parse_url(str_contains($value, '://') ? $value : '//'.$value, PHP_URL_HOST);
-        $value = rtrim($value, '.');
+        $names = [];
 
-        if (preg_match('/[^\x00-\x7F]/', $value) === 1) {
-            $value = (string) idn_to_ascii($value, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46);
+        foreach (preg_split('/[\s,;()<>|"\']+/u', trim((string) $value), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $token) {
+            // The host of what may be a URL, or a host with a user, port or path.
+            $host = rtrim((string) parse_url(str_contains($token, '://') ? $token : '//'.$token, PHP_URL_HOST), '.');
+
+            if (preg_match('/[^\x00-\x7F]/', $host) === 1) {
+                $host = (string) idn_to_ascii($host, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46);
+            }
+
+            if (str_contains($host, '.') && preg_match('/^[A-Za-z0-9.-]+$/', $host) === 1
+                && (filter_var($host, FILTER_VALIDATE_IP) !== false || preg_match('/[A-Za-z]/', (string) strrchr($host, '.')) === 1)) {
+                array_push($names, $host, (string) idn_to_utf8($host, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46));
+            }
         }
 
-        if (! str_contains($value, '.') || preg_match('/^[A-Za-z0-9.-]+$/', $value) !== 1) {
-            return [];
-        }
-
-        return array_values(array_unique([$value, (string) idn_to_utf8($value, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46)]));
+        return array_values(array_unique(array_filter($names)));
     }
 }
