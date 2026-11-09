@@ -6,7 +6,9 @@ use Closure;
 
 /**
  * Whether what is created now gets an author (RecordsAuthor): monitoring
- * writes without one, also when a person's "Check now" set it off.
+ * writes without one, also when a person's "Check now" set it off. The
+ * activity log still names that person as the causer of what changed: it
+ * records who set a change off, not who wrote it.
  */
 final class Authorship
 {
