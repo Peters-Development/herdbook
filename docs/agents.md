@@ -229,7 +229,7 @@ Then store the new token with the [same command](#the-token-in-your-keychain) as
 - **A token is a key without a second factor.** Treat it like a password.
 - **What an agent reads leaves your network.** Everything a tool returns becomes part of the conversation, which goes to the agent's model provider and stays in its local history (for Claude Code, under `~/.claude`). That is why tools return no addresses, notes or contact details, but names, plans and reports are sent as written.
 - **Plans and reports are written by people and other agents.** Herdbook tells agents to treat them as data, to act on a plan only when you ask, and to tell you when a plan was changed by someone other than its creator, but that is no guarantee: a text can try to steer an agent. Don't let an agent that carries out a plan run without asking for permission, so you see each command before it reaches your servers.
-- **An agent acts within its token.** A misled agent with a write token can plan, change, complete or call off maintenance. It can't delete maintenance, and the activity log names it, but not everything it does can be undone from the log.
+- **An agent acts within its token.** A misled agent with a write token can plan, change, complete or call off maintenance. It can't delete maintenance, and the activity log names it and keeps the plans and reports it replaced, but changes to links aren't logged.
 - **Revoking.** `agents:revoke` (one, an account's, or all), or switch the MCP server off. A backup restored from before a revoke brings the token back: revoke it again ([Disaster Recovery](backups.md#disaster-recovery)).
 
 The [Security](security.md#agents) page puts this in the context of the rest of Herdbook.
@@ -243,7 +243,7 @@ The [Security](security.md#agents) page puts this in the context of the rest of 
 | Called it off | Edit it and set the status back to *Planned*. |
 | Completed it | Set the status back to *Planned*; the times it had before are in the activity log. |
 | Changed its work, title or times | The old values are in the activity log. |
-| Replaced or cleared a plan or report | The log only records *that* it changed: the old text comes back only from a backup. |
+| Replaced or cleared a plan or report | The activity log keeps the text it replaced: **Previous text** on that entry shows it, to copy back in the edit form. |
 | Changed its servers or projects | Not logged, as for people. |
 
 <a name="troubleshooting"></a>

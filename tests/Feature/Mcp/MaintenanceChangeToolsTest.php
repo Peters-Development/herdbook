@@ -14,6 +14,7 @@ use App\Models\Maintenance;
 use App\Models\Project;
 use App\Models\Server;
 use App\Models\User;
+use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -378,6 +379,27 @@ class MaintenanceChangeToolsTest extends TestCase
         $this->assertSame('plan: Geen links naar andere sites: zet adressen tussen backticks.', $this->callToolError($this->token, 'update_maintenance', ['id' => $maintenance->id, 'version' => $maintenance->version(), 'plan' => $maintenance->plan."\n3. See [this](https://elsewhere.example/other)."]));
         $this->assertSame('report: Geen links naar andere sites: zet adressen tussen backticks.', $this->callToolError($this->token, 'complete_maintenance', ['id' => $maintenance->id, 'version' => $maintenance->version(), 'report' => 'Done, see www.elsewhere.example.']));
         $this->assertSame([MaintenanceStatus::Planned, $person."\n2. Upgrade."], [$maintenance->refresh()->status, $maintenance->plan]);
+    }
+
+    public function test_the_activity_log_keeps_the_text_an_agent_replaced_to_put_it_back(): void
+    {
+        $maintenance = $this->planned(['plan' => 'The plan Bob wrote.']);
+        $this->update($maintenance, ['plan' => 'Something else entirely.']);
+        $this->update($maintenance, ['report' => 'A first report.']);
+        $this->actingAs($this->user);
+        $maintenance->refresh()->update(['plan' => 'By hand.']);
+
+        [$replaced, $added, $byHand] = Activity::query()->where('subject_type', 'maintenance')->where('subject_id', $maintenance->id)->where('event', 'updated')->orderBy('id')->get()->all();
+        $this->assertSame(['plan' => 'The plan Bob wrote.'], $replaced->properties['previous_texts']);
+        // Nothing replaced, or not by an agent: nothing kept.
+        $this->assertArrayNotHasKey('previous_texts', $added->properties->all());
+        $this->assertArrayNotHasKey('previous_texts', $byHand->properties->all());
+
+        Livewire::test(ActivityRelationManager::class, ['ownerRecord' => $maintenance->fresh(), 'pageClass' => ViewMaintenance::class])
+            ->assertActionHidden(TestAction::make('previousTexts')->table($added))
+            ->assertActionHidden(TestAction::make('previousTexts')->table($byHand))
+            ->mountAction(TestAction::make('previousTexts')->table($replaced))
+            ->assertMountedActionModalSee(['Wat de agent verving.', 'Plan', 'The plan Bob wrote.']);
     }
 
     public function test_a_change_by_hand_names_no_agent(): void

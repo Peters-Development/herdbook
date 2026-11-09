@@ -120,7 +120,7 @@ final class ActivityPresenter
                 .' → '.self::value($attribute, $value, $casts[$attribute] ?? null))
             ->values()
             ->merge(collect($activity->properties?->get('texts', []))->map(
-                fn (string $attribute): string => (self::textLabels()["{$activity->subject_type}.{$attribute}"] ?? self::label($attribute)).': '.__('changed'),
+                fn (string $attribute): string => self::textLabel($activity, $attribute).': '.__('changed'),
             ));
 
         return $lines->isEmpty() ? null : $lines->implode("\n");
@@ -148,6 +148,24 @@ final class ActivityPresenter
         }
 
         return (string) $activity->description;
+    }
+
+    /**
+     * The name of a long text kept out of the log, as its form calls it.
+     */
+    public static function textLabel(Activity $activity, string $attribute): string
+    {
+        return self::textLabels()["{$activity->subject_type}.{$attribute}"] ?? self::label($attribute);
+    }
+
+    /**
+     * The texts an agent replaced, kept by RecordsActivity ("previous_texts").
+     *
+     * @return array<string, string>
+     */
+    public static function previousTexts(Activity $activity): array
+    {
+        return array_filter((array) $activity->properties?->get('previous_texts'), is_string(...));
     }
 
     /**

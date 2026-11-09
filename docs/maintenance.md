@@ -106,7 +106,7 @@ When anything is planned, the dashboard shows a **Planned maintenance** table: w
 
 The [status page](dashboard.md#the-project-status-page) of a project draws maintenance as a band over its window above the uptime bars: blue, dashed while it is planned, orange when it is overdue. It shows the maintenance of the project and of the servers its production needs, so an update of a shared database server shows up on every project that uses it.
 
-The activity log records the changes to a maintenance, who made them and through which agent, but not its links to servers and projects. Of its plan and report, which are long texts, it only records that they changed.
+The activity log records the changes to a maintenance, who made them and through which agent, but not its links to servers and projects. Of its plan and report, which are long texts, it only records that they changed; when an agent changed one, it also keeps the text the agent replaced (**Previous text** on that entry), so you can put it back.
 
 > [!NOTE]
 > Alerts are not silenced during a planned maintenance window: a check that goes down during your work still alerts as usual. Pause the checks involved if you expect downtime (see [Monitoring](monitoring.md#creating-a-check-by-hand)).

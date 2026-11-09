@@ -3,6 +3,8 @@
 namespace App\Filament\RelationManagers;
 
 use App\Filament\Support\ActivityPresenter;
+use Filament\Actions\Action;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -85,6 +87,38 @@ class ActivityRelationManager extends RelationManager
                     ->separator("\n")
                     ->wrap()
                     ->placeholder('—'),
+            ])
+            ->recordActions([
+                // What an agent replaced (RecordsActivity keeps it): to copy back.
+                Action::make('previousTexts')
+                    ->label(__('Previous text'))
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->visible(fn (Activity $record): bool => ActivityPresenter::previousTexts($record) !== [])
+                    ->modalHeading(__('Previous text'))
+                    ->modalDescription(__('What the agent replaced. To restore it, copy it into the edit form.'))
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel(__('Close'))
+                    ->schema(fn (Activity $record): array => collect(ActivityPresenter::previousTexts($record))
+                        ->map(fn (string $text, string $attribute): TextEntry => TextEntry::make("previous_{$attribute}")
+                            ->label(ActivityPresenter::textLabel($record, $attribute))
+                            ->state(self::asCode($text))
+                            ->markdown()
+                            ->copyable()
+                            ->copyableState($text))
+                        ->values()
+                        ->all()),
             ]);
+    }
+
+    /**
+     * Markdown shown as written, in a code block: a fence longer than any
+     * run of backticks in it.
+     */
+    private static function asCode(string $text): string
+    {
+        preg_match_all('/`+/', $text, $runs);
+        $fence = str_repeat('`', max(3, max(0, ...array_map(strlen(...), $runs[0] ?: [''])) + 1));
+
+        return "{$fence}\n{$text}\n{$fence}";
     }
 }

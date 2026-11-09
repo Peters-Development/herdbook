@@ -32,6 +32,9 @@ trait RecordsActivity
      * page of what this model belongs to, even after it was deleted; which
      * long texts changed ("texts"); and the agent that acted for the causer
      * ("via", "agent_token_id": its name may be reused once it is revoked).
+     * A long text an agent replaced is kept ("previous_texts"): a misled
+     * agent's change can then be undone from the log. An agent only writes
+     * over texts it can read whole, so what is kept stays short.
      */
     public function beforeActivityLogged(Model $activity, string $eventName): void
     {
@@ -44,6 +47,10 @@ trait RecordsActivity
 
         if ($eventName === 'updated' && ($texts = $this->changedTextsNotLogged()) !== []) {
             $context['texts'] = $texts;
+
+            if (isset($context['via']) && ($previous = array_filter(array_intersect_key($this->getOriginal(), array_flip($texts)), filled(...))) !== []) {
+                $context['previous_texts'] = $previous;
+            }
         }
 
         if ($context !== []) {
