@@ -16,7 +16,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
-use Spatie\Activitylog\Models\Activity;
 
 /**
  * Work on servers and projects, planned ahead or written down afterwards:
@@ -157,27 +156,6 @@ class Maintenance extends Model
     public static function versionedRelations(): array
     {
         return ['servers', 'projects'];
-    }
-
-    /**
-     * The last logged change to the plan and to the report (null: none),
-     * from the activity log, which records who changed a text and through
-     * which agent: so a plan someone rewrote doesn't pass for its
-     * creator's. Changes from before Herdbook logged them ("texts")
-     * aren't there.
-     *
-     * @return array{plan: ?Activity, report: ?Activity}
-     */
-    public function lastTextChanges(): array
-    {
-        $last = fn (string $text): ?Activity => $this->activitiesAsSubject()
-            ->where('event', 'updated')
-            ->whereJsonContains('properties->texts', $text)
-            ->with('causer')
-            ->latest('id')
-            ->first();
-
-        return ['plan' => $last('plan'), 'report' => $last('report')];
     }
 
     /**

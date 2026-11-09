@@ -9,6 +9,7 @@
 - [Action Items](#action-items)
 - [Linking an Incident](#linking-an-incident)
 - [Draft Incidents From Checks](#draft-incidents-from-checks)
+- [From an Agent](#from-an-agent)
 - [Importing Existing Reports](#importing-existing-reports)
     - [What the Importer Reads](#what-the-importer-reads)
     - [Running the Import](#running-the-import)
@@ -109,6 +110,11 @@ A check watches production when its hostname points to a production environment,
 Each outage is considered once. A draft you delete does not come back, a check that recovered within the five minutes opens nothing, and paused checks never open incidents. The five minutes are `checks.incident_after_minutes` in `config/herdbook.php`.
 
 The title and timeline entries are written in the default language of the installation (`APP_LOCALE`), since they are created by the scheduler, not by a person. See [Translations](translations.md#generated-text).
+
+<a name="from-an-agent"></a>
+## From an Agent
+
+An agent such as Claude Code can read incidents through Herdbook's MCP server: the unresolved ones of a project or a server, and one incident with its report, timeline and action items ([Agents](agents.md)). It finds them the way the overviews count them for a project, so also through the servers its production needs.
 
 <a name="importing-existing-reports"></a>
 ## Importing Existing Reports

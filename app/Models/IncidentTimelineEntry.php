@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['incident_id', 'user_id', 'occurred_at', 'note'])]
+#[Fillable(['incident_id', 'user_id', 'recorded_via', 'occurred_at', 'note'])]
 class IncidentTimelineEntry extends Model
 {
     /** @return BelongsTo<Incident, $this> */

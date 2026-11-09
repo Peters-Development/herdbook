@@ -553,7 +553,7 @@ class MaintenanceChangeToolsTest extends TestCase
         [, $reader] = $this->agentToken(access: AgentAccess::Read);
         $maintenance = $this->planned();
 
-        $this->assertEqualsCanonicalizing(['search_inventory', 'list_maintenance', 'get_maintenance'], array_column($this->mcp($reader, 'tools/list')->json('result.tools'), 'name'));
+        $this->assertEqualsCanonicalizing(['search_inventory', 'list_maintenance', 'get_maintenance', 'list_incidents', 'get_incident'], array_column($this->mcp($reader, 'tools/list')->json('result.tools'), 'name'));
 
         foreach (['update_maintenance', 'complete_maintenance', 'cancel_maintenance'] as $tool) {
             $this->callTool($reader, $tool, ['id' => $maintenance->id])->assertJsonPath('error.code', -32602);

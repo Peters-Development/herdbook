@@ -3,21 +3,26 @@
 namespace App\Mcp;
 
 use App\Filament\Resources\Hostnames\HostnameResource;
+use App\Filament\Resources\Incidents\IncidentResource;
 use App\Filament\Resources\Maintenances\MaintenanceResource;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\Servers\ServerResource;
 use App\Models\Environment;
 use App\Models\Hostname;
+use App\Models\Incident;
+use App\Models\IncidentAction;
+use App\Models\IncidentTimelineEntry;
 use App\Models\Maintenance;
 use App\Models\Project;
 use App\Models\Server;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Spatie\Activitylog\Models\Activity;
 
 /**
  * What the MCP tools show an agent, field by field: a new column never
- * reaches an agent by itself. No notes, IP addresses, provider hostnames
+ * reaches an agent by itself. No notes (of inventory), IP addresses, provider hostnames
  * (they often hold the address), repository URLs (they may hold credentials),
  * SSH details, costs, credential references or contact details. Enum values rather than
  * translated labels, and times in ISO 8601 with their offset, in the
@@ -37,6 +42,20 @@ final class Serializer
      * What maintenance() reads, to eager-load.
      */
     public const array MAINTENANCE_RELATIONS = ['servers', 'projects', 'user'];
+
+    /**
+     * What incident() reads, to eager-load: who wrote it down, its links,
+     * and its action items (counted; listed by incidentWithTexts()).
+     */
+    public const array INCIDENT_RELATIONS = ['user', 'projects', 'servers', 'domains', 'networks', 'clients', 'actions'];
+
+    /**
+     * How many timeline entries incidentWithTexts() shows (the latest), and
+     * where it cuts a note: monitoring writes one line, people a few.
+     */
+    public const int TIMELINE_ENTRIES = 100;
+
+    public const int MAX_NOTE = 2000;
 
     /**
      * What project() reads, to eager-load.
@@ -97,11 +116,89 @@ final class Serializer
             ...self::maintenance($maintenance),
             ...array_map(fn (?string $text): ?string => $text === null ? null : mb_substr($text, 0, self::MAX_TEXT), $texts),
             'truncated' => array_keys(array_filter($texts, fn (?string $text): bool => mb_strlen((string) $text) > self::MAX_TEXT)),
-            'texts_changed' => array_map(fn (?Activity $change): ?array => $change === null ? null : [
-                'by' => $change->causer?->name,
-                'via' => $change->properties?->get('via'),
-                'at' => self::time($change->created_at),
-            ], $maintenance->lastTextChanges()),
+            'texts_changed' => array_map(self::textChange(...), $maintenance->lastTextChanges()),
+        ];
+    }
+
+    /**
+     * Who changed a long text last, through which agent, and when.
+     *
+     * @return array{by: ?string, via: ?string, at: ?string}|null
+     */
+    private static function textChange(?Activity $change): ?array
+    {
+        return $change === null ? null : [
+            'by' => $change->causer?->name,
+            'via' => $change->properties?->get('via'),
+            'at' => self::time($change->created_at),
+        ];
+    }
+
+    /**
+     * An incident without its texts and timeline. Its date is a calendar
+     * day; its times carry their offset.
+     *
+     * @return array<string, mixed>
+     */
+    public static function incident(Incident $incident): array
+    {
+        return [
+            'id' => $incident->id,
+            'title' => $incident->title,
+            'severity' => $incident->severity->value,
+            'status' => $incident->status->value,
+            // manual, import, or check: a draft monitoring opened.
+            'source' => $incident->source->value,
+            'occurred_on' => $incident->occurred_on?->toDateString(),
+            'started_at' => self::time($incident->started_at),
+            'detected_at' => self::time($incident->detected_at),
+            'resolved_at' => self::time($incident->resolved_at),
+            'projects' => self::references($incident->projects),
+            'servers' => self::references($incident->servers),
+            'domains' => self::references($incident->domains),
+            'networks' => self::references($incident->networks),
+            'clients' => self::references($incident->clients),
+            'open_actions' => $incident->actions->whereNull('done_at')->count(),
+            'created_by' => $incident->user?->name,
+            'via' => $incident->recorded_via,
+            'version' => $incident->version(),
+            'url' => IncidentResource::getUrl('view', ['record' => $incident]),
+        ];
+    }
+
+    /**
+     * incident() with its impact, root cause and report, each cut at
+     * MAX_TEXT ("truncated" names the ones that were longer), who last
+     * changed the root cause and report ("texts_changed"), its latest
+     * TIMELINE_ENTRIES timeline entries in order ("more_timeline": there are
+     * earlier ones), and its action items.
+     *
+     * @param  Collection<int, IncidentTimelineEntry>  $latest  the latest TIMELINE_ENTRIES + 1 entries, newest first, with their user
+     * @return array<string, mixed>
+     */
+    public static function incidentWithTexts(Incident $incident, Collection $latest): array
+    {
+        $texts = ['impact' => $incident->impact, 'root_cause' => $incident->root_cause, 'body' => $incident->body];
+
+        return [
+            ...self::incident($incident),
+            ...array_map(fn (?string $text): ?string => $text === null ? null : mb_substr($text, 0, self::MAX_TEXT), $texts),
+            'truncated' => array_keys(array_filter($texts, fn (?string $text): bool => mb_strlen((string) $text) > self::MAX_TEXT)),
+            'texts_changed' => array_map(self::textChange(...), $incident->lastTextChanges()),
+            'timeline' => $latest->take(self::TIMELINE_ENTRIES)->reverse()->map(fn (IncidentTimelineEntry $entry): array => [
+                'occurred_at' => self::time($entry->occurred_at),
+                'note' => mb_substr($entry->note, 0, self::MAX_NOTE),
+                'by' => $entry->user?->name,
+                'via' => $entry->recorded_via,
+            ])->values()->all(),
+            'more_timeline' => $latest->count() > self::TIMELINE_ENTRIES,
+            'actions' => $incident->actions->sortBy('id')->map(fn (IncidentAction $action): array => [
+                'id' => $action->id,
+                'description' => $action->description,
+                'due_on' => $action->due_on?->toDateString(),
+                'done_at' => self::time($action->done_at),
+                'overdue' => $action->isOverdue(),
+            ])->values()->all(),
         ];
     }
 
@@ -173,13 +270,13 @@ final class Serializer
     /**
      * @return array{id: int, name: string}
      */
-    private static function reference(Project|Server $model): array
+    private static function reference(Model $model): array
     {
         return ['id' => $model->id, 'name' => $model->name];
     }
 
     /**
-     * @param  Collection<int, covariant Project|Server>  $models
+     * @param  Collection<int, covariant Model>  $models  with an id and a name
      * @return list<array{id: int, name: string}>
      */
     private static function references(Collection $models): array

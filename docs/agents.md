@@ -23,7 +23,7 @@
 <a name="introduction"></a>
 ## Introduction
 
-An agent such as [Claude Code](https://code.claude.com) can look things up in Herdbook and keep its maintenance log, without clicking through the panel: find a server, see when it was last updated, plan work, and write down what it did. It talks to Herdbook's MCP server (the [Model Context Protocol](https://modelcontextprotocol.io)) at `/mcp`, with a token of its own.
+An agent such as [Claude Code](https://code.claude.com) can look things up in Herdbook and keep its maintenance log, without clicking through the panel. It reads incidents too: what is going on, and what happened last time. It can find a server, see when it was last updated, plan work, and write down what it did. It talks to Herdbook's MCP server (the [Model Context Protocol](https://modelcontextprotocol.io)) at `/mcp`, with a token of its own.
 
 Herdbook remains the place where people work: an agent sees less than a person and may do less. Maintenance an agent creates is signed with its account and its name, such as "Ada via deploy-agent", and the activity log names the agent for every change it makes to a maintenance (not to which servers and projects it is linked to, which isn't logged for people either).
 
@@ -35,6 +35,8 @@ Herdbook remains the place where people work: an agent sees less than a person a
 | `search_inventory` | Finds projects, servers and hostnames the way an agent knows them: by name, by the git remote of the repository it works in, by the output of `hostname -f`, or by the address it connects to. A server shows when updates, a reboot, an inspection and an upgrade were last done on it. | read |
 | `list_maintenance` | Lists maintenance: planned (overdue included), overdue, done or called off, for some servers or projects, of some kind of work. | read |
 | `get_maintenance` | One maintenance with its plan and report. | read |
+| `list_incidents` | Lists incidents: the unresolved ones unless it asks for others, of some projects (as far as Herdbook counts them for a project: also through the servers its production needs) or servers, of some severity, since some day. | read |
+| `get_incident` | One incident with its impact, root cause, report, timeline (the latest 100 entries) and action items. | read |
 | `schedule_maintenance` | Plans maintenance. | write |
 | `log_maintenance` | Writes down maintenance that was done. | write |
 | `update_maintenance` | Changes the work, title, times, plan, report or servers and projects of planned or done maintenance. Not its status, and nothing that was called off. | write |
@@ -46,7 +48,7 @@ There is no tool that deletes anything. An agent with a read token doesn't see t
 <a name="what-it-gets"></a>
 ### What It Gets
 
-What a tool returns is built field by field, so a new column never reaches an agent by itself. An agent gets names (of projects, servers, hostnames, providers, clients and accounts), a server's operating system, maintenance with its plan and report, cut at 10,000 characters each, and links to the pages in Herdbook. With a plan, it also gets who created the maintenance and who last changed its plan and report, through which agent, as far as the activity log records it: a plan someone else rewrote doesn't pass for its creator's. It never gets notes, IP addresses, provider hostnames (they often hold the address), repository URLs (they may hold credentials), SSH details, costs, credential references or the contact details of clients.
+What a tool returns is built field by field, so a new column never reaches an agent by itself. An agent gets names (of projects, servers, hostnames, providers, clients and accounts), a server's operating system, maintenance with its plan and report, cut at 10,000 characters each, and links to the pages in Herdbook. With a plan, it also gets who created the maintenance and who last changed its plan and report, through which agent, as far as the activity log records it: a plan someone else rewrote doesn't pass for its creator's. The same goes for incidents: their impact, root cause, report, timeline and action items, as written, with who wrote them down and who last changed the root cause and report. It never gets notes, IP addresses, provider hostnames (they often hold the address), repository URLs (they may hold credentials), SSH details, costs, credential references or the contact details of clients.
 
 It can still *find* a server by its address or its provider hostname, and a project by its git remote: those are compared whole (a provider hostname also by its first label), never in part, so they can't be spelled out character by character. A guessed address can be confirmed, though: at 120 requests a minute, an agent can try every address of a /24 in a few minutes.
 
@@ -183,7 +185,9 @@ Let the agent read without asking, and have it ask before it writes. In `~/.clau
     "allow": [
       "mcp__herdbook__search_inventory",
       "mcp__herdbook__list_maintenance",
-      "mcp__herdbook__get_maintenance"
+      "mcp__herdbook__get_maintenance",
+      "mcp__herdbook__list_incidents",
+      "mcp__herdbook__get_incident"
     ],
     "ask": [
       "mcp__herdbook__schedule_maintenance",

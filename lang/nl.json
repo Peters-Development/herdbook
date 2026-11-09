@@ -783,6 +783,7 @@
     "Their own amount is removed; their registrar's price list counts instead. Domains without a price in the list keep theirs.": "Hun eigen bedrag wordt weggehaald; de prijslijst van hun registrar telt dan. Domeinen zonder prijs in de lijst houden het hunne.",
     "Their own amount is removed; their registrar's price list counts instead. Domains without a price in the list keep theirs. That changes what these cost: :changes": "Hun eigen bedrag wordt weggehaald; de prijslijst van hun registrar telt dan. Domeinen zonder prijs in de lijst houden het hunne. Dat verandert wat deze kosten: :changes",
     "There are no checks on production: only maintenance and incidents.": "Er zijn geen checks op productie: alleen onderhoud en incidenten.",
+    "There is no incident with id :id. list_incidents finds them.": "Er is geen incident met id :id. list_incidents vindt ze.",
     "There is no maintenance with id :id. list_maintenance finds them.": "Er is geen onderhoud met id :id. list_maintenance vindt ze.",
     "This agent token has expired. Create a new one with agents:create.": "Dit agent-token is verlopen. Maak een nieuw aan met agents:create.",
     "This agent token is unknown or has been revoked.": "Dit agent-token is onbekend of ingetrokken.",

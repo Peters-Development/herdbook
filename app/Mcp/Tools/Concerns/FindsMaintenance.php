@@ -12,19 +12,11 @@ use Laravel\Mcp\Response;
  */
 trait FindsMaintenance
 {
+    use FindsRecords;
+
     protected function idSchema(JsonSchema $schema): Type
     {
-        return $schema->integer()->min(1)->required()->description('From list_maintenance, or an earlier answer.');
-    }
-
-    /**
-     * Numeric first: Laravel's integer rule takes JSON true for 1.
-     *
-     * @return list<string>
-     */
-    protected function idRules(): array
-    {
-        return ['required', 'numeric', 'integer', 'min:1'];
+        return $this->idSchemaFrom($schema, 'list_maintenance');
     }
 
     /**

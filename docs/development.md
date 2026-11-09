@@ -154,7 +154,7 @@ A few questions are answered in exactly one place. Everything that needs the ans
 | Question | Answered by |
 |---|---|
 | How is a project, environment, server or hostname doing? | `Services\Health\ProjectHealth` (with `HealthState`): tiles, projects list, status page, map, status screen. |
-| Which incidents belong to a project? | `Services\Health\ProjectIncidents`: linked to the project, to a server its production needs, or to such a server's network. |
+| Which incidents belong to a project? | `Services\Health\ProjectIncidents`: linked to the project, to a server its production needs, or to such a server's network. `reach()` says what that is for any status (`list_incidents`). |
 | What does something cost, per year, per month, per group? | `Services\Costs\RecurringCosts`: the costs page, the cost section on project and client pages, and any other total. |
 | Which renewals need attention? | `Services\RenewalAttention`: dashboard, filters, digest. |
 | What goes down when a server (or network) does? | `Services\Impact\ImpactAnalyzer`: the server and network pages, the map, health, draft incidents. |

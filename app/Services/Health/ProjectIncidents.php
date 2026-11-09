@@ -28,15 +28,34 @@ final class ProjectIncidents
      */
     public function for(Project|int $project): Collection
     {
-        $projectId = $project instanceof Project ? $project->id : $project;
-        $serverIds = $this->health->productionServerIds($projectId);
-        $networkIds = $this->health->productionNetworkIds($projectId);
+        $reach = $this->reach([$project instanceof Project ? $project->id : $project]);
 
         return $this->unresolved()
-            ->filter(fn (Incident $incident): bool => $incident->projects->contains('id', $projectId)
-                || $incident->servers->whereIn('id', $serverIds)->isNotEmpty()
-                || $incident->networks->whereIn('id', $networkIds)->isNotEmpty())
+            ->filter(fn (Incident $incident): bool => $incident->projects->whereIn('id', $reach['projects'])->isNotEmpty()
+                || $incident->servers->whereIn('id', $reach['servers'])->isNotEmpty()
+                || $incident->networks->whereIn('id', $reach['networks'])->isNotEmpty())
             ->values();
+    }
+
+    /**
+     * What an incident is linked to when it belongs to any of these
+     * projects, resolved or not: the projects, the servers their production
+     * needs, and the networks those stand in.
+     *
+     * @param  list<int>  $projectIds
+     * @return array{projects: list<int>, servers: list<int>, networks: list<int>}
+     */
+    public function reach(array $projectIds): array
+    {
+        $servers = [];
+        $networks = [];
+
+        foreach ($projectIds as $projectId) {
+            $servers = [...$servers, ...$this->health->productionServerIds($projectId)];
+            $networks = [...$networks, ...$this->health->productionNetworkIds($projectId)];
+        }
+
+        return ['projects' => array_values($projectIds), 'servers' => array_values(array_unique($servers)), 'networks' => array_values(array_unique($networks))];
     }
 
     /**
