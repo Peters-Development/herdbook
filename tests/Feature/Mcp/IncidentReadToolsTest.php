@@ -321,6 +321,7 @@ class IncidentReadToolsTest extends TestCase
         Server::factory()->create(['name' => 'notes', 'provider_hostname' => 'vps-7.host.example (rescue)']);
         Server::factory()->create(['name' => 'two', 'provider_hostname' => 'vps-8.host.example, vps-9.host.example']);
         Server::factory()->create(['name' => 'label', 'provider_hostname' => 'Hetzner: vps-10.host.example / panel']);
+        Server::factory()->create(['name' => 'glued', 'provider_hostname' => 'Hetzner:vps-11.host.example, `vps-12.host.example`, [vps-13.host.example], host=vps-14.host.example:ssh']);
         Server::factory()->create(['name' => 'plan', 'provider_hostname' => 'CX22 v2.1']);
         Server::factory()->create(['name' => 'hindi', 'provider_hostname' => 'उदाहरण.परीक्षा']);
         Server::factory()->create(['name' => 'thai', 'provider_hostname' => 'ตัวอย่าง.example']);
@@ -331,8 +332,8 @@ class IncidentReadToolsTest extends TestCase
         );
         // Free text: every hostname in it, but no version.
         $this->assertSame(
-            '[adres van notes], [adres van two], [adres van two] and [adres van label] run v2.1',
-            app(HiddenValues::class)->mask('vps-7.host.example, vps-8.host.example, vps-9.host.example and vps-10.host.example run v2.1'),
+            '[adres van notes], [adres van two], [adres van two] and [adres van label] run v2.1; [adres van glued] [adres van glued] [adres van glued] [adres van glued]',
+            app(HiddenValues::class)->mask('vps-7.host.example, vps-8.host.example, vps-9.host.example and vps-10.host.example run v2.1; vps-11.host.example vps-12.host.example vps-13.host.example vps-14.host.example'),
         );
         // An internationalised one also as written, in any case and script; the others still when letters are glued to them.
         $this->assertSame(

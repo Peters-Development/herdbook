@@ -404,11 +404,11 @@ class HiddenValues
 
     /**
      * The hostnames in what was filled in as a provider hostname, free text
-     * ("vps-1.provider.example (rescue)", more than one): each the host of a
-     * URL, without a trailing dot; an internationalised one in punycode and
-     * as written. One without a dot is a name, often the server's own
-     * ("hz-1"), and one that ends in a number a version ("v2.1"), not an
-     * address.
+     * ("vps-1.provider.example (rescue)", "Hetzner:vps-2.provider.example",
+     * a URL, more than one): every run of dotted labels, an internationalised
+     * one in punycode and as written. One without a dot is a name, often the
+     * server's own ("hz-1"), and one that ends in a number a version
+     * ("v2.1"), not an address.
      *
      * @return list<string>
      */
@@ -416,10 +416,7 @@ class HiddenValues
     {
         $names = [];
 
-        foreach (preg_split('/[\s,;()<>|"\']+/u', trim((string) $value), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $token) {
-            // The host of what may be a URL, or a host with a user, port or path.
-            $host = rtrim((string) parse_url(str_contains($token, '://') ? $token : '//'.$token, PHP_URL_HOST), '.');
-
+        foreach (preg_match_all(self::UNICODE_LABELS, (string) $value, $runs) ? $runs[0] : [] as $host) {
             if (preg_match('/[^\x00-\x7F]/', $host) === 1) {
                 $host = (string) idn_to_ascii($host, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46);
             }
