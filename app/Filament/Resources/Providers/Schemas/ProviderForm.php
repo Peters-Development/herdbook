@@ -79,8 +79,8 @@ class ProviderForm
         return Section::make(__('Price list'))
             ->explain(__('What a domain costs per extension per year, excluding VAT. Applies to its domains without an amount of their own, so a price change is made here once.'))
             ->visible(fn (Get $get, ?Provider $record): bool => collect($get('kinds'))->contains(fn (ProviderKind|string $kind): bool => $kind === ProviderKind::Registrar || $kind === ProviderKind::Registrar->value)
-                || (bool) $record?->domainPrices()->exists()
-                || (bool) $record?->registeredDomains()->exists())
+                // One query, and only for one that is no registrar.
+                || ($record?->exists && Provider::query()->whereKey($record->getKey())->where(fn (Builder $query) => $query->has('domainPrices')->orHas('registeredDomains'))->exists()))
             ->schema([
                 Repeater::make('domainPrices')
                     ->label(__('Price list'))

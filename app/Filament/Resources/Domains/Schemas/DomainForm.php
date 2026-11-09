@@ -10,11 +10,9 @@ use App\Filament\Support\CostSchema;
 use App\Filament\Support\RenewalSchema;
 use App\Models\Domain;
 use App\Models\DomainPrice;
-use App\Models\Provider;
 use App\Models\Server;
 use App\Rules\NoSecretMaterial;
 use App\Services\Costs\Money;
-use BcMath\Number;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -131,22 +129,20 @@ class DomainForm
         return $amount
             ->live(onBlur: true)
             ->placeholder(function (Get $get): ?string {
-                if (($key = self::priceListKey($get)) === null) {
+                if (($domain = self::formDomain($get)) === null) {
                     return null;
                 }
 
-                $price = self::listPrice($get);
-
                 // The field shows the currency symbol already.
-                return $price === null
-                    ? __('No price for .:extension at :registrar', ['extension' => $key['extension'], 'registrar' => $key['registrarName']])
-                    : __(':amount from the price list', ['amount' => Money::number($price->cost_amount)]);
+                return $domain->listPrice() === null
+                    ? __('No price for .:extension at :registrar', ['extension' => Domain::extensionOf($domain->name), 'registrar' => $domain->registrar->name])
+                    : __(':amount from the price list', ['amount' => Money::number($domain->listPrice()->cost_amount)]);
             })
-            ->explain(fn (Get $get): ?string => self::priceListKey($get) === null ? null : __("Leave it empty to use the registrar's price list: a price change there counts here too."))
+            ->explain(fn (Get $get): ?string => self::formDomain($get) === null ? null : __("Leave it empty to use the registrar's price list: a price change there counts here too."))
             // State, not an explanation: always shown, so not in the helper text
             // (explain()) or the hint (excluding VAT). An amount of its own that
             // is just the list price would not follow a price change.
-            ->aboveContent(fn (Get $get): ?string => self::isListPrice($get) ? __('Same as the price list: leave it empty to follow price changes.') : null)
+            ->aboveContent(fn (Get $get): ?string => self::formDomain($get)?->isAtListPrice() ? __('Same as the price list: leave it empty to follow price changes.') : null)
             ->hintAction(self::addToPriceListAction());
     }
 
@@ -159,27 +155,27 @@ class DomainForm
         return Action::make('addToPriceList')
             ->label(__('Add to the price list'))
             ->icon(Heroicon::OutlinedPlus)
-            ->visible(fn (Get $schemaGet): bool => self::priceListKey($schemaGet) !== null && self::listPrice($schemaGet) === null)
-            ->modalHeading(fn (Get $schemaGet): string => __('Add .:extension to the price list', ['extension' => self::priceListKey($schemaGet)['extension'] ?? '']))
+            ->visible(fn (Get $schemaGet): bool => ($domain = self::formDomain($schemaGet)) !== null && $domain->listPrice() === null)
+            ->modalHeading(fn (Get $schemaGet): string => __('Add .:extension to the price list', ['extension' => Domain::extensionOf((string) self::formDomain($schemaGet)?->name)]))
             ->modalDescription(__('What a domain with this extension costs per year at this registrar, excluding VAT. It counts for each of its domains without an amount of their own.'))
             ->fillForm(fn (Get $schemaGet): array => ['cost_amount' => self::period($schemaGet) === CostPeriod::Month ? null : $schemaGet('cost_amount')])
             ->schema([ProviderForm::priceInput()])
             ->action(function (array $data, Get $schemaGet, Set $schemaSet): void {
-                $key = self::priceListKey($schemaGet);
-
-                if ($key === null) {
+                if (($domain = self::formDomain($schemaGet)) === null) {
                     return;
                 }
 
+                $extension = Domain::extensionOf($domain->name);
+
                 DomainPrice::query()->firstOrCreate(
-                    ['provider_id' => $key['registrar'], 'extension' => $key['extension']],
+                    ['provider_id' => $domain->registrar_id, 'extension' => $extension],
                     ['cost_amount' => $data['cost_amount']],
                 );
-                // The lookups of this request said there was none.
+                // The domain of this request knew no price for it.
                 Once::flush();
 
                 // Its own amount was the price: now the list says it.
-                $cleared = self::isListPrice($schemaGet);
+                $cleared = (bool) self::formDomain($schemaGet)?->isAtListPrice();
 
                 if ($cleared) {
                     $schemaSet('cost_amount', null);
@@ -187,43 +183,36 @@ class DomainForm
 
                 Notification::make()
                     ->success()
-                    ->title(__('Added .:extension to the price list.', ['extension' => $key['extension']]))
+                    ->title(__('Added .:extension to the price list.', ['extension' => $extension]))
                     ->body($cleared ? __('Save the domain to keep its changes.') : null)
                     ->send();
             });
     }
 
     /**
-     * The registrar and extension of the domain in the form, when a price
-     * of the list can apply to it: a valid, registered name at a registrar
-     * that exists.
-     *
-     * @return ?array{registrar: int, registrarName: string, extension: string}
+     * The domain in the form, unsaved, so Domain::listPrice() and
+     * isAtListPrice() answer for it as for a stored one; once per request
+     * and state. Null when no price of a list can apply to it: no valid,
+     * registered name, or no registrar that exists.
      */
-    private static function priceListKey(Get $get): ?array
+    private static function formDomain(Get $get): ?Domain
     {
         $name = mb_strtolower(trim((string) $get('name')));
+        $registrar = (int) $get('registrar_id');
+        $local = (bool) $get('local_only');
+        // Only a plain amount: a browser lets "1e3" through.
+        $amount = preg_match('/^\d+(\.\d+)?$/', trim((string) $get('cost_amount'))) ? trim((string) $get('cost_amount')) : null;
+        $period = self::period($get);
 
-        if ($get('local_only') || blank($get('registrar_id')) || ! preg_match(Domain::NAME_PATTERN, $name) || mb_strlen(Domain::extensionOf($name)) > 63) {
+        if ($local || $registrar === 0 || ! preg_match(Domain::NAME_PATTERN, $name) || mb_strlen(Domain::extensionOf($name)) > 63) {
             return null;
         }
 
-        $registrarName = self::registrarName((int) $get('registrar_id'));
+        return once(function () use ($name, $registrar, $amount, $period): ?Domain {
+            $domain = new Domain(['name' => $name, 'registrar_id' => $registrar, 'cost_amount' => $amount, 'cost_period' => $period]);
 
-        return $registrarName === null ? null : [
-            'registrar' => (int) $get('registrar_id'),
-            'registrarName' => $registrarName,
-            'extension' => DomainPrice::normalize(Domain::extensionOf($name)),
-        ];
-    }
-
-    /**
-     * Once per request: the placeholder, the explanation, the state line and
-     * the action each ask.
-     */
-    private static function registrarName(int $id): ?string
-    {
-        return once(fn (): ?string => Provider::query()->whereKey($id)->value('name'));
+            return $domain->registrar === null ? null : $domain;
+        });
     }
 
     private static function period(Get $get): ?CostPeriod
@@ -231,41 +220,6 @@ class DomainForm
         $period = $get('cost_period');
 
         return $period instanceof CostPeriod ? $period : CostPeriod::tryFrom((string) $period);
-    }
-
-    /**
-     * Domain::listPrice() for the form, whose domain is not saved yet.
-     */
-    private static function listPrice(Get $get): ?DomainPrice
-    {
-        if (($key = self::priceListKey($get)) === null) {
-            return null;
-        }
-
-        return self::findPrice($key['registrar'], $key['extension']);
-    }
-
-    /**
-     * Once per request (registrarName()); addToPriceListAction() forgets it
-     * after adding one.
-     */
-    private static function findPrice(int $registrar, string $extension): ?DomainPrice
-    {
-        return once(fn (): ?DomainPrice => DomainPrice::query()->where('provider_id', $registrar)->where('extension', $extension)->first());
-    }
-
-    /**
-     * Its own amount is per year and just the list price. Only a plain
-     * amount: a browser lets "1e3" through.
-     */
-    private static function isListPrice(Get $get): bool
-    {
-        $amount = trim((string) $get('cost_amount'));
-        $price = self::listPrice($get);
-
-        return $price !== null && preg_match('/^\d+(\.\d+)?$/', $amount)
-            && self::period($get) === CostPeriod::Year
-            && (new Number($amount))->compare(new Number($price->cost_amount)) === 0;
     }
 
     /**

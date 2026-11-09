@@ -316,6 +316,19 @@ class Domain extends Model implements Renewable
     }
 
     /**
+     * isAtListPrice() in a query.
+     *
+     * @param  Builder<Domain>  $query
+     */
+    public function scopeAtListPrice(Builder $query): void
+    {
+        $query
+            ->whereNotNull('cost_amount')
+            ->where('cost_period', CostPeriod::Year)
+            ->whereRaw('cost_amount = ('.self::listPriceSql().')');
+    }
+
+    /**
      * usesPriceList() in a query.
      *
      * @param  Builder<Domain>  $query

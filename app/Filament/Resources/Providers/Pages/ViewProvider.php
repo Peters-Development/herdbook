@@ -32,12 +32,12 @@ class ViewProvider extends ViewRecord
             ->label(__('Use the price list'))
             ->icon(Heroicon::OutlinedListBullet)
             ->color('gray')
-            ->visible(fn (Provider $record): bool => $record->domainsAtListPrice()->isNotEmpty())
+            ->visible(fn (Provider $record): bool => $record->registeredDomains()->atListPrice()->exists())
             ->requiresConfirmation()
             ->modalHeading(__('Use the price list'))
             ->modalDescription(fn (Provider $record): string => trans_choice(
                 ':count domain has an amount of its own that equals its price in the list, so it would not follow a price change. Clear its amount, so it uses the price list?|:count domains have an amount of their own that equals their price in the list, so they would not follow a price change. Clear their amount, so they use the price list?',
-                $record->domainsAtListPrice()->count(),
+                $record->registeredDomains()->atListPrice()->count(),
             ))
             ->modalSubmitActionLabel(__('Use the price list'))
             ->action(function (Provider $record): void {

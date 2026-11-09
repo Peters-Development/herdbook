@@ -75,6 +75,18 @@ class DomainPriceTest extends TestCase
         $this->assertSame('€ 15,00 per jaar', Money::describe($own));
     }
 
+    public function test_at_the_list_price_is_the_same_in_php_and_sql(): void
+    {
+        $same = $this->domain('same.com', ['cost_amount' => '9.95', 'cost_period' => CostPeriod::Year]);
+        $this->domain('more.com', ['cost_amount' => '12.00', 'cost_period' => CostPeriod::Year]);
+        $this->domain('monthly.com', ['cost_amount' => '9.95', 'cost_period' => CostPeriod::Month]);
+        $this->domain('listed.com');
+        $this->domain('there.com', ['registrar_id' => $this->other->id, 'cost_amount' => '9.95', 'cost_period' => CostPeriod::Year]);
+
+        $this->assertSame([$same->id], Domain::query()->atListPrice()->pluck('id')->all());
+        $this->assertSame([$same->id], Domain::query()->with('registrar.domainPrices')->get()->filter->isAtListPrice()->modelKeys());
+    }
+
     public function test_an_amount_without_a_period_stays_its_own_and_missing(): void
     {
         $half = $this->domain('half.com', ['cost_amount' => '15.00']);

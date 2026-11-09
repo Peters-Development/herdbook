@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\CostPeriod;
 use App\Enums\ProviderKind;
 use App\Models\Concerns\RecordsActivity;
 use Database\Factories\ProviderFactory;
@@ -54,20 +53,7 @@ class Provider extends Model
      */
     public function domainsAtListPrice(): Collection
     {
-        $this->loadMissing('domainPrices');
-
-        if ($this->domainPrices->isEmpty()) {
-            return new Collection;
-        }
-
-        return $this->registeredDomains()
-            ->whereNotNull('cost_amount')
-            ->where('cost_period', CostPeriod::Year)
-            ->orderBy('name')
-            ->get()
-            ->each(fn (Domain $domain): Domain => $domain->setRelation('registrar', $this))
-            ->filter(fn (Domain $domain): bool => $domain->isAtListPrice())
-            ->values();
+        return $this->registeredDomains()->atListPrice()->orderBy('name')->get();
     }
 
     /** @return HasMany<Domain, $this> */
