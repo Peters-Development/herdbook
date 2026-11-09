@@ -85,7 +85,7 @@ A certificate that is about to expire is a warning, not an outage: the site stil
 <a name="tcp-port"></a>
 ### TCP Port
 
-Opens a TCP connection to `host:port` within 5 seconds. Up when the connection opens; nothing is sent. Good for databases, mail servers, SSH, or anything else without an HTTP endpoint. IPv6 addresses go in brackets: `[2001:db8::10]:22`.
+Opens a TCP connection to `host:port` within 5 seconds. Up when the connection opens; nothing is sent. Good for databases, mail servers, DNS servers (port 53), SSH, or anything else without an HTTP endpoint. IPv6 addresses go in brackets: `[2001:db8::10]:22`.
 
 <a name="dns"></a>
 ### DNS
@@ -233,7 +233,7 @@ The dashboard tiles, the projects list, the status page, the map and the status 
 For an environment, these checks count:
 
 - the checks of the hostnames that point to it;
-- the checks of the servers it runs on, and of the [mail server](inventory.md#mail-server) of the domains of its hostnames;
+- the checks of the servers it runs on, and of the [mail server](inventory.md#mail-server) and [DNS server](inventory.md#dns-server) of the domains of its hostnames;
 - the checks of the servers those servers depend on, directly or through a chain.
 
 The last rule is what makes [dependencies](inventory.md#dependencies-and-impact) useful: when `storage-1` stops answering pings, a project whose production runs on `app-2`, which mounts `storage-1` over NFS, shows the outage too, even though its own website check may not have noticed yet.

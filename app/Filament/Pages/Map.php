@@ -16,6 +16,7 @@ use App\Services\Map\InfrastructureMap;
 use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Renderless;
 use Livewire\Attributes\Url;
 
@@ -81,8 +82,11 @@ class Map extends Page
 
         $nodes = $impacts
             ->map(fn (ImpactedEnvironment $impact): string => "environment-{$impact->environment->id}")
-            // Every domain with its mail on one of them, also one whose environments run there anyway.
-            ->merge(Domain::query()->whereIn('mail_server_id', $servers)->pluck('id')->map(fn (int $id): string => "domain-{$id}"))
+            // Every domain with its mail or DNS on one of them, also one whose environments run there anyway.
+            ->merge(Domain::query()
+                ->where(fn (Builder $query) => $query->whereIn('mail_server_id', $servers)->orWhereIn('dns_server_id', $servers))
+                ->pluck('id')
+                ->map(fn (int $id): string => "domain-{$id}"))
             ->merge(array_map(fn (int $id): string => "server-{$id}", $servers));
 
         return [
@@ -94,7 +98,7 @@ class Map extends Page
             'items' => $impacts->map(fn (ImpactedEnvironment $impact): array => [
                 'key' => $impact->environment->id,
                 'label' => $impact->environment->full_name,
-                // Mail through a domain names the domain (example.com → mail-1), also when direct.
+                // Mail or DNS through a domain names the domain (example.com → mail-1), also when direct.
                 'path' => $impact->isDirect() && $impact->domain === null ? null : $impact->path(),
                 'url' => ProjectResource::getUrl('view', ['record' => $impact->environment->project_id]),
             ])->all(),

@@ -25,7 +25,8 @@ class ProvidersTable
                     ))
                     ->badge(),
                 TextColumn::make('servers_count')->label(__('Servers'))->counts('servers'),
-                TextColumn::make('registered_domains_count')->label(__('Domains'))->counts('registeredDomains'),
+                TextColumn::make('registered_domains_count')->label(__('Registered domains'))->counts('registeredDomains'),
+                TextColumn::make('dns_domains_count')->label(__('DNS domains'))->counts('dnsDomains')->toggleable(),
                 TextColumn::make('panel_url')
                     ->label(__('Control panel'))
                     ->url(fn (?string $state): ?string => $state, shouldOpenInNewTab: true)

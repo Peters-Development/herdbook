@@ -5,11 +5,16 @@ namespace Tests\Feature\Filament;
 use App\Enums\ProviderKind;
 use App\Enums\RenewalStatus;
 use App\Enums\ServerStatus;
+use App\Filament\Resources\Domains\DomainResource;
+use App\Filament\Resources\Domains\Pages\CreateDomain;
 use App\Filament\Resources\Domains\Pages\EditDomain;
 use App\Filament\Resources\Domains\Pages\ListDomains;
 use App\Filament\Resources\Domains\Pages\ViewDomain;
 use App\Filament\Resources\Domains\RelationManagers\HostnamesRelationManager;
+use App\Filament\Resources\Hostnames\HostnameResource;
 use App\Filament\Resources\Hostnames\Pages\CreateHostname;
+use App\Filament\Resources\Providers\Pages\ListProviders;
+use App\Filament\Resources\Providers\ProviderResource;
 use App\Filament\Resources\Servers\ServerResource;
 use App\Models\Domain;
 use App\Models\Environment;
@@ -249,5 +254,190 @@ class DomainFlowTest extends TestCase
 
         Livewire::test(ViewDomain::class, ['record' => $kept->getRouteKey()])
             ->assertSee('old-mail (Uit gebruik)');
+    }
+
+    public function test_the_dns_server_is_chosen_on_the_domain_and_its_provider_becomes_the_dns_host(): void
+    {
+        $this->signIn();
+        $domain = Domain::factory()->create(['name' => 'example.com', 'dns_provider_id' => Provider::factory()->registrar()->create(['name' => 'Old DNS'])->id]);
+        // A hosting provider, not one offering DNS: its package runs the DNS all the same.
+        $package = Server::factory()->for(Provider::factory()->create(['name' => 'Packager']))->create(['name' => 'package-1']);
+
+        Livewire::test(EditDomain::class, ['record' => $domain->getRouteKey()])
+            ->assertFormFieldVisible('dns_provider_id')
+            ->assertSee('Alleen als de DNS draait op een server die je hebt toegevoegd')
+            ->fillForm(['dns_server_id' => $package->id])
+            // The explanation stays next to what the app reports.
+            ->assertSee('Alleen als de DNS draait op een server die je hebt toegevoegd')
+            ->assertFormFieldHidden('dns_provider_id')
+            ->assertSee('DNS bij: Packager, de leverancier van deze server.')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertTrue($domain->fresh()->dnsServer->is($package));
+        $this->assertSame($package->provider_id, $domain->fresh()->dns_provider_id);
+
+        Livewire::test(ViewDomain::class, ['record' => $domain->getRouteKey()])
+            ->assertSee('DNS-server')
+            ->assertSee('package-1')
+            ->assertSee('Packager')
+            ->assertSee(ProviderResource::getUrl('view', ['record' => $package->provider_id]));
+
+        $this->get(ServerResource::getUrl('view', ['record' => $package]))
+            ->assertOk()
+            ->assertSee('DNS van')
+            ->assertSee('example.com')
+            // only DNS runs here: no "nothing runs here" next to it
+            ->assertDontSee('Er draait niets op deze server.');
+    }
+
+    public function test_a_new_domain_with_its_dns_on_a_server_without_provider_has_no_dns_host(): void
+    {
+        $this->signIn();
+        $box = Server::factory()->create(['provider_id' => null]);
+
+        Livewire::test(CreateDomain::class)
+            ->fillForm(['name' => 'example.org', 'dns_provider_id' => Provider::factory()->registrar()->create()->id, 'dns_server_id' => $box->id])
+            ->assertSee('DNS bij: niemand, deze server heeft geen leverancier.')
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $domain = Domain::query()->where('name', 'example.org')->sole();
+        $this->assertSame($box->id, $domain->dns_server_id);
+        $this->assertNull($domain->dns_provider_id);
+
+        // Not "no DNS" anywhere: the server itself serves it.
+        $hostname = Hostname::factory()->for($domain)->create();
+
+        Livewire::test(ListDomains::class)->assertTableColumnStateSet('dns_host', $box->name, $domain);
+
+        $this->get(HostnameResource::getUrl('view', ['record' => $hostname]))
+            ->assertOk()
+            ->assertSee(e($box->name), false)
+            ->assertSee(ServerResource::getUrl('view', ['record' => $box]));
+    }
+
+    public function test_clearing_the_dns_server_right_after_choosing_it_keeps_the_new_dns_host(): void
+    {
+        $this->signIn();
+        $package = Server::factory()->for(Provider::factory())->create();
+        $domain = Domain::factory()->create(['dns_provider_id' => Provider::factory()->registrar()->create()->id]);
+
+        Livewire::test(EditDomain::class, ['record' => $domain->getRouteKey()])
+            ->fillForm(['dns_server_id' => $package->id])
+            ->call('save')
+            ->fillForm(['dns_server_id' => null])
+            ->assertFormSet(['dns_provider_id' => $package->provider_id])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame($package->provider_id, $domain->fresh()->dns_provider_id);
+    }
+
+    public function test_clearing_the_dns_server_in_the_form_shows_the_dns_host_again_and_keeps_it(): void
+    {
+        $this->signIn();
+        $package = Server::factory()->for(Provider::factory())->create();
+        $domain = Domain::factory()->create(['dns_server_id' => $package->id]);
+
+        Livewire::test(EditDomain::class, ['record' => $domain->getRouteKey()])
+            ->assertFormFieldHidden('dns_provider_id')
+            ->fillForm(['dns_server_id' => null])
+            ->assertFormFieldVisible('dns_provider_id')
+            ->assertFormSet(['dns_provider_id' => $package->provider_id])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertNull($domain->fresh()->dns_server_id);
+        $this->assertSame($package->provider_id, $domain->fresh()->dns_provider_id);
+    }
+
+    public function test_a_bulk_action_sets_the_dns_server_and_with_it_the_dns_host(): void
+    {
+        $this->signIn();
+        $package = Server::factory()->for(Provider::factory())->create();
+        $domains = Domain::factory()->count(2)->create();
+        $other = Domain::factory()->create();
+
+        Livewire::test(ListDomains::class)
+            ->selectTableRecords($domains)
+            ->callAction(TestAction::make('setDnsServer')->table()->bulk(), ['dns_server_id' => $package->id])
+            ->assertNotified('DNS-server ingesteld voor 2 domeinen.');
+
+        $this->assertSame(2, $package->dnsDomains()->where('dns_provider_id', $package->provider_id)->count());
+        $this->assertNull($other->fresh()->dns_server_id);
+
+        Livewire::test(ListDomains::class)
+            ->selectTableRecords([$domains->first()])
+            ->callAction(TestAction::make('setDnsServer')->table()->bulk(), ['dns_server_id' => null]);
+
+        // The server goes, the DNS host stays.
+        $this->assertNull($domains->first()->fresh()->dns_server_id);
+        $this->assertSame($package->provider_id, $domains->first()->fresh()->dns_provider_id);
+    }
+
+    public function test_the_list_shows_and_filters_on_the_dns_host(): void
+    {
+        $this->signIn();
+        $cloud = Provider::factory()->registrar()->create(['name' => 'Cloudy']);
+        $atCloud = Domain::factory()->create(['dns_provider_id' => $cloud->id]);
+        $elsewhere = Domain::factory()->create();
+
+        Livewire::test(ListDomains::class)
+            ->assertTableColumnStateSet('dns_host', 'Cloudy', $atCloud)
+            ->filterTable('dns_provider_id', $cloud->id)
+            ->assertCanSeeTableRecords([$atCloud])
+            ->assertCanNotSeeTableRecords([$elsewhere]);
+
+        $package = Server::factory()->create(['name' => 'package-1']);
+        $onPackage = Domain::factory()->create(['dns_server_id' => $package->id]);
+
+        Livewire::test(ListDomains::class)
+            ->assertTableColumnStateSet('dnsServer.name', 'package-1', $onPackage)
+            ->filterTable('dns_server_id', $package->id)
+            ->assertCanSeeTableRecords([$onPackage])
+            ->assertCanNotSeeTableRecords([$atCloud, $elsewhere]);
+
+        // The link on the provider page opens the same list.
+        Livewire::withQueryParams(['filters' => ['dns_provider_id' => ['value' => $cloud->id]]])
+            ->test(ListDomains::class)
+            ->assertCanSeeTableRecords([$atCloud])
+            ->assertCanNotSeeTableRecords([$elsewhere]);
+    }
+
+    public function test_the_provider_page_links_its_dns_domains_and_a_hostname_names_its_dns_host(): void
+    {
+        $this->signIn();
+        $cloud = Provider::factory()->registrar()->create(['name' => 'Cloudy']);
+        $domain = Domain::factory()->create(['dns_provider_id' => $cloud->id]);
+        $hostname = Hostname::factory()->for($domain)->create();
+
+        Domain::factory()->create(['registrar_id' => $cloud->id]);
+        Server::factory()->for($cloud)->create();
+
+        $this->get(ProviderResource::getUrl('view', ['record' => $cloud]))
+            ->assertOk()
+            ->assertSee('DNS-domeinen')
+            ->assertSee('Geregistreerde domeinen')
+            ->assertSee(e(DomainResource::getUrl('index', ['filters' => ['dns_provider_id' => ['value' => $cloud->id]]])), false)
+            ->assertSee(e(DomainResource::getUrl('index', ['filters' => ['registrar_id' => ['value' => $cloud->id]]])), false)
+            ->assertSee(e(ServerResource::getUrl('index', ['filters' => ['provider_id' => ['value' => $cloud->id]]])), false);
+
+        // Nothing behind a zero: no link to an empty list, no DNS count at all.
+        $idle = Provider::factory()->create();
+        $this->get(ProviderResource::getUrl('view', ['record' => $idle]))
+            ->assertOk()
+            ->assertDontSee('DNS-domeinen')
+            ->assertDontSee(e(ServerResource::getUrl('index', ['filters' => ['provider_id' => ['value' => $idle->id]]])), false);
+
+        Livewire::test(ListProviders::class)
+            ->assertTableColumnStateSet('dns_domains_count', 1, $cloud)
+            ->assertTableColumnStateSet('registered_domains_count', 1, $cloud);
+
+        $this->get(HostnameResource::getUrl('view', ['record' => $hostname]))
+            ->assertOk()
+            ->assertSee('DNS bij')
+            ->assertSee('Cloudy')
+            ->assertSee(ProviderResource::getUrl('view', ['record' => $cloud]));
     }
 }

@@ -50,11 +50,15 @@ class DomainForm
                             ->searchable()
                             ->preload()
                             ->hidden(fn (Get $get): bool => (bool) $get('local_only')),
+                        // Before the DNS host, which it hides: so it does not move when chosen.
+                        self::dnsServerField(),
                         Select::make('dns_provider_id')->validationAttribute(__('DNS host'))
                             ->label(__('DNS host'))
                             ->relationship('dnsProvider', 'name', fn (Builder $query, ?Model $record) => $query->offering(ProviderKind::Dns, $record?->dns_provider_id))
                             ->searchable()
-                            ->preload(),
+                            ->preload()
+                            // With a DNS server, the DNS host is its provider (Domain::booted()).
+                            ->hidden(fn (Get $get): bool => filled($get('dns_server_id'))),
                         self::mailServerField(),
                         Toggle::make('local_only')
                             ->label(__('Only on the local network'))
@@ -73,23 +77,53 @@ class DomainForm
             ]);
     }
 
+    public static function mailServerField(): Select
+    {
+        return self::serverField('mail_server_id', __('Mail server'))
+            ->explain(__('Only when the mail runs somewhere other than the website\'s server, such as on a hosting package (a service like Google Workspace is a subscription). An outage there counts for the projects of the domain.'));
+    }
+
+    public static function dnsServerField(): Select
+    {
+        return self::serverField('dns_server_id', __('DNS server'))
+            ->live()
+            ->explain(__('Only when the DNS runs on a server you added, such as a hosting package or a nameserver of your own. Its provider becomes the DNS host, and an outage there counts for the projects of the domain.'))
+            // State, so a hint: the helper text is the explanation's (explain()).
+            ->hint(function (Get $get): ?string {
+                if (blank($get('dns_server_id'))) {
+                    return null;
+                }
+
+                // One query: this runs on every round trip of the form.
+                $server = Server::query()
+                    ->leftJoin('providers', 'providers.id', '=', 'servers.provider_id')
+                    ->where('servers.id', $get('dns_server_id'))
+                    ->first(['servers.id', 'providers.name as provider_name']);
+
+                return match (true) {
+                    $server === null => null,
+                    $server->provider_name === null => __('No DNS host: this server has no provider.'),
+                    default => __('DNS host: :provider, the provider of this server.', ['provider' => $server->provider_name]),
+                };
+            });
+    }
+
     /**
-     * Also in the bulk action of the domains table: options rather than a
+     * Also in the bulk actions of the domains table: options rather than a
      * relationship, which needs a record. Not a server out of use, unless it
      * is the current one.
      */
-    public static function mailServerField(): Select
+    private static function serverField(string $column, string $label): Select
     {
-        return Select::make('mail_server_id')
-            ->label(__('Mail server'))
+        return Select::make($column)
+            ->label($label)
             ->options(fn (?Model $record): array => Server::query()
                 ->where(fn (Builder $query) => $query
                     ->where('status', '!=', ServerStatus::Decommissioned)
-                    ->when($record?->mail_server_id, fn (Builder $query, int $id) => $query->orWhereKey($id)))
+                    ->when($record?->{$column}, fn (Builder $query, int $id) => $query->orWhereKey($id)))
                 ->orderBy('name')
                 ->pluck('name', 'id')
                 ->all())
-            ->searchable()
-            ->explain(__('Only when the mail runs somewhere other than the website\'s server, such as on a hosting package (a service like Google Workspace is a subscription). An outage there counts for the projects of the domain.'));
+            ->searchable();
     }
 }

@@ -328,9 +328,9 @@ class Check extends Model
 
     /**
      * The production environments that use this server or a server that
-     * needs it (also for the mail of their domain): a storage server that
-     * goes down takes down what mounts it. The same reach as "Affected by an
-     * outage" and ProjectHealth.
+     * needs it (also for the mail or DNS of their domain): a storage server
+     * that goes down takes down what mounts it. The same reach as "Affected
+     * by an outage" and ProjectHealth.
      *
      * @return Collection<int, Environment>
      */

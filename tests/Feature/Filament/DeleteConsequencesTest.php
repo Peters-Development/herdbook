@@ -73,6 +73,17 @@ class DeleteConsequencesTest extends TestCase
             ->assertMountedActionModalSee('nog in gebruik');
     }
 
+    public function test_a_server_that_runs_the_dns_of_a_domain_is_in_use(): void
+    {
+        $this->signIn();
+        $server = Server::factory()->create();
+        Domain::factory()->create(['dns_server_id' => $server->id]);
+
+        Livewire::test(EditServer::class, ['record' => $server->getRouteKey()])
+            ->mountAction(DeleteAction::class)
+            ->assertMountedActionModalSee('DNS-domeinen');
+    }
+
     public function test_a_server_that_runs_the_mail_of_a_domain_is_in_use(): void
     {
         $this->signIn();

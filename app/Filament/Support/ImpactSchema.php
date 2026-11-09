@@ -2,6 +2,7 @@
 
 namespace App\Filament\Support;
 
+use App\Enums\ServerRole;
 use App\Services\Impact\ImpactedEnvironment;
 use Closure;
 use Filament\Infolists\Components\TextEntry;
@@ -30,7 +31,12 @@ final class ImpactSchema
                     ->state(fn (Model $record): array => $impacts($record)
                         ->map(fn (ImpactedEnvironment $impact): string => match (true) {
                             ! $impact->isDirect() => __(':environment: via :path', ['environment' => $impact->environment->full_name, 'path' => $impact->path()]),
-                            $impact->domain !== null => __(':environment: mail of :domain on :server', [
+                            $impact->domain !== null && $impact->role === ServerRole::Dns => __(':environment: DNS of :domain on :server', [
+                                'environment' => $impact->environment->full_name,
+                                'domain' => $impact->domain->name,
+                                'server' => $impact->server->name,
+                            ]),
+                            $impact->domain !== null && $impact->role === ServerRole::Mail => __(':environment: mail of :domain on :server', [
                                 'environment' => $impact->environment->full_name,
                                 'domain' => $impact->domain->name,
                                 'server' => $impact->server->name,

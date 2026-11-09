@@ -3,8 +3,10 @@
 namespace App\Filament\Resources\Hostnames\Schemas;
 
 use App\Filament\Resources\Domains\DomainResource;
+use App\Filament\Resources\Domains\Schemas\DomainInfolist;
 use App\Filament\Resources\Hostnames\HostnameResource;
 use App\Filament\Resources\Projects\ProjectResource;
+use App\Models\Domain;
 use App\Models\Hostname;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -25,6 +27,8 @@ class HostnameInfolist
                         TextEntry::make('domain.name')
                             ->label(__('Domain'))
                             ->url(fn (Hostname $record): string => DomainResource::getUrl('view', ['record' => $record->domain])),
+                        // Where its records are changed.
+                        DomainInfolist::dnsHostEntry(fn (Hostname $record): Domain => $record->domain),
                         TextEntry::make('environment')
                             ->label(__('Points to'))
                             ->state(fn (Hostname $record): ?string => $record->environment?->full_name)

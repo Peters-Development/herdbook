@@ -16,6 +16,7 @@
 - [Networks](#networks)
 - [Domains](#domains)
     - [Mail Server](#mail-server)
+    - [DNS Server](#dns-server)
 - [Hostnames](#hostnames)
 - [Providers](#providers)
 - [Clients](#clients)
@@ -43,7 +44,7 @@ Client (optional)
   │
 Project ──< Environment (Production, Staging, Testing, Development)
                ├──< Hostname ──> Domain ──> Provider (registrar, DNS)
-               │                   └──> Server (mail, optional)
+               │                   └──> Server (mail, DNS, optional)
                │       └──< Check
                └──>< Server   [role: App, Database, Storage, Mail, Proxy, Worker, Other]
                        ├──> Provider (hosting)
@@ -122,14 +123,16 @@ Deleting an environment keeps its hostnames (they no longer point anywhere) but 
 
 A server is a VPS, a dedicated server or a machine on your own network. Besides its name, it has a status, a provider, its name at the provider, a plan and a location, its addresses, SSH access, specifications (vCPU, RAM, disk, operating system and version, backup policy), what it [costs](costs.md), its contract and markdown notes.
 
-The server page brings together what you need when something is wrong with it: its addresses and SSH command, what **runs here** (every environment with its role, and the domains whose [mail](#mail-server) runs here), what is **affected by an outage**, its dependencies in both directions, when maintenance was last done, and its checks, incidents, maintenance, documents and credentials.
+The server page brings together what you need when something is wrong with it: its addresses and SSH command, what **runs here** (every environment with its role, and the domains whose [mail](#mail-server) or [DNS](#dns-server) runs here), what is **affected by an outage**, its dependencies in both directions, when maintenance was last done, and its checks, incidents, maintenance, documents and credentials.
 
-The list of servers shows, per server, how its own checks are doing (**Monitoring**: the same state as on the map, from its pings and ports, not from what runs on it), its roles, how many environments use it, and whether it carries the mail of domains. Hover over a problem to see which checks are behind it. Filter on **Monitoring** to find the servers with a problem, or the ones that nothing watches yet (*Not monitored*); a decommissioned server shows no state and is left out of that filter. Location, contract date and the number of checks are columns you can show.
+The list of servers shows, per server, how its own checks are doing (**Monitoring**: the same state as on the map, from its pings and ports, not from what runs on it), its roles, how many environments use it, and whether it carries the mail or DNS of domains. Hover over a problem to see which checks are behind it. Filter on **Monitoring** to find the servers with a problem, or the ones that nothing watches yet (*Not monitored*); a decommissioned server shows no state and is left out of that filter. Location, contract date and the number of checks are columns you can show.
 
 <a name="roles"></a>
 ### Roles
 
 A role says what a server does for an environment: *App*, *Database*, *Storage*, *Mail*, *Proxy*, *Worker* or *Other*. The role is part of the "runs on" link, not of the server, since one server can play different roles for different environments.
+
+DNS is not a role you assign: DNS belongs to a domain, and one domain often serves several environments. Choose the server as the [DNS server](#dns-server) of the domain instead. The roles in the server list do show *DNS* for such a server, and **Affected by an outage** says "DNS of example.com on package-1".
 
 Roles matter in one place: the servers with the role *App* or *Proxy* are the ones a hostname is expected to point at, so their public addresses become the expectation of its [DNS check](monitoring.md#dns-expectations).
 
@@ -165,12 +168,13 @@ Servers often need each other: an app server mounts storage over NFS, talks to a
 
 The server page shows dependencies in both directions: what it **depends on**, and what it is **needed by**.
 
-From these links Herdbook works out the impact of an outage. **Affected by an outage** on the server page lists every environment that goes down when this server does: the environments that run on it directly (or have the [mail of their domain](#mail-server) there), and those that run on any server that depends on it, directly or through a chain. For an indirect one it shows the path:
+From these links Herdbook works out the impact of an outage. **Affected by an outage** on the server page lists every environment that goes down when this server does: the environments that run on it directly (or have the [mail](#mail-server) or [DNS](#dns-server) of their domain there), and those that run on any server that depends on it, directly or through a chain. For an indirect one it shows the path (lines from several server pages):
 
 ```
 Acme Shop · Production: runs on storage-1 (Storage)
 Acme Blog · Production: via app-2 → NFS → storage-1
 Acme Site · Production: mail of acme.example on mail-1
+Acme App · Production: DNS of acme.example on package-1
 ```
 
 The same reasoning is used everywhere: a check on `storage-1` also counts towards the health of the projects on `app-2`, a critical outage of `storage-1` opens a draft incident for them, and clicking `storage-1` on the [map](dashboard.md#the-map) highlights everything that falls over with it. Chains are followed up to ten steps, and a circular dependency simply ends where it started.
@@ -199,9 +203,9 @@ On the map, networks share the first column with the providers, and a server in 
 <a name="domains"></a>
 ## Domains
 
-A domain is a registered name such as `example.com`. It has an optional client (empty: it is yours), a registrar, a DNS provider, what it [costs](costs.md), its [renewal](renewals.md) details and notes. Herdbook stores domain names in lower case.
+A domain is a registered name such as `example.com`. It has an optional client (empty: it is yours), a registrar, a **DNS host** (the provider where its DNS records are), optionally the servers its [mail](#mail-server) and [DNS](#dns-server) run on, what it [costs](costs.md), its [renewal](renewals.md) details and notes. Herdbook stores domain names in lower case.
 
-You enter the expiry date yourself. The list of domains shows the renewal status of each, can be filtered by status, and has the **Renew** action per row and in bulk, plus a bulk action to set the same amount on many domains at once (one registrar often charges the same for all of them).
+You enter the expiry date yourself. The list of domains shows the renewal status and the DNS host of each, can be filtered by status, registrar or DNS host, and has the **Renew** action per row and in bulk, plus a bulk action to set the same amount on many domains at once (one registrar often charges the same for all of them).
 
 A domain's hostnames are listed, and can be added, on the domain's page.
 
@@ -210,11 +214,20 @@ A domain that exists only in your local DNS, such as `home.arpa` or `internal`, 
 <a name="mail-server"></a>
 ### Mail Server
 
-Often the mail (and DNS) of a domain is somewhere else than its website: ten client domains on one hosting package for mail, while their sites run on a VPS. Rather than a mail check on every domain, add the hosting package once as a server (its provider, the address of the mail host), give that server its checks (TCP ports 993 and 465, say), and choose it as the **Mail server** of those domains. The domains list has a bulk action **Set mail server** for this, a filter on it, and a column you can show.
+Often the mail (and DNS) of a domain is somewhere else than its website: ten client domains on one hosting package for mail, while their sites run on a VPS. Rather than a mail check on every domain, add the hosting package once as a server (its provider, the address of the mail host), give that server its checks (TCP ports 993 and 465, say), and choose it as the **Mail server** of those domains (for their DNS, see [DNS Server](#dns-server)). The domains list has a bulk action **Set mail server** for this, a filter on it, and a column you can show.
 
 An outage of the mail server then counts for the environments of the domain's hostnames, as if they ran on it in the role *Mail*: in their [health](monitoring.md#which-checks-count), in **Affected by an outage**, in draft incidents and on the [map](dashboard.md#the-map). The server page lists the domains whose mail runs there. Certificates differ per domain, so a certificate check stays on the domain's own mail hostname (`mail.example.com`). Link that hostname to the production environment (purpose *mail*), so its certificate check counts for the project too.
 
 Leave it empty when the mail runs on a server the environment already runs on (link that server to the environment, with the role *Mail*, instead), or with a mail service such as Google Workspace: that is a [subscription](costs.md), not a server. A server that is decommissioned is not offered. Costs do not follow this link: a mail server's amount counts for the projects that run on it, so a package that only carries mail shows under *No project* on the [costs page](costs.md); to count it for one client, move its amount to a subscription for that client (and leave the server's amount empty, so it is not counted twice). A package for several clients is simply your own cost.
+
+<a name="dns-server"></a>
+### DNS Server
+
+The DNS host says *where* the records of a domain are kept. When they are served by a server you added, such as the hosting package that also carries the mail, or a nameserver of your own, choose that server as the **DNS server** of the domain. Its provider then becomes the DNS host, also when it is not marked as supplying DNS: in the form the DNS host makes way for a line that says which provider that is, and when the server moves to another provider its domains follow. A nameserver of your own has no provider, so the domain then has no DNS host. Clear the DNS server and the DNS host stays as it was, to change by hand. A DNS service that is not a server in Herdbook (Cloudflare, the DNS of your registrar) is just the DNS host, without a DNS server. A server that is decommissioned is not offered.
+
+When the DNS server goes down, the names of the domain stop resolving, so its websites go with it: the outage counts for the environments of the domain's hostnames, as for a [mail server](#mail-server), in their health, in **Affected by an outage** ("DNS of example.com on package-1"), in draft incidents and on the map. Give the server a check on TCP port 53. If an environment also runs on the server, the impact says it runs there; if a domain has its mail and its DNS on one server, the impact names the DNS.
+
+The domains list has a bulk action **Set DNS server**, a filter and a column you can show; the server page lists the domains whose DNS runs there, and such a server cannot be deleted. An outage of a whole DNS provider that is not a server in Herdbook is not worked out. Costs do not follow the link, as with the mail server.
 
 <a name="hostnames"></a>
 ## Hostnames
@@ -230,7 +243,7 @@ A hostname has:
 - **Only on the local network**: the name is in your local DNS only, with a self-signed certificate or one of a CA of your own (such as Caddy's). **Turn on monitoring** then creates just a check of the page that accepts its certificate (see [Names on the Local Network](monitoring.md#names-on-the-local-network)).
 - **Expected IP addresses**: overrides the addresses the DNS check expects. Leave it empty to use the public addresses of the App and Proxy servers of the environment.
 
-You add hostnames under **Inventory → Hostnames**, or on the page of their domain. The hostnames tab of a project then lists every name that points to one of its environments, with its monitoring state (the worst state of its active checks, or *Off*) and the renewal status of its domain.
+You add hostnames under **Inventory → Hostnames**, or on the page of their domain. The page of a hostname names the DNS host of its domain: where you change its record. The hostnames tab of a project then lists every name that points to one of its environments, with its monitoring state (the worst state of its active checks, or *Off*) and the renewal status of its domain.
 
 Hostnames are where monitoring starts: **Turn on monitoring** on a hostname creates its [default checks](monitoring.md#turning-on-monitoring).
 
@@ -243,6 +256,8 @@ When you rename a hostname, its checks follow: a check whose target is exactly t
 ## Providers
 
 A provider is any company you get something from. **Supplies** says what you get from it: *Hosting*, *Registrar*, *DNS*, *Mail*, *Internet* or *Other*, and the forms only offer providers of the right kind (a registrar for a domain, a hosting provider for a server, an internet provider for a network). Unticking a kind later does not break records that already use the provider.
+
+The provider page counts its servers, the domains it registers, the domains whose DNS it hosts and its subscriptions; each number opens the list behind it.
 
 A provider also has a website, a link to its control panel, support email and phone, notes, and a **Renewal lead time (days)**: how many days before the expiry date it renews automatically. That applies to all its domains, servers, subscriptions and internet lines unless an item says otherwise (see [Renewals](renewals.md#lead-time-and-grace)).
 
@@ -294,7 +309,7 @@ Some pages show the changes of their parts too, even after those parts were dele
 Projects, servers, domains, hostnames and networks are deleted one at a time, never in bulk, and the confirmation says what goes with them:
 
 - **A project** takes its environments with it. The checks of its hostnames are paused; the hostnames themselves stay. Linked incidents, maintenance, documents, credentials and subscriptions stay.
-- **A server** that is still in use (in an environment, a dependency or as the mail server of a domain) cannot be deleted: set it to *Decommissioned*, or take it out of its environments, dependencies and mail domains first. A server that is free goes with its checks and their history.
+- **A server** that is still in use (in an environment, a dependency or as the mail or DNS server of a domain) cannot be deleted: set it to *Decommissioned*, or take it out of its environments, dependencies, mail domains and DNS domains first. A server that is free goes with its checks and their history.
 - **A domain** takes its hostnames and their checks with it.
 - **A network** keeps its servers and removes its devices.
 - **Providers and clients** cannot be deleted while something still uses them.

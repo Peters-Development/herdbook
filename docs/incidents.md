@@ -98,7 +98,7 @@ When a **critical** check that watches **production** has been down for five min
 - the impact is the check's error, and the first timeline entry says that the check went down;
 - it is linked to the affected projects and to the servers involved.
 
-A check watches production when its hostname points to a production environment, or when it is a server check on a server that a production environment runs on, directly or through a [dependency](inventory.md#dependencies-and-impact). A failing storage server therefore opens an incident for the project on the app server that mounts it. Archived projects do not count.
+A check watches production when its hostname points to a production environment, or when it is a server check on a server that a production environment runs on (or that carries the [mail](inventory.md#mail-server) or [DNS](inventory.md#dns-server) of its domains), directly or through a [dependency](inventory.md#dependencies-and-impact). A failing storage server therefore opens an incident for the project on the app server that mounts it. Archived projects do not count.
 
 **One incident per outage, not one per check.** If an unresolved check incident of the same project was detected within the last twelve hours, a new outage joins it instead: it gets a timeline entry ("Also down: …"), its projects and servers are added to the links, and an incident that was *Watching* goes back to *Open*. An incident nobody closed does not swallow next week's outage.
 

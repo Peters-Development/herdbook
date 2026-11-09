@@ -4,7 +4,7 @@
 --}}
 @php
     $tag = $node['selectable'] ? 'button' : 'a';
-    $title = $node['label'].($node['status'] ? ' · '.$node['status'] : '').($node['selectable'] ? ' · '.__('click to see what goes down with it') : '');
+    $title = $node['label'].($node['detail'] ? ' · '.$node['detail'] : '').($node['status'] ? ' · '.$node['status'] : '').($node['selectable'] ? ' · '.__('click to see what goes down with it') : '');
 @endphp
 
 <{{ $tag }}
@@ -24,6 +24,9 @@
                 <span @class(['hb-node-sub', 'fi-font-mono' => $node['subMono']])>{{ $node['sub'] }}</span>
             @endif
         </span>
+        @if ($node['detail'])
+            <span class="fi-sr-only">{{ $node['detail'] }}</span>
+        @endif
         @if ($node['status'])
             <span class="fi-sr-only">{{ $node['status'] }}</span>
         @endif

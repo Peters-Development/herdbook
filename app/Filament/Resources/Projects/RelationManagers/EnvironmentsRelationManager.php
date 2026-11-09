@@ -64,7 +64,8 @@ class EnvironmentsRelationManager extends RelationManager
                             ->required(),
                         Select::make('role')
                             ->label(__('Role'))
-                            ->options(ServerRole::class)
+                            ->options(ServerRole::assignableOptions())
+                            ->enum(ServerRole::class)
                             ->default(ServerRole::App)
                             ->required(),
                         TextInput::make('notes')->label(__('Note'))->maxLength(255),

@@ -16,6 +16,11 @@ enum ServerRole: string implements HasLabel
     case Proxy = 'proxy';
     case Worker = 'worker';
     case Other = 'other';
+    /**
+     * Only through a domain (Domain::dnsServer()): DNS belongs to the domain,
+     * not to an environment, so it is never assigned (assignableOptions()).
+     */
+    case Dns = 'dns';
 
     public function getLabel(): string
     {
@@ -27,6 +32,20 @@ enum ServerRole: string implements HasLabel
             self::Proxy => __('Proxy'),
             self::Worker => __('Worker'),
             self::Other => __('Other'),
+            self::Dns => __('DNS'),
         };
+    }
+
+    /**
+     * The roles a server can have in an environment, as options.
+     *
+     * @return array<string, string>
+     */
+    public static function assignableOptions(): array
+    {
+        return collect(self::cases())
+            ->reject(fn (self $role): bool => $role === self::Dns)
+            ->mapWithKeys(fn (self $role): array => [$role->value => $role->getLabel()])
+            ->all();
     }
 }

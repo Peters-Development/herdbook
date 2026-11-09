@@ -53,7 +53,7 @@ A tile shows:
 - the project's name, its state and its client (or *Own project*);
 - the first problem, such as "HTTP shop.example.com: HTTP 503", and since when;
 - its environments, each with a dot in its own state, so a staging outage is visible too;
-- the servers production runs on (or has the [mail of its domains](inventory.md#mail-server) on), and, dimmed, the servers those depend on ("via storage-1");
+- the servers production runs on (or has the [mail](inventory.md#mail-server) or [DNS](inventory.md#dns-server) of its domains on), and, dimmed, the servers those depend on ("via storage-1");
 - 24 hour bars, the uptime over 24 hours and the response time (see [Hour Bars, Uptime and Response Time](monitoring.md#hour-bars-uptime-and-response-time));
 - the number of open and watched incidents.
 
@@ -133,9 +133,9 @@ From left to right:
 | Server | every server | its address |
 | Environment | the environments, grouped per project | |
 | Hostname | the hostnames | their purpose |
-| Domain | the domains | the registrar and expiry date |
+| Domain | the domains | the registrar and expiry date (hover for the DNS host) |
 
-Lines connect each server to its provider or network (a server can have both), each environment to the servers it runs on, each hostname to its environment and its domain. A short-dotted line connects an environment to the [mail server](inventory.md#mail-server) of its domain, when it does not run on that server anyway. [Dependencies](inventory.md#dependencies-and-impact) between servers are dotted arcs next to the server column, labeled with their kind (NFS, WireGuard). Registrars are not nodes of their own: they are named on the domain.
+Lines connect each server to its provider or network (a server can have both), each environment to the servers it runs on, each hostname to its environment and its domain. A short-dotted line connects an environment to the [mail server](inventory.md#mail-server) of its domain, and a dash-dotted one to its [DNS server](inventory.md#dns-server), when it does not run on that server anyway (with both on one server, the DNS line). [Dependencies](inventory.md#dependencies-and-impact) between servers are dotted arcs next to the server column, labeled with their kind (NFS, WireGuard). Registrars and DNS hosts are not nodes of their own: they are named on the domain.
 
 Each column is sorted so that as few lines cross as possible: nodes are placed near what they are connected to, and anything connected to nothing goes to the bottom. Each node always ends up in the same place, so you learn where to look. Archived projects are not on the map.
 
@@ -157,7 +157,7 @@ The states refresh every minute, without redrawing the map.
 
 **Hover over a node** and everything connected to it, to the left and to the right, lights up: point at a provider to see its servers and what runs on them, or at a domain to see its hostnames and their environments.
 
-**Click a server** to see what goes down with it: every environment that runs on it (or has the mail of its domain there), or on a server that depends on it, lights up on the map, with the domains whose mail it carries, and a list next to it names them, with the path for the indirect ones ("via app-2 → NFS → storage-1") and a link to the server. Servers that depend on it but run no environment (a backup machine mounting its storage) light up too. This is a simulation, not a state, so it uses the selection color of the brand rather than red: a real outage is already red. Click the server again, press Escape, or use **Close** to clear it.
+**Click a server** to see what goes down with it: every environment that runs on it (or has the mail or DNS of its domain there), or on a server that depends on it, lights up on the map, with the domains whose mail or DNS it carries, and a list next to it names them, with the path for the indirect ones ("via app-2 → NFS → storage-1") and a link to the server. Servers that depend on it but run no environment (a backup machine mounting its storage) light up too. This is a simulation, not a state, so it uses the selection color of the brand rather than red: a real outage is already red. Click the server again, press Escape, or use **Close** to clear it.
 
 **Click any other node** to open its page; an environment opens its project.
 

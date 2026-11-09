@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\DB;
  * registered nowhere: no registrar, costs or renewal.
  */
 #[Fillable([
-    'name', 'client_id', 'registrar_id', 'dns_provider_id', 'mail_server_id', 'local_only', 'cost_amount', 'cost_period',
+    'name', 'client_id', 'registrar_id', 'dns_provider_id', 'mail_server_id', 'dns_server_id', 'local_only', 'cost_amount', 'cost_period',
     'expires_on', 'auto_renews', 'renewal_period_months', 'renewal_lead_days', 'renewal_stopped_at',
     'notes',
 ])]
@@ -44,6 +44,15 @@ class Domain extends Model implements Renewable
         static::saving(function (Domain $domain): void {
             if ($domain->local_only) {
                 $domain->fill(['registrar_id' => null, 'cost_amount' => null, 'cost_period' => null, 'expires_on' => null, 'renewal_stopped_at' => null]);
+            }
+
+            // With a DNS server, the DNS host is that server's provider (none
+            // for a box of your own), so the lists, counts and filters on the
+            // DNS host need only the one column. A query, not the relation: a
+            // loaded one keeps the old server. Without a DNS server the DNS
+            // host is chosen by hand, also when one was just cleared.
+            if ($domain->dns_server_id !== null && $domain->isDirty(['dns_server_id', 'dns_provider_id'])) {
+                $domain->dns_provider_id = Server::query()->whereKey($domain->dns_server_id)->value('provider_id');
             }
         });
 
@@ -103,6 +112,33 @@ class Domain extends Model implements Renewable
     public function mailServer(): BelongsTo
     {
         return $this->belongsTo(Server::class, 'mail_server_id');
+    }
+
+    /**
+     * Where its DNS runs, when that is a server of its own (a hosting package
+     * for mail and DNS, a nameserver): an outage there reaches the
+     * environments of its hostnames (ImpactAnalyzer::usage()). Its provider
+     * is the DNS host (booted()).
+     *
+     * @return BelongsTo<Server, $this>
+     */
+    public function dnsServer(): BelongsTo
+    {
+        return $this->belongsTo(Server::class, 'dns_server_id');
+    }
+
+    /**
+     * Who serves its DNS, to show: the DNS host, or the DNS server itself
+     * when that has no provider (a nameserver of your own).
+     */
+    public function dnsHost(): Provider|Server|null
+    {
+        return $this->dnsProvider ?? $this->dnsServer;
+    }
+
+    public function dnsHostName(): ?string
+    {
+        return $this->dnsHost()?->name;
     }
 
     public static function renewalProviderRelation(): string

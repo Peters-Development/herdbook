@@ -127,7 +127,7 @@ class DemoSeeder extends Seeder
             'web-02' => ['Hetzner', '198.51.100.22', 'CX32', 7.59, 200],
             'staging-01' => ['Hetzner', '198.51.100.30', 'CX22', 4.59, 200],
             'mail-01' => ['Hetzner', '198.51.100.40', 'CX22', 4.59, 200],
-            // A hosting package for the mail of client domains (Domain::mailServer()).
+            // A hosting package for the mail and DNS of client domains (Domain::mailServer(), Domain::dnsServer()).
             'shared-mail' => ['Namecheap', '198.51.100.50', 'Mail + DNS package', 3.50, 60],
             'legacy-01' => ['DigitalOcean', '203.0.113.99', 'Basic 4 GB', 14.95, null],
         ] as $name => [$provider, $ip, $plan, $cost, $expiresInDays]) {
@@ -220,8 +220,10 @@ class DemoSeeder extends Seeder
                 'expires_on' => $this->today()->addDays($expiresInDays)->toDateString(),
                 'auto_renews' => $autoRenews,
                 'renewal_period_months' => 12,
-                // Websites on a VPS, the mail on a hosting package.
+                // Websites on a VPS, the mail on a hosting package; for one of
+                // them the DNS too, so the map shows both kinds of line.
                 'mail_server_id' => in_array($name, ['meadowbakery.test', 'cartercycles.test'], true) ? $this->servers['shared-mail']->id : null,
+                'dns_server_id' => $name === 'meadowbakery.test' ? $this->servers['shared-mail']->id : null,
             ]);
         }
     }
@@ -359,8 +361,8 @@ class DemoSeeder extends Seeder
             ]), CheckState::Up);
         }
 
-        // The mail of the client domains on the package: its ports, once.
-        foreach ([993, 465] as $port) {
+        // The mail and DNS of the client domains on the package: its ports, once.
+        foreach ([993, 465, 53] as $port) {
             $this->settle(Check::create([
                 'server_id' => $this->servers['shared-mail']->id,
                 'type' => CheckType::Tcp,

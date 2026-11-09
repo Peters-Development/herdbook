@@ -101,6 +101,18 @@ class ServerFlowTest extends TestCase
             ->assertSee(e($environment->full_name).': mail van example.com op mail-1', false);
     }
 
+    public function test_the_view_page_shows_the_environments_that_have_their_dns_on_the_server(): void
+    {
+        $this->signIn();
+        $server = Server::factory()->create(['name' => 'ns-1']);
+        $environment = Environment::factory()->create();
+        Hostname::factory()->for(Domain::factory()->create(['name' => 'example.com', 'dns_server_id' => $server->id]))->create(['environment_id' => $environment->id]);
+
+        $this->get(ServerResource::getUrl('view', ['record' => $server]))
+            ->assertOk()
+            ->assertSee(e($environment->full_name).': DNS van example.com op ns-1', false);
+    }
+
     public function test_a_server_of_our_own_has_no_contract_and_is_reached_over_its_private_address(): void
     {
         $this->signIn();
@@ -231,6 +243,19 @@ class ServerFlowTest extends TestCase
             ->filterTable('health', HealthState::Unwatched->value)
             ->assertCanSeeTableRecords([$quiet])
             ->assertCanNotSeeTableRecords([$mail]);
+    }
+
+    public function test_the_list_counts_dns_through_a_domain(): void
+    {
+        $this->signIn();
+        $package = Server::factory()->create();
+        Hostname::factory()->for(Domain::factory()->create(['mail_server_id' => $package->id, 'dns_server_id' => $package->id]))->create(['environment_id' => Environment::factory()->create()->id]);
+        Domain::factory()->create(['dns_server_id' => $package->id]);
+
+        Livewire::test(ListServers::class)
+            ->assertTableColumnStateSet('roles', ['DNS', 'Mail'], $package)
+            ->assertTableColumnStateSet('environments_count', 1, $package)
+            ->assertSee('mail van 1 domein · DNS van 2 domeinen');
     }
 
     public function test_a_server_out_of_use_shows_no_monitoring_state_and_is_no_gap(): void

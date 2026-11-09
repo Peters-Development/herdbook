@@ -74,14 +74,20 @@ class ServerInfolist
                             ->listWithLineBreaks()
                             ->bulleted()
                             ->placeholder(__('Nothing runs on this server.'))
-                            // Only mail: then that is what runs here.
-                            ->hidden(fn (Server $record): bool => $record->mailDomains->isNotEmpty() && $record->assignments()->doesntExist()),
+                            // Only mail or DNS: then that is what runs here.
+                            ->hidden(fn (Server $record): bool => ($record->mailDomains->isNotEmpty() || $record->dnsDomains->isNotEmpty()) && $record->assignments()->doesntExist()),
                         TextEntry::make('mailDomains')
                             ->label(__('Mail of'))
                             ->state(fn (Server $record): array => $record->mailDomains->sortBy('name')->pluck('name')->all())
                             ->listWithLineBreaks()
                             ->bulleted()
                             ->visible(fn (Server $record): bool => $record->mailDomains->isNotEmpty()),
+                        TextEntry::make('dnsDomains')
+                            ->label(__('DNS of'))
+                            ->state(fn (Server $record): array => $record->dnsDomains->sortBy('name')->pluck('name')->all())
+                            ->listWithLineBreaks()
+                            ->bulleted()
+                            ->visible(fn (Server $record): bool => $record->dnsDomains->isNotEmpty()),
                     ]),
                 ImpactSchema::section(
                     __('What goes down when this server fails, including through servers that depend on it.'),

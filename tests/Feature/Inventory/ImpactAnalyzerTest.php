@@ -159,6 +159,87 @@ class ImpactAnalyzerTest extends TestCase
         $this->assertSame('example.com → mail-1 → NFS → storage', app(ImpactAnalyzer::class)->forServer($storage)->firstWhere('environment.id', $onlyMail->id)->path());
     }
 
+    public function test_the_dns_server_of_a_domain_takes_down_the_environments_of_its_hostnames(): void
+    {
+        $dns = Server::factory()->create(['name' => 'ns-1']);
+        $production = Environment::factory()->create();
+        $domain = Domain::factory()->create(['name' => 'example.com', 'dns_server_id' => $dns->id]);
+        Hostname::factory()->for($domain)->create(['environment_id' => $production->id]);
+
+        $impact = app(ImpactAnalyzer::class)->forServer($dns)->sole();
+
+        $this->assertTrue($impact->environment->is($production));
+        $this->assertTrue($impact->domain->is($domain));
+        $this->assertSame(ServerRole::Dns, $impact->role);
+        $this->assertSame('example.com → ns-1', $impact->path());
+    }
+
+    public function test_dns_names_the_link_when_mail_and_dns_of_a_domain_run_on_one_server(): void
+    {
+        $package = Server::factory()->create(['name' => 'package']);
+        $production = Environment::factory()->create();
+        Hostname::factory()->for(Domain::factory()->create(['mail_server_id' => $package->id, 'dns_server_id' => $package->id]))->create(['environment_id' => $production->id]);
+
+        $this->assertSame(ServerRole::Dns, app(ImpactAnalyzer::class)->forServer($package)->sole()->role);
+        $this->assertEqualsCanonicalizing(
+            [ServerRole::Mail, ServerRole::Dns],
+            ImpactAnalyzer::usage()->where('serverId', $package->id)->pluck('role')->all(),
+        );
+    }
+
+    public function test_a_shorter_chain_wins_over_dns_through_a_domain(): void
+    {
+        $storage = Server::factory()->create(['name' => 'storage']);
+        $app = Server::factory()->create(['name' => 'app']);
+        $dns = Server::factory()->create(['name' => 'ns-1']);
+        ServerDependency::create(['server_id' => $app->id, 'depends_on_id' => $storage->id, 'kind' => 'NFS']);
+        ServerDependency::create(['server_id' => $dns->id, 'depends_on_id' => $app->id, 'kind' => 'WireGuard']);
+        $production = Environment::factory()->create();
+        $this->runsOn($production, $app, ServerRole::App);
+        Hostname::factory()->for(Domain::factory()->create(['dns_server_id' => $dns->id]))->create(['environment_id' => $production->id]);
+
+        $impact = app(ImpactAnalyzer::class)->forServer($storage)->sole();
+
+        $this->assertNull($impact->domain);
+        $this->assertSame('app → NFS → storage', $impact->path());
+    }
+
+    public function test_running_on_the_server_wins_over_dns_through_a_domain(): void
+    {
+        $vps = Server::factory()->create(['name' => 'vps-1']);
+        $production = Environment::factory()->create();
+        $this->runsOn($production, $vps, ServerRole::App);
+        Hostname::factory()->for(Domain::factory()->create(['dns_server_id' => $vps->id]))->create(['environment_id' => $production->id]);
+
+        $impact = app(ImpactAnalyzer::class)->forServer($vps)->sole();
+
+        $this->assertNull($impact->domain);
+        $this->assertSame(ServerRole::App, $impact->role);
+    }
+
+    public function test_dns_wins_over_mail_through_other_servers_at_the_same_distance(): void
+    {
+        $storage = Server::factory()->create(['name' => 'storage']);
+        $mail = Server::factory()->create(['name' => 'mail-1']);
+        $dns = Server::factory()->create(['name' => 'ns-1']);
+        ServerDependency::create(['server_id' => $mail->id, 'depends_on_id' => $storage->id, 'kind' => 'NFS']);
+        ServerDependency::create(['server_id' => $dns->id, 'depends_on_id' => $storage->id, 'kind' => 'NFS']);
+        $production = Environment::factory()->create();
+        Hostname::factory()->for(Domain::factory()->create(['name' => 'example.com', 'mail_server_id' => $mail->id, 'dns_server_id' => $dns->id]))->create(['environment_id' => $production->id]);
+
+        $impact = app(ImpactAnalyzer::class)->forServer($storage)->sole();
+
+        $this->assertSame(ServerRole::Dns, $impact->role);
+        $this->assertSame('example.com → ns-1 → NFS → storage', $impact->path());
+    }
+
+    public function test_a_domain_without_mail_or_dns_server_adds_no_use(): void
+    {
+        Hostname::factory()->for(Domain::factory()->create())->create(['environment_id' => Environment::factory()->create()->id]);
+
+        $this->assertCount(0, ImpactAnalyzer::usage());
+    }
+
     private function runsOn(Environment $environment, Server $server, ServerRole $role): void
     {
         EnvironmentServer::create(['environment_id' => $environment->id, 'server_id' => $server->id, 'role' => $role]);

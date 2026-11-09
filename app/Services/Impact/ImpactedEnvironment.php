@@ -10,8 +10,8 @@ use App\Models\ServerDependency;
 
 /**
  * An environment that goes down with a server: it runs on $server in $role
- * (or the mail of $domain runs there), and $server is the failing one or
- * reaches it through $chain.
+ * (or the mail or DNS of $domain runs there, $role says which), and $server
+ * is the failing one or reaches it through $chain.
  */
 final readonly class ImpactedEnvironment
 {
@@ -33,7 +33,7 @@ final readonly class ImpactedEnvironment
 
     /**
      * "app-1 → NFS → storage-1", or "example.com → mail-1 → NFS → storage-1"
-     * for the mail of a domain.
+     * for the mail or DNS of a domain.
      */
     public function path(): string
     {

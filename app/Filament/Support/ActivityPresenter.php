@@ -47,6 +47,7 @@ final class ActivityPresenter
         'server_id' => [Server::class, 'name'],
         'depends_on_id' => [Server::class, 'name'],
         'mail_server_id' => [Server::class, 'name'],
+        'dns_server_id' => [Server::class, 'name'],
         'project_id' => [Project::class, 'name'],
         'user_id' => [User::class, 'name'],
     ];
@@ -160,6 +161,7 @@ final class ActivityPresenter
             'server_id' => __('Server'),
             'depends_on_id' => __('Depends on'),
             'mail_server_id' => __('Mail server'),
+            'dns_server_id' => __('DNS server'),
             'project_id' => __('Project'),
             'role' => __('Role'),
             'repository_url' => __('Repository'),

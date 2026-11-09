@@ -40,6 +40,14 @@ class ActivityPresenterTest extends TestCase
         $this->assertStringContainsString('Opgezegd: — → 22-10-2026 06:10', $changes);
     }
 
+    public function test_a_dns_server_change_shows_the_server_by_name(): void
+    {
+        $domain = Domain::factory()->create();
+        $domain->update(['dns_server_id' => Server::factory()->create(['name' => 'ns-1'])->id]);
+
+        $this->assertSame('DNS-server: — → ns-1', ActivityPresenter::changes(Activity::query()->where('event', 'updated')->sole()));
+    }
+
     public function test_a_mail_server_change_shows_the_server_by_name(): void
     {
         $domain = Domain::factory()->create();

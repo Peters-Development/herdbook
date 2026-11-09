@@ -9,6 +9,7 @@ use App\Models\EnvironmentServer;
 use App\Models\Hostname;
 use App\Models\Server;
 use App\Models\ServerDependency;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 
 /**
@@ -16,7 +17,7 @@ use Illuminate\Support\Collection;
  * a whole network of them) does. Follows server dependencies (NFS,
  * WireGuard, ...) upwards to every server that needs the failing one,
  * directly or indirectly, and the environments that use those servers
- * (usage(): they run on it, or the mail of their domain does).
+ * (usage(): they run on it, or the mail or DNS of their domain does).
  */
 final class ImpactAnalyzer
 {
@@ -57,6 +58,11 @@ final class ImpactAnalyzer
         $domains = Domain::query()->findMany($uses->pluck('domainId')->filter()->unique())->keyBy('id');
 
         return $uses
+            // The shortest chain, then the strongest use (ServerUse::rank()).
+            ->sortBy([
+                fn (ServerUse $a, ServerUse $b): int => count($chains[$a->serverId]) <=> count($chains[$b->serverId]),
+                fn (ServerUse $a, ServerUse $b): int => $a->rank() <=> $b->rank(),
+            ])
             ->map(fn (ServerUse $use): ImpactedEnvironment => new ImpactedEnvironment(
                 $environments[$use->environmentId],
                 $servers[$use->serverId],
@@ -64,8 +70,6 @@ final class ImpactAnalyzer
                 $chains[$use->serverId],
                 $use->domainId === null ? null : $domains[$use->domainId],
             ))
-            // The shortest chain, and running on it before mail through a domain.
-            ->sortBy(fn (ImpactedEnvironment $impact): int => count($impact->chain) * 2 + ($impact->domain === null ? 0 : 1))
             ->unique(fn (ImpactedEnvironment $impact): int => $impact->environment->id)
             ->sortBy(fn (ImpactedEnvironment $impact): string => $impact->environment->full_name)
             ->values();
@@ -73,9 +77,10 @@ final class ImpactAnalyzer
 
     /**
      * Which environments use which server directly: those that run on it
-     * (in a role), and those with a hostname whose domain has its mail there
-     * (Domain::mailServer(), role Mail). The start of every reach: impact,
-     * health, incidents and the map.
+     * (in a role), and those with a hostname whose domain has its mail
+     * (Domain::mailServer(), role Mail) or DNS (Domain::dnsServer(), role
+     * Dns) there. The start of every reach: impact, health, incidents and
+     * the map.
      *
      * @return Collection<int, ServerUse>
      */
@@ -86,16 +91,19 @@ final class ImpactAnalyzer
             ->get(['environment_id', 'server_id', 'role'])
             ->map(fn (object $row): ServerUse => new ServerUse((int) $row->environment_id, (int) $row->server_id, ServerRole::from($row->role)));
 
-        $mail = Hostname::query()
+        $throughDomains = Hostname::query()
             ->toBase()
             ->join('domains', 'domains.id', '=', 'hostnames.domain_id')
-            ->whereNotNull('domains.mail_server_id')
+            ->where(fn (Builder $query) => $query->whereNotNull('domains.mail_server_id')->orWhereNotNull('domains.dns_server_id'))
             ->whereNotNull('hostnames.environment_id')
             ->distinct()
-            ->get(['hostnames.environment_id', 'domains.mail_server_id', 'domains.id as domain_id'])
-            ->map(fn (object $row): ServerUse => new ServerUse((int) $row->environment_id, (int) $row->mail_server_id, ServerRole::Mail, (int) $row->domain_id));
+            ->get(['hostnames.environment_id', 'domains.mail_server_id', 'domains.dns_server_id', 'domains.id as domain_id'])
+            ->flatMap(fn (object $row): array => array_values(array_filter([
+                $row->mail_server_id === null ? null : new ServerUse((int) $row->environment_id, (int) $row->mail_server_id, ServerRole::Mail, (int) $row->domain_id),
+                $row->dns_server_id === null ? null : new ServerUse((int) $row->environment_id, (int) $row->dns_server_id, ServerRole::Dns, (int) $row->domain_id),
+            ])));
 
-        return $assignments->concat($mail)->values();
+        return $assignments->concat($throughDomains)->values();
     }
 
     /**
