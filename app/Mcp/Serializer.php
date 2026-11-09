@@ -132,7 +132,7 @@ final class Serializer
         return [
             ...self::maintenance($maintenance),
             ...array_map(fn (?string $text): ?string => $text === null ? null : mb_substr($text, 0, self::MAX_TEXT), $texts),
-            'truncated' => array_keys(array_filter($texts, fn (?string $text): bool => mb_strlen((string) $text) > self::MAX_TEXT)),
+            'truncated' => self::truncated($texts),
             'texts_changed' => array_map(self::textChange(...), $maintenance->lastTextChanges()),
         ];
     }
@@ -170,6 +170,20 @@ final class Serializer
             'done_at' => self::time($action->done_at),
             'overdue' => $action->isOverdue(),
         ];
+    }
+
+    /**
+     * The texts an agent didn't read whole: longer than MAX_TEXT once
+     * masked, or not masked at all (hidden as a whole).
+     *
+     * @param  array<string, ?string>  $texts  masked
+     * @return list<string>
+     */
+    private static function truncated(array $texts): array
+    {
+        $hidden = app(HiddenValues::class)->hiddenText();
+
+        return array_keys(array_filter($texts, fn (?string $text): bool => mb_strlen((string) $text) > self::MAX_TEXT || $text === $hidden));
     }
 
     /**
@@ -252,7 +266,7 @@ final class Serializer
         return [
             ...self::incident($incident),
             ...array_map(fn (?string $text): ?string => $text === null ? null : mb_substr($text, 0, self::MAX_TEXT), $texts),
-            'truncated' => array_keys(array_filter($texts, fn (?string $text): bool => mb_strlen((string) $text) > self::MAX_TEXT)),
+            'truncated' => self::truncated($texts),
             'texts_changed' => ['root_cause' => self::textChange($changes['root_cause']), 'report' => self::textChange($changes['body'])],
             'timeline' => $shown->reverse()->values()->all(),
             'more_timeline' => $latest->count() > $shown->count(),

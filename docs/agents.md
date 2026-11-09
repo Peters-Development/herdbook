@@ -25,7 +25,7 @@
 
 An agent such as [Claude Code](https://code.claude.com) can look things up in Herdbook and keep its maintenance log, without clicking through the panel. It keeps incidents too: it sees what is going on and what happened last time, opens an incident when something breaks, and writes down what it tries and finds as it goes. It can find a server, see when it was last updated, plan work, and write down what it did. It talks to Herdbook's MCP server (the [Model Context Protocol](https://modelcontextprotocol.io)) at `/mcp`, with a token of its own.
 
-Herdbook remains the place where people work: an agent sees less than a person and may do less. Maintenance an agent creates is signed with its account and its name, such as "Ada via deploy-agent", and the activity log names the agent for every change it makes to a maintenance (not to which servers and projects it is linked to, which isn't logged for people either).
+Herdbook remains the place where people work: an agent sees less than a person and may do less. What an agent creates (maintenance, incidents, timeline entries, action items) is signed with its account and its name, such as "Ada via deploy-agent", and the activity log names the agent for every change it makes to a maintenance (not to which servers and projects it is linked to, which isn't logged for people either).
 
 <a name="what-an-agent-can-do"></a>
 ## What an Agent Can Do
@@ -37,7 +37,7 @@ Herdbook remains the place where people work: an agent sees less than a person a
 | `get_maintenance` | One maintenance with its plan and report. | read |
 | `list_incidents` | Lists incidents: the unresolved ones unless it asks for others, of some projects (as far as Herdbook counts them for a project: also through the servers its production needs) or servers, of some severity, since some day. | read |
 | `get_incident` | One incident with its impact, root cause, report, timeline (its latest entries, as many as fit in one answer) and action items. | read |
-| `open_incident` | Opens an incident: what is wrong, how severe, when it started and was detected, its impact and what is known so far. It looks for an unresolved one of the same servers or projects first, as Herdbook's checks may have opened one. | write |
+| `open_incident` | Opens an incident: what is wrong, how severe, when it started and was detected, its impact and what is known so far. Herdbook tells the agent to look for an unresolved one of the same servers or projects first, as its checks may have opened one, and the answer names those. | write |
 | `add_timeline_entry` | Adds an entry to an incident's timeline: what was tried, found or done, and when. Only added, also to a resolved incident. | write |
 | `add_incident_action` | Adds an action item to an incident, with a due date if there is one. | write |
 | `complete_incident_action` | Marks an action item as done. | write |
@@ -247,7 +247,7 @@ Then store the new token with the [same command](#the-token-in-your-keychain) as
 - **A token is a key without a second factor.** Treat it like a password.
 - **What an agent reads leaves your network.** Everything a tool returns becomes part of the conversation, which goes to the agent's model provider and stays in its local history (for Claude Code, under `~/.claude`). That is why tools return no addresses, notes or contact details, but names, plans and reports are sent as written.
 - **Plans and reports are written by people and other agents.** Herdbook tells agents to treat them as data, to act on a plan only when you ask, and to tell you when a plan was changed by someone other than its creator, but that is no guarantee: a text can try to steer an agent. Don't let an agent that carries out a plan run without asking for permission, so you see each command before it reaches your servers.
-- **An agent acts within its token.** A misled agent with a write token can plan, change, complete or call off maintenance, and open incidents and add to them: an open SEV1 colours the dashboard and the status screen red. It can't delete maintenance, and the activity log names it and keeps the plans and reports it replaced, but changes to its servers and projects aren't logged.
+- **An agent acts within its token.** A misled agent with a write token can plan, change, complete or call off maintenance, and open incidents and add to them: an open SEV1 colours the dashboard and the status screen red. It can't delete anything, and the activity log names it and keeps the plans and reports it replaced, but changes to its servers and projects aren't logged.
 - **Revoking.** `agents:revoke` (one, an account's, or all), or switch the MCP server off. A backup restored from before a revoke brings the token back: revoke it again ([Disaster Recovery](backups.md#disaster-recovery)).
 
 The [Security](security.md#agents) page puts this in the context of the rest of Herdbook.

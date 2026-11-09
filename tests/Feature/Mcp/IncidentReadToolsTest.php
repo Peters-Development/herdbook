@@ -307,10 +307,13 @@ class IncidentReadToolsTest extends TestCase
         Server::factory()->create(['name' => 'trail', 'provider_hostname' => 'trail.host.example.']);
         Server::factory()->create(['name' => 'panel', 'provider_hostname' => 'https://panel.host.example/vm/77']);
         Server::factory()->create(['name' => 'idn', 'provider_hostname' => 'bücher.example']);
+        Server::factory()->create(['name' => 'port', 'provider_hostname' => 'vps-1.host.example:2222']);
+        Server::factory()->create(['name' => 'path', 'provider_hostname' => 'vps-2.host.example/vm/7']);
+        Server::factory()->create(['name' => 'user', 'provider_hostname' => 'root@vps-3.host.example']);
 
         $this->assertSame(
-            '[adres van trail], [adres van panel] and [adres van idn]',
-            app(HiddenValues::class)->mask('trail.host.example, panel.host.example and xn--bcher-kva.example'),
+            '[adres van trail], [adres van panel] and [adres van idn]; [adres van port], [adres van path], [adres van user]',
+            app(HiddenValues::class)->mask('trail.host.example, panel.host.example and xn--bcher-kva.example; vps-1.host.example, vps-2.host.example, vps-3.host.example'),
         );
     }
 

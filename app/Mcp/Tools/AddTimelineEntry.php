@@ -5,9 +5,11 @@ namespace App\Mcp\Tools;
 use App\Mcp\Serializer;
 use App\Mcp\Tools\Concerns\WritesIncidents;
 use App\Models\Incident;
+use App\Models\IncidentTimelineEntry;
 use App\Rules\Moment;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\Validator;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -33,7 +35,7 @@ class AddTimelineEntry extends Tool
         return 'Add an entry to the timeline of an incident: what was tried, found or done, and when. Write them as it happens. '
             .'Entries are only added: an agent can\'t change or delete one, so a correction is a new entry. An entry may be added to a resolved incident too. '
             .'The note is plain text of at most '.number_format(Serializer::MAX_NOTE).' characters, and refuses passwords, tokens, private keys and masks such as [address of app-1]. '
-            .self::answerSentence('in "entry" the entry');
+            .self::repeatSentence('note').self::answerSentence('in "entry" the entry');
     }
 
     public function schema(JsonSchema $schema): array
@@ -59,11 +61,17 @@ class AddTimelineEntry extends Tool
             return $incident;
         }
 
-        $entry = $incident->timelineEntries()->create([
-            'occurred_at' => self::moment($input['occurred_at'] ?? null) ?? CarbonImmutable::now()->startOfMinute(),
+        $occurredAt = self::moment($input['occurred_at'] ?? null);
+        $repeat = self::repeated(IncidentTimelineEntry::query()
+            ->where('incident_id', $incident->id)
+            ->where('note', $input['note'])
+            ->when($occurredAt, fn (Builder $query, CarbonImmutable $moment) => $query->where('occurred_at', $moment)));
+
+        $entry = $repeat ?? $incident->timelineEntries()->create([
+            'occurred_at' => $occurredAt ?? CarbonImmutable::now()->startOfMinute(),
             'note' => $input['note'],
         ]);
 
-        return $this->answer($incident, ['entry' => Serializer::timelineEntry($entry->load('user'))]);
+        return $this->answer($incident, ['entry' => Serializer::timelineEntry($entry->load('user'))], unchanged: $repeat !== null);
     }
 }

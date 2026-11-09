@@ -10,6 +10,7 @@ use App\Enums\IncidentStatus;
 use App\Models\Check;
 use App\Models\CheckEvent;
 use App\Models\CheckResult;
+use App\Models\Concerns\Authorship;
 use App\Models\Incident;
 use App\Models\Project;
 use Carbon\CarbonImmutable;
@@ -31,7 +32,21 @@ final class CheckIncidents
      */
     private const int JOIN_WITHIN_HOURS = 12;
 
+    /**
+     * Without an author: monitoring writes it, also when a person's "Check
+     * now" set it off (Authorship).
+     */
     public function openForLongOutages(CarbonImmutable $now): int
+    {
+        return Authorship::without(fn (): int => $this->openOrJoin($now));
+    }
+
+    public function recovered(CheckEvent $upEvent): void
+    {
+        Authorship::without(fn () => $this->recover($upEvent));
+    }
+
+    private function openOrJoin(CarbonImmutable $now): int
     {
         $minutes = (int) config('herdbook.checks.incident_after_minutes');
         $opened = 0;
@@ -113,7 +128,7 @@ final class CheckIncidents
         return $opened;
     }
 
-    public function recovered(CheckEvent $upEvent): void
+    private function recover(CheckEvent $upEvent): void
     {
         $downEvent = CheckEvent::query()
             ->where('check_id', $upEvent->check_id)

@@ -74,7 +74,7 @@ class UpdateIncident extends Tool
             'title' => ['sometimes', 'required', ...$this->plainTextRules(255)],
             'severity' => ['sometimes', 'required', Rule::enum(IncidentSeverity::class)],
             'status' => ['sometimes', 'required', Rule::enum(IncidentStatus::class)],
-            'occurred_on' => ['sometimes', 'required', 'date_format:Y-m-d', 'before_or_equal:'.now(config('herdbook.display_timezone'))->toDateString()],
+            'occurred_on' => ['sometimes', 'required', 'date_format:Y-m-d', 'after_or_equal:1970-01-01', 'before_or_equal:'.now(config('herdbook.display_timezone'))->toDateString()],
             'started_at' => self::momentRules(),
             'detected_at' => self::momentRules(),
             'resolved_at' => self::momentRules(),

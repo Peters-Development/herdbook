@@ -54,8 +54,7 @@ class TimelineEntriesRelationManager extends RelationManager
                 // Not "create another": Filament casts the default "now" a second time
                 // for the next form, which puts it an extra UTC offset ahead.
                 CreateAction::make()
-                    ->createAnother(false)
-                    ->mutateDataUsing(fn (array $data): array => [...$data, 'user_id' => auth()->id()]),
+                    ->createAnother(false),
             ])
             ->recordActions([
                 EditAction::make(),

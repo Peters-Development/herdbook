@@ -39,8 +39,8 @@ class OpenIncident extends Tool
             .'Check first with list_incidents (the same server_ids or project_ids) whether there is an unresolved one already: Herdbook\'s checks open one themselves when a critical production check stays down. If there is, add to it with add_timeline_entry instead: nothing written can be deleted by an agent. '
             .'Severity sev1 only when production is down or data is at risk; sev2, the default, when it is serious but has a workaround or a limited reach; sev3 for a small problem. '
             .'Link it to the servers and projects it concerns (ids from search_inventory; at least one). '
-            .'The impact is plain text: who notices what. '.self::textsSentence('The report')
-            .self::answerSentence();
+            .'The title and the impact are plain text and refuse passwords, tokens, private keys and masks such as [address of app-1]. '.self::textsSentence('The report', replacing: false)
+            .self::repeatSentence('title').self::answerSentence();
     }
 
     public function schema(JsonSchema $schema): array
@@ -74,7 +74,7 @@ class OpenIncident extends Tool
             'severity' => ['nullable', Rule::enum(IncidentSeverity::class)],
             'started_at' => ['nullable', new Moment],
             'detected_at' => ['nullable', new Moment],
-            'occurred_on' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:'.now(config('herdbook.display_timezone'))->toDateString()],
+            'occurred_on' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:1970-01-01', 'before_or_equal:'.now(config('herdbook.display_timezone'))->toDateString()],
             'impact' => $this->plainTextRules(Serializer::MAX_TEXT),
             'report' => $this->textRules(),
             ...$this->linkRules(),
@@ -90,10 +90,15 @@ class OpenIncident extends Tool
         });
 
         $given = $moments($input);
+        $title = Str::squish($input['title']);
 
-        $incident = DB::transaction(function () use ($input, $given): Incident {
+        if (($repeat = self::repeated(Incident::query()->unresolved()->where('title', $title))) !== null) {
+            return $this->answer($repeat, unchanged: true);
+        }
+
+        $incident = DB::transaction(function () use ($input, $given, $title): Incident {
             $incident = Incident::query()->create([
-                'title' => Str::squish($input['title']),
+                'title' => $title,
                 'severity' => $input['severity'] ?? IncidentSeverity::Sev2,
                 'status' => IncidentStatus::Open,
                 'occurred_on' => $input['occurred_on'] ?? $given['started_at']->timezone(config('herdbook.display_timezone'))->toDateString(),

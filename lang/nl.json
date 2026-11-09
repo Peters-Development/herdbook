@@ -799,7 +799,7 @@
     "this client": "deze klant",
     "This client still has projects, domains or subscriptions": "Deze klant heeft nog projecten, domeinen of abonnementen",
     "This code is unknown or has been revoked.": "Deze code is onbekend of ingetrokken.",
-    "This holds a mask such as [address of app-1]: the address it stands for would be lost. Leave the masks out, or change the text in Herdbook itself.": "Dit bevat een masker zoals [adres van app-1]: het adres waar het voor staat zou verloren gaan. Laat de maskers weg, of wijzig de tekst in Herdbook zelf.",
+    "This holds a mask such as [address of app-1]: written back, it would take the place of the address. Write the name instead (app-1), or ask a person to change the text in Herdbook.": "Dit bevat een masker zoals [adres van app-1]: teruggeschreven zou het de plaats van het adres innemen. Schrijf de naam (app-1), of vraag een mens de tekst in Herdbook te wijzigen.",
     "This incident changed since you read it (now: :status). Read it again with get_incident.": "Dit incident is gewijzigd sinds je het las (nu: :status). Lees het opnieuw met get_incident.",
     "This incident is resolved already. Change it, or reopen it, with update_incident.": "Dit incident is al opgelost. Wijzig of heropen het met update_incident.",
     "This incident was changed meanwhile.": "Dit incident is intussen gewijzigd.",

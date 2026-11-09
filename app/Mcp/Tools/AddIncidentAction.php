@@ -5,6 +5,7 @@ namespace App\Mcp\Tools;
 use App\Mcp\Serializer;
 use App\Mcp\Tools\Concerns\WritesIncidents;
 use App\Models\Incident;
+use App\Models\IncidentAction;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -29,7 +30,7 @@ class AddIncidentAction extends Tool
         return 'Add an action item to an incident: what has to change so it doesn\'t happen again, such as "Alert on NFS latency", with a due date if there is one. '
             .'Check get_incident first: it may be there already, and an agent can\'t delete one. '
             .'Plain text of at most 255 characters; it refuses passwords, tokens, private keys and masks such as [address of app-1]. '
-            .self::answerSentence('in "action" the action item');
+            .self::repeatSentence('description').self::answerSentence('in "action" the action item');
     }
 
     public function schema(JsonSchema $schema): array
@@ -55,11 +56,13 @@ class AddIncidentAction extends Tool
             return $incident;
         }
 
-        $action = $incident->actions()->create([
+        $repeat = self::repeated(IncidentAction::query()->where('incident_id', $incident->id)->where('description', $input['description'])->whereNull('done_at'));
+
+        $action = $repeat ?? $incident->actions()->create([
             'description' => $input['description'],
             'due_on' => $input['due_on'] ?? null,
         ]);
 
-        return $this->answer($incident, ['action' => Serializer::incidentAction($action)]);
+        return $this->answer($incident, ['action' => Serializer::incidentAction($action)], unchanged: $repeat !== null);
     }
 }

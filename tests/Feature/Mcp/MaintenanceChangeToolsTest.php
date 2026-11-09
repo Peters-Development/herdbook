@@ -8,6 +8,7 @@ use App\Filament\RelationManagers\ActivityRelationManager;
 use App\Filament\Resources\Maintenances\Pages\EditMaintenance;
 use App\Filament\Resources\Maintenances\Pages\ViewMaintenance;
 use App\Filament\Support\ActivityPresenter;
+use App\Mcp\HiddenValues;
 use App\Mcp\Serializer;
 use App\Mcp\Servers\HerdbookServer;
 use App\Models\AgentToken;
@@ -393,6 +394,25 @@ class MaintenanceChangeToolsTest extends TestCase
 
         $this->assertSame(['plan'], $this->callToolSuccessfully($this->token, 'get_maintenance', ['id' => $maintenance->id])['truncated']);
         $this->assertStringStartsWith('plan: Deze tekst is langer', $this->callToolError($this->token, 'update_maintenance', ['id' => $maintenance->id, 'version' => $maintenance->version(), 'plan' => 'Short']));
+    }
+
+    public function test_a_text_that_could_not_be_masked_counts_as_unread_and_is_not_overwritten(): void
+    {
+        $maintenance = $this->planned(['plan' => 'Reboot 192.0.2.10.']);
+        // As when a pattern fails: the whole text is hidden.
+        $this->app->scoped(HiddenValues::class, fn (): HiddenValues => new class extends HiddenValues
+        {
+            public function mask(?string $text): ?string
+            {
+                return blank($text) ? $text : $this->hiddenText();
+            }
+        });
+
+        $read = $this->callToolSuccessfully($this->token, 'get_maintenance', ['id' => $maintenance->id]);
+
+        $this->assertSame(['[tekst verborgen]', ['plan']], [$read['plan'], $read['truncated']]);
+        $this->assertStringStartsWith('plan: Deze tekst is langer', $this->callToolError($this->token, 'update_maintenance', ['id' => $maintenance->id, 'version' => $maintenance->version(), 'plan' => 'Short']));
+        $this->assertSame('Reboot 192.0.2.10.', $maintenance->refresh()->plan);
     }
 
     public function test_an_agent_keeps_the_links_a_person_wrote_but_adds_none(): void

@@ -84,6 +84,54 @@ class IncidentWriteToolsTest extends TestCase
         $this->assertSame([$draft->id], array_column($answer['other_unresolved'], 'id'));
     }
 
+    public function test_an_incident_linked_to_no_server_or_project_names_no_others(): void
+    {
+        $alone = Incident::factory()->create();
+        Incident::factory()->create()->servers()->attach($this->server);
+
+        $answer = $this->callToolSuccessfully($this->token, 'add_timeline_entry', ['id' => $alone->id, 'note' => 'Looked at it.']);
+
+        $this->assertSame([], $answer['other_unresolved']);
+    }
+
+    public function test_a_call_tried_again_after_its_answer_was_lost_writes_nothing_twice(): void
+    {
+        $first = $this->callToolSuccessfully($this->token, 'open_incident', ['title' => 'Uploads fail', 'server_ids' => [$this->server->id]]);
+        $again = $this->callToolSuccessfully($this->token, 'open_incident', ['title' => ' Uploads  fail', 'server_ids' => [$this->server->id]]);
+        $this->assertSame([1, $first['incident']['id'], true], [Incident::count(), $again['incident']['id'], $again['unchanged']]);
+
+        $id = $first['incident']['id'];
+        foreach (range(1, 2) as $try) {
+            $entry = $this->callToolSuccessfully($this->token, 'add_timeline_entry', ['id' => $id, 'note' => 'Restarted php-fpm.']);
+            $action = $this->callToolSuccessfully($this->token, 'add_incident_action', ['id' => $id, 'description' => 'Alert on NFS latency']);
+        }
+        $this->assertSame([1, 1, true, true], [Incident::query()->sole()->timelineEntries()->count(), Incident::query()->sole()->actions()->count(), $entry['unchanged'], $action['unchanged']]);
+
+        // Later, the same note is a second entry: it happened again.
+        Date::setTestNow(now()->addMinutes(11));
+        $later = $this->callToolSuccessfully($this->token, 'add_timeline_entry', ['id' => $id, 'note' => 'Restarted php-fpm.']);
+        $this->assertSame([2, null], [Incident::query()->sole()->timelineEntries()->count(), $later['unchanged'] ?? null]);
+    }
+
+    public function test_the_day_it_is_filed_under_is_the_start_in_the_display_timezone(): void
+    {
+        // 23:30 in UTC is half past midnight the next day in Amsterdam.
+        Date::setTestNow('2026-11-09 23:30:00');
+
+        $this->callToolSuccessfully($this->token, 'open_incident', ['title' => 'Uploads fail', 'server_ids' => [$this->server->id]]);
+
+        $this->assertSame('2026-11-10', Incident::query()->sole()->occurred_on->toDateString());
+    }
+
+    public function test_an_action_item_written_in_the_panel_has_its_author_and_no_agent(): void
+    {
+        $this->actingAs($this->user);
+
+        $action = Incident::factory()->create()->actions()->create(['description' => 'Alert on NFS latency']);
+
+        $this->assertSame([$this->user->id, null], [$action->user_id, $action->recorded_via]);
+    }
+
     /** @return array<string, array{array<string, mixed>, string}> */
     public static function refusals(): array
     {

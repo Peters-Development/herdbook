@@ -17,6 +17,10 @@ trait RecordsAuthor
     public static function bootRecordsAuthor(): void
     {
         static::creating(function (self $record): void {
+            if (Authorship::paused()) {
+                return;
+            }
+
             $user = auth()->user();
             $record->user_id ??= $user?->getAuthIdentifier();
             $record->recorded_via ??= $user instanceof User ? $user->currentAgentToken()?->name : null;

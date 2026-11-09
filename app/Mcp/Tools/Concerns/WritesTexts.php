@@ -93,7 +93,9 @@ trait WritesTexts
                 continue;
             }
 
-            if (mb_strlen((string) $hidden->mask($record->{$attribute})) > Serializer::MAX_TEXT) {
+            $masked = (string) $hidden->mask($record->{$attribute});
+
+            if (mb_strlen($masked) > Serializer::MAX_TEXT || ($masked === $hidden->hiddenText() && filled($record->{$attribute}))) {
                 $cut[$argument] = __('This text is longer than an agent reads whole: change it in Herdbook itself.');
             }
 
@@ -114,11 +116,14 @@ trait WritesTexts
     }
 
     /**
-     * What a description tells an agent about the texts it writes.
+     * What a description tells an agent about the texts it writes;
+     * $replacing: over a text that is there, whose links may stay.
      */
-    protected static function textsSentence(string $what): string
+    protected static function textsSentence(string $what, bool $replacing = true): string
     {
-        return $what.' is markdown of at most '.number_format(Serializer::MAX_TEXT).' characters, and refuses passwords, tokens, private keys, masks such as [address of app-1], images, HTML and links to other sites (put tags, placeholders and web addresses between backticks; link into Herdbook with a path, such as [app-1](/servers/1); links already in the text you replace, and email addresses such as deploy@app-1.example.com in an ssh command, may stay). ';
+        return $what.' is markdown of at most '.number_format(Serializer::MAX_TEXT).' characters, and refuses passwords, tokens, private keys, masks such as [address of app-1], images, HTML and links to other sites (put tags, placeholders and web addresses between backticks; link into Herdbook with a path, such as [app-1](/servers/1); '
+            .($replacing ? 'links already in the text you replace, and ' : '')
+            .'email addresses such as deploy@app-1.example.com in an ssh command, may stay). ';
     }
 
     /**

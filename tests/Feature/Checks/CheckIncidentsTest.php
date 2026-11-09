@@ -18,6 +18,7 @@ use App\Models\Hostname;
 use App\Models\Incident;
 use App\Models\Server;
 use App\Models\ServerDependency;
+use App\Models\User;
 use App\Services\Checks\CheckIncidents;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -201,6 +202,22 @@ class CheckIncidentsTest extends TestCase
         $this->artisan('checks:incidents')->assertSuccessful();
 
         $this->assertNull(Incident::query()->sole()->recordedBy());
+    }
+
+    public function test_what_monitoring_writes_has_no_author_even_when_a_person_set_it_off(): void
+    {
+        // As "Check now" in the panel runs the checks in a person's request.
+        $this->actingAs(User::factory()->create());
+        $check = $this->downCheck(Environment::factory()->create());
+        Date::setTestNow('2026-10-22 13:20:00');
+
+        app(CheckIncidents::class)->openForLongOutages(now()->toImmutable());
+        $check->forceFill(['state' => CheckState::Up])->save();
+        app(CheckIncidents::class)->recovered($check->events()->create(['from_state' => CheckState::Down, 'to_state' => CheckState::Up, 'occurred_at' => '2026-10-22 13:25:00']));
+
+        $incident = Incident::query()->sole();
+        $this->assertNull($incident->user_id);
+        $this->assertSame([null, null], $incident->timelineEntries()->pluck('user_id')->all());
     }
 
     public function test_staging_and_normal_checks_open_no_incident(): void

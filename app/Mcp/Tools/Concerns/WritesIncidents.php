@@ -5,8 +5,11 @@ namespace App\Mcp\Tools\Concerns;
 use App\Mcp\Serializer;
 use App\Models\Incident;
 use App\Models\Maintenance;
+use App\Models\User;
 use App\Rules\Moment;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\Validator;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
@@ -26,6 +29,42 @@ trait WritesIncidents
      * servers or projects.
      */
     private const int OTHER_UNRESOLVED = 10;
+
+    /**
+     * How long the same thing written again by the same agent counts as a
+     * call tried again after its answer was lost, not a second one.
+     */
+    private const int REPEAT_MINUTES = 10;
+
+    /**
+     * What this agent wrote the same moments ago, if it did: the tool
+     * answers with that one ("unchanged") instead of writing it twice, as an
+     * agent can't delete what it wrote.
+     *
+     * @template TModel of Model
+     *
+     * @param  Builder<TModel>  $same  what counts as the same
+     * @return TModel|null
+     */
+    protected static function repeated(Builder $same): ?Model
+    {
+        $user = auth()->user();
+
+        return $same
+            ->where('user_id', $user?->getAuthIdentifier())
+            ->where('recorded_via', $user instanceof User ? $user->currentAgentToken()?->name : null)
+            ->where('created_at', '>=', now()->subMinutes(self::REPEAT_MINUTES))
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * What a description tells an agent about calling it again.
+     */
+    protected static function repeatSentence(string $what): string
+    {
+        return 'Called again with the same '.$what.' within '.self::REPEAT_MINUTES.' minutes (its answer lost), it returns the first with "unchanged": true. ';
+    }
 
     /**
      * Moments of an incident: what has happened, so not in the future;

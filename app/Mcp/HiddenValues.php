@@ -25,7 +25,7 @@ use App\Models\Server;
  * split over lines) gets through. When a pattern fails, the whole text is
  * hidden: better nothing than an address. Built once per request (scoped).
  */
-final class HiddenValues
+class HiddenValues
 {
     private const string MAC = '/(?<![0-9A-Za-z])(?:[0-9A-Fa-f]{2}(?:[:-][0-9A-Fa-f]{2}){5,}|[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}|[0-9A-Fa-f]{12})(?![0-9A-Za-z])/';
 
@@ -33,7 +33,7 @@ final class HiddenValues
 
     private const string IPV4 = '/(?<![0-9])\d+(?:\.\d{1,3}){3,}(?![0-9])/';
 
-    private const string LABELS = '/[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*/';
+    private const string LABELS = '/[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*+/';
 
     /**
      * The most labels a value has (an FQDN): no part of a longer run is
@@ -63,18 +63,47 @@ final class HiddenValues
         $masked = $this->replace(self::LABELS, $masked, fn (array $m): string => $this->labels($m[0]));
 
         if ($masked === null) {
-            return '['.__('text hidden').']';
+            return $this->hiddenText();
         }
 
         return strtr($masked, array_combine(array_map(self::placeholder(...), array_keys($this->masks)), $this->masks));
     }
 
     /**
+     * What a text reads as when it couldn't be masked: an agent read none
+     * of it, so it can't write over it either (WritesTexts::checkTexts()).
+     */
+    public function hiddenText(): string
+    {
+        return '['.__('text hidden').']';
+    }
+
+    /**
+     * Once more without PCRE's JIT when its stack ran out (a long run of
+     * labels): slower, but with a stack of its own.
+     *
      * @param  callable(array<int, string>): string  $mask
      */
     private function replace(string $pattern, ?string $text, callable $mask): ?string
     {
-        return $text === null ? null : preg_replace_callback($pattern, $mask, $text);
+        if ($text === null) {
+            return null;
+        }
+
+        $masked = preg_replace_callback($pattern, $mask, $text);
+
+        if ($masked === null && preg_last_error() === PREG_JIT_STACKLIMIT_ERROR) {
+            $jit = (string) ini_get('pcre.jit');
+            ini_set('pcre.jit', '0');
+
+            try {
+                $masked = preg_replace_callback($pattern, $mask, $text);
+            } finally {
+                ini_set('pcre.jit', $jit);
+            }
+        }
+
+        return $masked;
     }
 
     /**
@@ -90,7 +119,8 @@ final class HiddenValues
 
     private static function placeholder(int $number): string
     {
-        return "\u{E000}".strtr((string) $number, '0123456789', "\u{E010}\u{E011}\u{E012}\u{E013}\u{E014}\u{E015}\u{E016}\u{E017}\u{E018}\u{E019}")."\u{E001}";
+        // Each digit a character of its own: strtr() with two strings would go by byte.
+        return "\u{E000}".implode(array_map(fn (string $digit): string => mb_chr(0xE010 + (int) $digit), str_split((string) $number)))."\u{E001}";
     }
 
     /**
@@ -300,7 +330,8 @@ final class HiddenValues
     private static function hostname(?string $value): ?string
     {
         $value = trim((string) $value);
-        $value = str_contains($value, '://') ? (string) parse_url($value, PHP_URL_HOST) : $value;
+        // The host of what may be a URL, or a host with a user, port or path.
+        $value = (string) parse_url(str_contains($value, '://') ? $value : '//'.$value, PHP_URL_HOST);
         $value = rtrim($value, '.');
 
         if (preg_match('/[^\x00-\x7F]/', $value) === 1) {

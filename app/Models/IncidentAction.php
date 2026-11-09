@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * A follow-up from an incident ("monitor NFS latency").
  */
-#[Fillable(['incident_id', 'description', 'due_on', 'done_at', 'user_id', 'recorded_via'])]
+#[Fillable(['incident_id', 'description', 'due_on', 'done_at'])]
 class IncidentAction extends Model
 {
     use RecordsAuthor;

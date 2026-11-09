@@ -75,6 +75,13 @@ class Incident extends Model
      */
     public function scopeConcerning(Builder $query, array $serverIds, array $projectIds): void
     {
+        // Linked to none: concerning nothing, not everything.
+        if ($serverIds === [] && $projectIds === []) {
+            $query->whereRaw('0 = 1');
+
+            return;
+        }
+
         $reach = $projectIds === [] ? null : app(ProjectIncidents::class)->reach($projectIds);
 
         $query->where(fn (Builder $query) => $query
