@@ -27,6 +27,7 @@ use App\Models\Server;
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Spatie\Activitylog\Models\Activity;
 use Tests\Concerns\SignsIn;
@@ -154,6 +155,18 @@ class MaintenanceFlowTest extends TestCase
         $this->assertSame(['2026-10-22 20:00', 'Gedaan, twee dagen later dan gepland.'], [$maintenance->starts_at->format('Y-m-d H:i'), $maintenance->report]);
     }
 
+    public function test_the_list_filters_on_the_work_among_other_work(): void
+    {
+        $this->signIn();
+        $reboot = Maintenance::factory()->create(['tasks' => [MaintenanceTask::Updates->value, MaintenanceTask::Reboot->value]]);
+        $updates = Maintenance::factory()->create(['tasks' => [MaintenanceTask::Updates->value]]);
+
+        Livewire::test(ListMaintenances::class)
+            ->filterTable('tasks', MaintenanceTask::Reboot->value)
+            ->assertCanSeeTableRecords([$reboot])
+            ->assertCanNotSeeTableRecords([$updates]);
+    }
+
     public function test_completing_before_the_planned_time_starts_it_now(): void
     {
         $this->signIn();
@@ -191,6 +204,22 @@ class MaintenanceFlowTest extends TestCase
         $this->get(ServerResource::getUrl('view', ['record' => $server]))
             ->assertOk()
             ->assertSeeInOrder(['Onderhoud', 'Updates', '21-10-2026', 'Herstart', '21-10-2026', 'Controle', 'Nog niet', 'Gepland', '07-11-2026 22:00', 'Upgrade naar 24.04']);
+    }
+
+    public function test_last_done_reads_what_the_query_loaded_and_asks_for_the_rest(): void
+    {
+        $server = Server::factory()->create();
+        Maintenance::factory()->create(['tasks' => [MaintenanceTask::Updates->value, MaintenanceTask::Reboot->value], 'starts_at' => '2026-10-20 10:00:00'])->servers()->attach($server);
+
+        // Loaded with every task: no query of its own.
+        $loaded = Server::query()->withLastDoneOfEachTask()->findOrFail($server->id);
+        DB::enableQueryLog();
+        $this->assertSame('2026-10-20 10:00:00', $loaded->lastDone()['reboot']?->toDateTimeString());
+        $this->assertSame([], DB::getQueryLog());
+
+        // Loaded with one task only (the server list): the others are asked for.
+        $partly = Server::query()->withLastDone(MaintenanceTask::Updates)->findOrFail($server->id);
+        $this->assertSame('2026-10-20 10:00:00', $partly->lastDone()['reboot']?->toDateTimeString());
     }
 
     public function test_the_server_list_shows_and_sorts_by_the_last_updates(): void

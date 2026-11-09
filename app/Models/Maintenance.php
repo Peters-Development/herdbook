@@ -97,6 +97,16 @@ class Maintenance extends Model
         $query->orderByRaw('coalesce(ends_at, starts_at)');
     }
 
+    /**
+     * Maintenance that includes $task, among other work.
+     *
+     * @param  Builder<Maintenance>  $query
+     */
+    public function scopeIncludesTask(Builder $query, MaintenanceTask|string $task): void
+    {
+        $query->whereJsonContains($query->qualifyColumn('tasks'), $task instanceof MaintenanceTask ? $task->value : $task);
+    }
+
     /** @param  Builder<Maintenance>  $query */
     public function scopeDone(Builder $query): void
     {

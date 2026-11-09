@@ -42,7 +42,7 @@ class MaintenancesTable
                     ->options(MaintenanceTask::class)
                     ->query(fn (Builder $query, array $data): Builder => blank($data['value'] ?? null)
                         ? $query
-                        : $query->whereJsonContains('tasks', $data['value'])),
+                        : $query->includesTask($data['value'])),
                 SelectFilter::make('servers')->label(__('Server'))->relationship('servers', 'name')->searchable()->preload(),
                 SelectFilter::make('projects')->label(__('Project'))->relationship('projects', 'name')->searchable()->preload(),
             ])
