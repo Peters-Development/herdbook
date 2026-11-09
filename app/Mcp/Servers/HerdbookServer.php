@@ -2,13 +2,17 @@
 
 namespace App\Mcp\Servers;
 
+use App\Mcp\Tools\AddIncidentAction;
+use App\Mcp\Tools\AddTimelineEntry;
 use App\Mcp\Tools\CancelMaintenance;
+use App\Mcp\Tools\CompleteIncidentAction;
 use App\Mcp\Tools\CompleteMaintenance;
 use App\Mcp\Tools\GetIncident;
 use App\Mcp\Tools\GetMaintenance;
 use App\Mcp\Tools\ListIncidents;
 use App\Mcp\Tools\ListMaintenance;
 use App\Mcp\Tools\LogMaintenance;
+use App\Mcp\Tools\OpenIncident;
 use App\Mcp\Tools\ScheduleMaintenance;
 use App\Mcp\Tools\SearchInventory;
 use App\Mcp\Tools\UpdateMaintenance;
@@ -32,6 +36,10 @@ class HerdbookServer extends Server
         GetMaintenance::class,
         ListIncidents::class,
         GetIncident::class,
+        OpenIncident::class,
+        AddTimelineEntry::class,
+        AddIncidentAction::class,
+        CompleteIncidentAction::class,
         ScheduleMaintenance::class,
         LogMaintenance::class,
         UpdateMaintenance::class,
@@ -53,7 +61,7 @@ class HerdbookServer extends Server
 
             Maintenance is work on servers and projects: planned ahead, or written down once it is done. Its status is planned, done or cancelled; planned work whose time has passed is overdue. It links to servers and projects by their ids, which search_inventory finds. For "production of a project", that is the servers of that environment, and the project if the work concerns it as a whole.
 
-            Incidents are outages and problems: severity sev1 (critical: production down or data at risk), sev2 (major) or sev3 (minor); status open, monitoring (it recovered and is being watched) or resolved. Herdbook's checks open a draft themselves (source check) when a critical production check stays down. list_incidents finds them by project, as far as Herdbook counts them for it, and get_incident has the report and the timeline of what happened.
+            Incidents are outages and problems: severity sev1 (critical: production down or data at risk), sev2 (major) or sev3 (minor); status open, monitoring (it recovered and is being watched) or resolved. Herdbook's checks open a draft themselves (source check) when a critical production check stays down. list_incidents finds them by project, as far as Herdbook counts them for it, and get_incident has the report and the timeline of what happened. During an outage, look for an unresolved incident of the project or server first (the checks may have opened one) and write what you try and find on its timeline with add_timeline_entry as you go; open_incident only when there is none.
 
             To find the project of the repository you work in, search its git remote; for the machine you are on, the output of `hostname -f` or its address.
 

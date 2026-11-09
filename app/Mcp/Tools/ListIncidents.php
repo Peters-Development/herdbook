@@ -7,7 +7,6 @@ use App\Enums\IncidentStatus;
 use App\Mcp\Serializer;
 use App\Mcp\Tools\Concerns\ValidatesArguments;
 use App\Models\Incident;
-use App\Services\Health\ProjectIncidents;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\Rule;
@@ -67,29 +66,22 @@ class ListIncidents extends Tool
         ]);
 
         $status = $input['status'] ?? 'unresolved';
-        $serverIds = $input['server_ids'] ?? [];
-        $reach = ($input['project_ids'] ?? []) === [] ? null : app(ProjectIncidents::class)->reach(array_map(intval(...), $input['project_ids']));
+        $serverIds = array_map(intval(...), $input['server_ids'] ?? []);
+        $projectIds = array_map(intval(...), $input['project_ids'] ?? []);
         $limit = (int) ($input['limit'] ?? self::DEFAULT_LIMIT);
 
         $found = Incident::query()
             ->with(Serializer::INCIDENT_RELATIONS)
-            ->when($status === 'unresolved', fn (Builder $query) => $query->where('status', '!=', IncidentStatus::Resolved))
+            ->when($status === 'unresolved', fn (Builder $query) => $query->unresolved())
             ->when(! in_array($status, ['unresolved', 'any'], true), fn (Builder $query) => $query->where('status', IncidentStatus::from($status)))
             ->when($input['severity'] ?? null, fn (Builder $query, string $severity) => $query->where('severity', $severity))
             ->when($input['since'] ?? null, fn (Builder $query, string $since) => $query->where('occurred_on', '>=', $since))
-            ->when($serverIds !== [] || $reach !== null, fn (Builder $query) => $query->where(fn (Builder $query) => $query
-                ->when($serverIds, fn (Builder $query) => $query->orWhereHas('servers', fn (Builder $servers) => $servers->whereKey($serverIds)))
-                ->when($reach, fn (Builder $query) => $query
-                    ->orWhereHas('projects', fn (Builder $projects) => $projects->whereKey($reach['projects']))
-                    ->when($reach['servers'], fn (Builder $query, array $ids) => $query->orWhereHas('servers', fn (Builder $servers) => $servers->whereKey($ids)))
-                    ->when($reach['networks'], fn (Builder $query, array $ids) => $query->orWhereHas('networks', fn (Builder $networks) => $networks->whereKey($ids))))))
+            ->when($serverIds !== [] || $projectIds !== [], fn (Builder $query) => $query->concerning($serverIds, $projectIds))
             ->when(
                 in_array($status, ['unresolved', 'open', 'monitoring'], true),
-                // Open first, then the most severe (sev1 sorts first), as ProjectIncidents.
-                fn (Builder $query) => $query->orderByRaw('case when status = ? then 0 else 1 end', [IncidentStatus::Open->value])->orderBy('severity'),
+                fn (Builder $query) => $query->orderByUrgency(),
+                fn (Builder $query) => $query->orderByDesc('occurred_on')->orderByDesc('id'),
             )
-            ->orderByDesc('occurred_on')
-            ->orderByDesc('id')
             ->limit($limit + 1)
             ->get();
 

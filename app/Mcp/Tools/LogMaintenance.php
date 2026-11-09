@@ -43,6 +43,6 @@ class LogMaintenance extends Tool
     {
         $work = $this->validatedNewWork($request, ['report' => $this->textRules()], MaintenanceStatus::Done);
 
-        return $this->answer($this->record($request, MaintenanceStatus::Done, $work, ['report' => $work['report'] ?? null]));
+        return $this->answer($this->record(MaintenanceStatus::Done, $work, ['report' => $work['report'] ?? null]));
     }
 }

@@ -5,10 +5,10 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Who wrote an incident down (null: monitoring opened it, or it was
- * imported), and the agent an incident or a timeline entry was recorded
- * through (the name of its token, kept after the token is revoked; null:
- * by hand in the panel).
+ * Who wrote an incident or an action item down (null: monitoring opened it,
+ * it was imported, or it predates this), and the agent an incident, a
+ * timeline entry or an action item was recorded through (the name of its
+ * token, kept after the token is revoked; null: by hand in the panel).
  */
 return new class extends Migration
 {
@@ -22,10 +22,20 @@ return new class extends Migration
         Schema::table('incident_timeline_entries', function (Blueprint $table) {
             $table->string('recorded_via')->nullable()->after('user_id');
         });
+
+        Schema::table('incident_actions', function (Blueprint $table) {
+            $table->foreignId('user_id')->nullable()->after('done_at')->constrained()->nullOnDelete();
+            $table->string('recorded_via')->nullable()->after('user_id');
+        });
     }
 
     public function down(): void
     {
+        Schema::table('incident_actions', function (Blueprint $table) {
+            $table->dropColumn('recorded_via');
+            $table->dropConstrainedForeignId('user_id');
+        });
+
         Schema::table('incident_timeline_entries', function (Blueprint $table) {
             $table->dropColumn('recorded_via');
         });

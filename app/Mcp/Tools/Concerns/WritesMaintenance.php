@@ -6,7 +6,6 @@ use App\Enums\MaintenanceStatus;
 use App\Enums\MaintenanceTask;
 use App\Mcp\Serializer;
 use App\Models\Maintenance;
-use App\Models\User;
 use App\Rules\Moment;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -222,11 +221,10 @@ trait WritesMaintenance
      * @param  array<string, mixed>  $work  parsed (parseWork()), with server_ids and project_ids
      * @param  array<string, mixed>  $attributes  the rest: the plan or the report
      */
-    protected function record(Request $request, MaintenanceStatus $status, array $work, array $attributes): Maintenance
+    protected function record(MaintenanceStatus $status, array $work, array $attributes): Maintenance
     {
-        return DB::transaction(function () use ($request, $status, $work, $attributes): Maintenance {
-            $user = $request->user();
-
+        return DB::transaction(function () use ($status, $work, $attributes): Maintenance {
+            // Its author and agent: RecordsAuthor, from the account the token signed in.
             $maintenance = new Maintenance([
                 'tasks' => $work['tasks'],
                 'title' => $work['title'] ?? null,
@@ -235,10 +233,7 @@ trait WritesMaintenance
                 'ends_at' => $work['ends_at'] ?? null,
                 ...$attributes,
             ]);
-            $maintenance->forceFill([
-                'user_id' => $user?->getAuthIdentifier(),
-                'recorded_via' => $user instanceof User ? $user->currentAgentToken()?->name : null,
-            ])->save();
+            $maintenance->save();
 
             $maintenance->servers()->attach(self::ids($work['server_ids']));
             $maintenance->projects()->attach(self::ids($work['project_ids']));

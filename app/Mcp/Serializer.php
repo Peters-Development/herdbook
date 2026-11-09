@@ -11,6 +11,7 @@ use App\Models\Environment;
 use App\Models\Hostname;
 use App\Models\Incident;
 use App\Models\IncidentAction;
+use App\Models\IncidentTimelineEntry;
 use App\Models\Maintenance;
 use App\Models\Project;
 use App\Models\Server;
@@ -137,6 +138,41 @@ final class Serializer
     }
 
     /**
+     * A timeline entry, its note masked and cut at MAX_NOTE. Eager-load: user.
+     *
+     * @param  string|null  $note  the note masked already
+     * @return array<string, mixed>
+     */
+    public static function timelineEntry(IncidentTimelineEntry $entry, ?string $note = null): array
+    {
+        $note ??= (string) app(HiddenValues::class)->mask($entry->note);
+
+        return [
+            'occurred_at' => self::time($entry->occurred_at),
+            'note' => mb_substr($note, 0, self::MAX_NOTE),
+            'truncated' => mb_strlen($note) > self::MAX_NOTE,
+            'by' => $entry->user?->name,
+            'via' => $entry->recorded_via,
+        ];
+    }
+
+    /**
+     * An action item; its id is what complete_incident_action takes.
+     *
+     * @return array<string, mixed>
+     */
+    public static function incidentAction(IncidentAction $action): array
+    {
+        return [
+            'id' => $action->id,
+            'description' => app(HiddenValues::class)->mask($action->description),
+            'due_on' => $action->due_on?->toDateString(),
+            'done_at' => self::time($action->done_at),
+            'overdue' => $action->isOverdue(),
+        ];
+    }
+
+    /**
      * Who changed a long text last, through which agent, and when.
      *
      * @return array{by: ?string, via: ?string, at: ?string}|null
@@ -210,13 +246,7 @@ final class Serializer
                 break;
             }
 
-            $shown->push([
-                'occurred_at' => self::time($entry->occurred_at),
-                'note' => mb_substr($note, 0, self::MAX_NOTE),
-                'truncated' => mb_strlen($note) > self::MAX_NOTE,
-                'by' => $entry->user?->name,
-                'via' => $entry->recorded_via,
-            ]);
+            $shown->push(self::timelineEntry($entry, $note));
         }
 
         return [
@@ -226,13 +256,7 @@ final class Serializer
             'texts_changed' => ['root_cause' => self::textChange($changes['root_cause']), 'report' => self::textChange($changes['body'])],
             'timeline' => $shown->reverse()->values()->all(),
             'more_timeline' => $latest->count() > $shown->count(),
-            'actions' => $incident->actions->sortBy([['done_at', 'asc'], ['id', 'asc']])->take(self::ACTIONS)->map(fn (IncidentAction $action): array => [
-                'id' => $action->id,
-                'description' => $hidden->mask($action->description),
-                'due_on' => $action->due_on?->toDateString(),
-                'done_at' => self::time($action->done_at),
-                'overdue' => $action->isOverdue(),
-            ])->values()->all(),
+            'actions' => $incident->actions->sortBy([['done_at', 'asc'], ['id', 'asc']])->take(self::ACTIONS)->map(self::incidentAction(...))->values()->all(),
             'more_actions' => $incident->actions->count() > self::ACTIONS,
         ];
     }

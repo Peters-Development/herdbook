@@ -9,9 +9,11 @@ use App\Models\Concerns\GuardsChanges;
 use App\Models\Concerns\LinksToInventory;
 use App\Models\Concerns\RecordsActivity;
 use App\Models\Concerns\RecordsAuthor;
+use App\Services\Health\ProjectIncidents;
 use Carbon\CarbonInterval;
 use Database\Factories\IncidentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -51,6 +53,49 @@ class Incident extends Model
     public function timelineEntries(): HasMany
     {
         return $this->hasMany(IncidentTimelineEntry::class)->orderBy('occurred_at')->orderBy('id');
+    }
+
+    /**
+     * Linked to any of $serverIds directly, or one of $projectIds's
+     * incidents as far as Herdbook counts them for a project
+     * (ProjectIncidents::reach(): through the servers its production needs,
+     * and their networks).
+     *
+     * @param  Builder<Incident>  $query
+     * @param  list<int>  $serverIds
+     * @param  list<int>  $projectIds
+     */
+    public function scopeConcerning(Builder $query, array $serverIds, array $projectIds): void
+    {
+        $reach = $projectIds === [] ? null : app(ProjectIncidents::class)->reach($projectIds);
+
+        $query->where(fn (Builder $query) => $query
+            ->when($serverIds, fn (Builder $query) => $query->orWhereHas('servers', fn (Builder $servers) => $servers->whereKey($serverIds)))
+            ->when($reach, fn (Builder $query) => $query
+                ->orWhereHas('projects', fn (Builder $projects) => $projects->whereKey($reach['projects']))
+                ->when($reach['servers'], fn (Builder $query, array $ids) => $query->orWhereHas('servers', fn (Builder $servers) => $servers->whereKey($ids)))
+                ->when($reach['networks'], fn (Builder $query, array $ids) => $query->orWhereHas('networks', fn (Builder $networks) => $networks->whereKey($ids)))));
+    }
+
+    /**
+     * Open or monitoring.
+     *
+     * @param  Builder<Incident>  $query
+     */
+    public function scopeUnresolved(Builder $query): void
+    {
+        $query->where('status', '!=', IncidentStatus::Resolved);
+    }
+
+    /**
+     * Open first, then the most severe (sev1 sorts first), then the latest:
+     * as ProjectIncidents orders them.
+     *
+     * @param  Builder<Incident>  $query
+     */
+    public function scopeOrderByUrgency(Builder $query): void
+    {
+        $query->orderByRaw('case when status = ? then 0 else 1 end', [IncidentStatus::Open->value])->orderBy('severity')->orderByDesc('occurred_on')->orderByDesc('id');
     }
 
     /**

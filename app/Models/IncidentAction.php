@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RecordsAuthor;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -10,9 +11,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * A follow-up from an incident ("monitor NFS latency").
  */
-#[Fillable(['incident_id', 'description', 'due_on', 'done_at'])]
+#[Fillable(['incident_id', 'description', 'due_on', 'done_at', 'user_id', 'recorded_via'])]
 class IncidentAction extends Model
 {
+    use RecordsAuthor;
+
     /** @return BelongsTo<Incident, $this> */
     public function incident(): BelongsTo
     {

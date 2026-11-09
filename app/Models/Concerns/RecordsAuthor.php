@@ -9,14 +9,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * Who wrote it down (user_id: the account signed in when it was created;
  * null without one, as for monitoring and imports), and through which agent
- * (recorded_via: the name of its token, kept after the token is revoked).
+ * (recorded_via: the name of the token that account came in with, kept
+ * after the token is revoked; null in the panel).
  */
 trait RecordsAuthor
 {
     public static function bootRecordsAuthor(): void
     {
         static::creating(function (self $record): void {
-            $record->user_id ??= auth()->id();
+            $user = auth()->user();
+            $record->user_id ??= $user?->getAuthIdentifier();
+            $record->recorded_via ??= $user instanceof User ? $user->currentAgentToken()?->name : null;
         });
     }
 

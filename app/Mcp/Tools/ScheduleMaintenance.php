@@ -42,6 +42,6 @@ class ScheduleMaintenance extends Tool
     {
         $work = $this->validatedNewWork($request, ['plan' => $this->textRules()], MaintenanceStatus::Planned);
 
-        return $this->answer($this->record($request, MaintenanceStatus::Planned, $work, ['plan' => $work['plan'] ?? null]));
+        return $this->answer($this->record(MaintenanceStatus::Planned, $work, ['plan' => $work['plan'] ?? null]));
     }
 }
