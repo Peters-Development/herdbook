@@ -761,6 +761,7 @@
     "Test alert sent": "Testmelding verstuurd",
     "Test Pushover": "Pushover testen",
     "Testing": "Test",
+    "text hidden": "tekst verborgen",
     "The account of this agent has no two-factor authentication. The token works again once it is set up.": "Het account van deze agent heeft geen tweestapsverificatie. Het token werkt weer zodra die is ingesteld.",
     "The check itself failed.": "De controle zelf mislukte.",
     "The check on the hostnames is paused (the hostnames stay, without an environment).|The :count checks on the hostnames are paused (the hostnames stay, without an environment).": "De check op de hostnames gaat op pauze (de hostnames blijven, zonder omgeving).|De :count checks op de hostnames gaan op pauze (de hostnames blijven, zonder omgeving).",

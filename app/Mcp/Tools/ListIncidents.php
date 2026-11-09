@@ -76,7 +76,7 @@ class ListIncidents extends Tool
             ->when($status === 'unresolved', fn (Builder $query) => $query->where('status', '!=', IncidentStatus::Resolved))
             ->when(! in_array($status, ['unresolved', 'any'], true), fn (Builder $query) => $query->where('status', IncidentStatus::from($status)))
             ->when($input['severity'] ?? null, fn (Builder $query, string $severity) => $query->where('severity', $severity))
-            ->when($input['since'] ?? null, fn (Builder $query, string $since) => $query->whereDate('occurred_on', '>=', $since))
+            ->when($input['since'] ?? null, fn (Builder $query, string $since) => $query->where('occurred_on', '>=', $since))
             ->when($serverIds !== [] || $reach !== null, fn (Builder $query) => $query->where(fn (Builder $query) => $query
                 ->when($serverIds, fn (Builder $query) => $query->orWhereHas('servers', fn (Builder $servers) => $servers->whereKey($serverIds)))
                 ->when($reach, fn (Builder $query) => $query

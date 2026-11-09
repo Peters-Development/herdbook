@@ -89,6 +89,8 @@ trait ActsAsAgent
         ]);
 
         $this->app['auth']->forgetGuards();
+        // As after a real request: what is built once per request (HiddenValues, ProjectHealth) is built again.
+        $this->app->forgetScopedInstances();
 
         if ($before !== null) {
             $this->actingAs($before);

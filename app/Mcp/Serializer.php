@@ -61,6 +61,17 @@ final class Serializer
     public const int MAX_NOTE = 1000;
 
     /**
+     * What an entry of the timeline costs besides its note: its moment,
+     * names and keys.
+     */
+    public const int ENTRY_CHARACTERS = 100;
+
+    /**
+     * How many action items incidentWithTexts() shows: open ones first.
+     */
+    public const int ACTIONS = 30;
+
+    /**
      * What project() reads, to eager-load.
      */
     public const array PROJECT_RELATIONS = ['client', 'environments.servers'];
@@ -191,7 +202,7 @@ final class Serializer
 
         foreach ($latest->take(self::TIMELINE_ENTRIES) as $entry) {
             $note = (string) $hidden->mask($entry->note);
-            $characters += min(mb_strlen($note), self::MAX_NOTE);
+            $characters += min(mb_strlen($note), self::MAX_NOTE) + self::ENTRY_CHARACTERS;
 
             if ($characters > self::TIMELINE_CHARACTERS && $shown->isNotEmpty()) {
                 break;
@@ -213,13 +224,14 @@ final class Serializer
             'texts_changed' => ['root_cause' => self::textChange($changes['root_cause']), 'report' => self::textChange($changes['body'])],
             'timeline' => $shown->reverse()->values()->all(),
             'more_timeline' => $latest->count() > $shown->count(),
-            'actions' => $incident->actions->sortBy('id')->map(fn (IncidentAction $action): array => [
+            'actions' => $incident->actions->sortBy([['done_at', 'asc'], ['id', 'asc']])->take(self::ACTIONS)->map(fn (IncidentAction $action): array => [
                 'id' => $action->id,
                 'description' => $hidden->mask($action->description),
                 'due_on' => $action->due_on?->toDateString(),
                 'done_at' => self::time($action->done_at),
                 'overdue' => $action->isOverdue(),
             ])->values()->all(),
+            'more_actions' => $incident->actions->count() > self::ACTIONS,
         ];
     }
 

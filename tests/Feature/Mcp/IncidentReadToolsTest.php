@@ -8,6 +8,7 @@ use App\Enums\IncidentSource;
 use App\Enums\IncidentStatus;
 use App\Enums\ServerRole;
 use App\Filament\Resources\Incidents\IncidentResource;
+use App\Mcp\HiddenValues;
 use App\Mcp\Serializer;
 use App\Models\Client;
 use App\Models\Domain;
@@ -15,12 +16,15 @@ use App\Models\Environment;
 use App\Models\EnvironmentServer;
 use App\Models\Incident;
 use App\Models\Network;
+use App\Models\NetworkAddress;
 use App\Models\Project;
 use App\Models\Server;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\ActsAsAgent;
 use Tests\TestCase;
 
@@ -158,7 +162,7 @@ class IncidentReadToolsTest extends TestCase
 
         $found = $this->callToolSuccessfully($this->token, 'get_incident', ['id' => $incident->id]);
 
-        $this->assertSame([...array_keys(Serializer::incident($incident->load(Serializer::INCIDENT_RELATIONS))), 'impact', 'root_cause', 'report', 'truncated', 'texts_changed', 'timeline', 'more_timeline', 'actions'], array_keys($found));
+        $this->assertSame([...array_keys(Serializer::incident($incident->load(Serializer::INCIDENT_RELATIONS))), 'impact', 'root_cause', 'report', 'truncated', 'texts_changed', 'timeline', 'more_timeline', 'actions', 'more_actions'], array_keys($found));
         $this->assertSame(['Uploads failed for an hour.', 'NFS stalled.', 'The report.', [], ['root_cause' => null, 'report' => null]], [$found['impact'], $found['root_cause'], $found['report'], $found['truncated'], $found['texts_changed']]);
         $this->assertSame([
             ['occurred_at' => '2026-11-08T22:05:00+01:00', 'note' => 'Check HTTP shop.example.com went down: HTTP 503', 'truncated' => false, 'by' => null, 'via' => null],
@@ -194,7 +198,7 @@ class IncidentReadToolsTest extends TestCase
 
         $found = $this->callToolSuccessfully($this->token, 'get_incident', ['id' => $incident->id]);
 
-        $shown = intdiv(Serializer::TIMELINE_CHARACTERS, Serializer::MAX_NOTE);
+        $shown = intdiv(Serializer::TIMELINE_CHARACTERS, Serializer::MAX_NOTE + Serializer::ENTRY_CHARACTERS);
         $this->assertCount($shown, $found['timeline']);
         $this->assertTrue($found['more_timeline']);
         $this->assertSame([Serializer::MAX_NOTE, true], [mb_strlen($found['timeline'][0]['note']), $found['timeline'][0]['truncated']]);
@@ -237,6 +241,89 @@ class IncidentReadToolsTest extends TestCase
         foreach (['192.0.2.1', '2001:db8', '198.51.100.7', 'vps-123'] as $hidden) {
             $this->assertStringNotContainsString($hidden, $answer);
         }
+    }
+
+    /** @return array<string, array{string, string}> */
+    public static function addressesInText(): array
+    {
+        return [
+            'with a port, as the TLS check says' => ['No TLS connection to 192.0.2.10:443.', 'No TLS connection to [adres van app-1]:443.'],
+            'in a URL' => ['GET https://192.0.2.10:8443/health failed.', 'GET https://[adres van app-1]:8443/health failed.'],
+            'a provider hostname in a URL' => ['GET https://vps-123.provider.example/health', 'GET https://[adres van app-1]/health'],
+            'a provider hostname with a port' => ['ssh vps-123.provider.example:22', 'ssh [adres van app-1]:22'],
+            'a provider hostname in a longer name' => ['shop.vps-123.provider.example is down', 'shop.[adres van app-1] is down'],
+            'a provider hostname in capitals' => ['VPS-123.Provider.Example is down', '[adres van app-1] is down'],
+            'after a colon' => ['ip:192.0.2.10 host:vps-123.provider.example', 'ip:[adres van app-1] host:[adres van app-1]'],
+            'rsync' => ['rsync backup@10.0.0.5:/backups', 'rsync backup@[adres]:/backups'],
+            'scp' => ['scp x deploy@vps-123.provider.example:/tmp', 'scp x deploy@[adres van app-1]:/tmp'],
+            'before a dot and a word' => ['192.0.2.10.Next', '[adres van app-1].Next'],
+            'after an underscore' => ['x_192.0.2.10', 'x_[adres van app-1]'],
+            'IPv6 after a colon' => ['addr:2001:db8::10', 'addr:[adres van app-1]'],
+            'IPv6 in brackets with a port' => ['[2001:DB8:0::10]:443', '[[adres van app-1]]:443'],
+            'an unknown IPv6' => ['to 2001:db8::99 failed', 'to [adres] failed'],
+            'an address in a cloud hostname' => ['ip-10-0-0-5.eu-west-1.compute.internal', 'ip-[adres].eu-west-1.compute.internal'],
+            'a network\'s gateway, shared by two' => ['via 192.168.1.1', 'via [adres]'],
+            'a subnet' => ['in 10.20.0.0/16', 'in [adres van Office]/16'],
+            'a network address and its MAC' => ['nas at 10.20.0.9 (00-11-22-33-44-55)', 'nas at [adres van nas] ([adres van nas])'],
+            'not times, versions, hashes or methods' => ['At 12:30:45, PHP 8.5.0 (a1b2c3d4) in Class::method.', 'At 12:30:45, PHP 8.5.0 (a1b2c3d4) in Class::method.'],
+            'not the start of a longer address' => ['192.0.2.100 is another', '[adres] is another'],
+        ];
+    }
+
+    #[DataProvider('addressesInText')]
+    public function test_every_way_an_address_can_appear_in_a_text_is_masked(string $text, string $masked): void
+    {
+        Server::factory()->create(['name' => 'app-1', 'public_ipv4' => '192.0.2.10', 'public_ipv6' => '2001:db8::10', 'provider_hostname' => 'vps-123.provider.example']);
+        Network::factory()->create(['name' => 'Office', 'subnet' => '10.20.0.0/16', 'gateway' => '192.168.1.1']);
+        Network::factory()->create(['name' => 'Home', 'gateway' => '192.168.1.1']);
+        NetworkAddress::query()->create(['network_id' => Network::query()->firstWhere('name', 'Office')->id, 'name' => 'nas', 'address' => '10.20.0.9', 'mac_address' => '00:11:22:33:44:55']);
+        $incident = Incident::factory()->create(['impact' => $text]);
+        $incident->timelineEntries()->create(['occurred_at' => now(), 'note' => $text]);
+        $incident->actions()->create(['description' => Str::limit($text, 250)]);
+
+        $found = $this->callToolSuccessfully($this->token, 'get_incident', ['id' => $incident->id]);
+
+        $this->assertSame([$masked, $masked], [$found['impact'], $found['timeline'][0]['note']]);
+        $this->assertSame($masked, $found['actions'][0]['description']);
+    }
+
+    public function test_an_address_where_a_text_is_cut_is_masked_before_it_is_cut(): void
+    {
+        Server::factory()->create(['name' => 'app-1', 'public_ipv4' => '192.0.2.10']);
+        $incident = Incident::factory()->create();
+        $incident->timelineEntries()->create(['occurred_at' => now(), 'note' => str_repeat('x', Serializer::MAX_NOTE - 5).' 192.0.2.10']);
+
+        $note = $this->callToolSuccessfully($this->token, 'get_incident', ['id' => $incident->id])['timeline'][0]['note'];
+
+        $this->assertStringNotContainsString('192.0', $note);
+    }
+
+    public function test_masking_holds_up_for_a_large_inventory_and_odd_text(): void
+    {
+        $now = now()->toDateTimeString();
+        DB::table('servers')->insert(array_map(fn (int $i): array => [
+            'name' => "server-{$i}", 'public_ipv4' => '10.'.intdiv($i, 250).'.'.($i % 250).'.1', 'provider_hostname' => "vps-{$i}.provider.example",
+            'status' => 'active', 'ssh_port' => 22, 'auto_renews' => true, 'renewal_period_months' => 12, 'created_at' => $now, 'updated_at' => $now,
+        ], range(1, 1500)));
+        $incident = Incident::factory()->create(['impact' => 'vps-1499.provider.example and 10.5.249.1 went down; ſ '.str_repeat('a.', 5000).'end']);
+
+        $found = $this->callToolSuccessfully($this->token, 'get_incident', ['id' => $incident->id]);
+
+        $this->assertStringStartsWith('[adres van server-1499] and [adres van server-1499] went down; ſ a.a.', $found['impact']);
+    }
+
+    public function test_when_masking_fails_the_text_is_hidden_not_shown(): void
+    {
+        $limit = ini_get('pcre.backtrack_limit');
+        ini_set('pcre.backtrack_limit', '1');
+
+        try {
+            $masked = app(HiddenValues::class)->mask('Ping 192.0.2.10 failed: '.str_repeat('a1:', 50));
+        } finally {
+            ini_set('pcre.backtrack_limit', (string) $limit);
+        }
+
+        $this->assertSame('[tekst verborgen]', $masked);
     }
 
     public function test_texts_changed_names_who_last_changed_the_root_cause_and_the_report(): void
