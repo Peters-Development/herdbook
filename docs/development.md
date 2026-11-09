@@ -192,7 +192,7 @@ Polymorphic relations (the "related to" links, the activity log) store a short a
 <a name="markdown"></a>
 ### Markdown
 
-Markdown written by users (notes, documents, incident reports, maintenance plans) is never rendered raw. In Filament, use `TextEntry::markdown()`, which sanitizes the HTML. Anywhere else, use:
+Markdown written by users (notes, documents, incident reports, maintenance plans) is never rendered raw. In Filament, use `TextEntry::markdown()`, which sanitizes the HTML. The sanitizer's config is Herdbook's own (`HtmlSanitizerConfig` in `AppServiceProvider`): stricter than Filament's, without `style`, `class` or data attributes, which only its rich editor needs. Anywhere else, use:
 
 ```php
 Str::markdown($text, ['html_input' => 'strip', 'allow_unsafe_links' => false]);

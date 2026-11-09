@@ -37,6 +37,7 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Symfony\Component\HtmlSanitizer\HtmlSanitizerConfig;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -53,6 +54,21 @@ class AppServiceProvider extends ServiceProvider
 
         // The checks' network calls; tests bind a fake.
         $this->app->bind(NetworkProbe::class, SocketProbe::class);
+
+        // How Filament sanitizes the HTML of markdown (TextEntry::markdown())
+        // and notifications. Filament's own config lets every element keep
+        // `style`, `class` and data attributes, for its rich editor, which
+        // Herdbook doesn't use: with them a document or an imported incident
+        // could restyle the page, say lay a fake sign-in form over it. Safe
+        // elements with their safe attributes only; images may still come over
+        // https (docs/security.md#what-users-write).
+        $this->app->scoped(HtmlSanitizerConfig::class, fn (): HtmlSanitizerConfig => (new HtmlSanitizerConfig)
+            ->allowSafeElements()
+            ->allowRelativeLinks()
+            ->allowRelativeMedias()
+            ->allowAttribute('width', allowedElements: 'img')
+            ->allowAttribute('height', allowedElements: 'img')
+            ->withMaxInputLength(500000));
     }
 
     /**
