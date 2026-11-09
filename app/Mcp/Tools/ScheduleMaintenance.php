@@ -3,7 +3,6 @@
 namespace App\Mcp\Tools;
 
 use App\Enums\MaintenanceStatus;
-use App\Mcp\Serializer;
 use App\Mcp\Tools\Concerns\WritesMaintenance;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -27,15 +26,15 @@ class ScheduleMaintenance extends Tool
     public function description(): string
     {
         return 'Plan maintenance in Herdbook: the work, when it starts (and ends, for a window), a work plan in markdown, and the servers and projects it concerns (ids from search_inventory; at least one). '
-            .'The plan is at most '.number_format(Serializer::MAX_TEXT).' characters and refuses passwords, tokens, private keys, images and HTML (put tags and placeholders between backticks). '
-            .self::beforeWriting();
+            .self::textsSentence('The plan')
+            .self::checkFirst().self::answerSentence();
     }
 
     public function schema(JsonSchema $schema): array
     {
         return [
             ...$this->workSchema($schema, MaintenanceStatus::Planned),
-            'plan' => $schema->string()->max(Serializer::MAX_TEXT)->description('Markdown: the steps, what goes down, how to roll back.'),
+            'plan' => $this->planSchema($schema),
         ];
     }
 

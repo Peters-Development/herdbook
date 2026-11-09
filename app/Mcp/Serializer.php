@@ -75,6 +75,8 @@ final class Serializer
             'created_by' => $maintenance->user?->name,
             // The agent it was recorded through, if any.
             'via' => $maintenance->recorded_via,
+            // Given back to the tools that change it: refused when it changed since.
+            'version' => $maintenance->version(),
             'url' => MaintenanceResource::getUrl('view', ['record' => $maintenance]),
         ];
     }

@@ -4,6 +4,7 @@ namespace App\Filament\Support;
 
 use App\Enums\MaintenanceTask;
 use App\Enums\ProviderKind;
+use App\Models\AgentToken;
 use App\Models\Client;
 use App\Models\Contracts\Renewable;
 use App\Models\Domain;
@@ -83,6 +84,15 @@ final class ActivityPresenter
         $label = $activity->properties?->get('label');
 
         return trim("{$description} · {$type} {$label}");
+    }
+
+    /**
+     * Who made the change, and through which agent ("Ada via deploy-agent").
+     * Eager-load: causer.
+     */
+    public static function causer(Activity $activity): ?string
+    {
+        return AgentToken::byline($activity->causer?->name, $activity->properties?->get('via'));
     }
 
     /**

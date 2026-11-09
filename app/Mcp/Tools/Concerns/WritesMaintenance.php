@@ -14,6 +14,7 @@ use App\Rules\NoSecretMaterial;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator as ValidatorFactory;
 use Illuminate\Support\Str;
@@ -41,13 +42,14 @@ trait WritesMaintenance
 
     /**
      * The fields of work, for the input schema. $partial: a change, in which
-     * none is required; otherwise $status says whether a start is.
+     * none is required and null clears what may be empty; otherwise $status
+     * says whether a start is required.
      *
      * @return array<string, mixed>
      */
     protected function workSchema(JsonSchema $schema, MaintenanceStatus $status = MaintenanceStatus::Planned, bool $partial = false): array
     {
-        $moment = 'ISO 8601: 2026-11-12T22:00 (in '.config('herdbook.display_timezone').'), or with an offset (Z, +01:00).';
+        $moment = self::momentFormat();
         $start = $schema->string()->description(match (true) {
             $partial => "When it starts or started. {$moment}",
             $status === MaintenanceStatus::Done => "When it started; default now, not in the future. {$moment}",
@@ -58,11 +60,11 @@ trait WritesMaintenance
 
         return [
             'tasks' => $partial ? $tasks : $tasks->required(),
-            'title' => $schema->string()->max(255)->description($partial
+            'title' => $schema->string()->max(255)->nullable($partial)->description($partial
                 ? 'Null for one made from the work, such as "Updates and reboot".'
                 : 'Leave it out for one made from the work, such as "Updates and reboot".'),
             'starts_at' => $partial || $status === MaintenanceStatus::Done ? $start : $start->required(),
-            'ends_at' => $schema->string()->description(match (true) {
+            'ends_at' => $schema->string()->nullable($partial)->description(match (true) {
                 $partial => "When it ends or ended; null for no end. Not before the start. {$moment}",
                 $status === MaintenanceStatus::Done => "When it ended, if that matters; not before the start, which is now without starts_at. {$moment}",
                 default => "When it ends, for a window; not before the start. {$moment}",
@@ -76,8 +78,8 @@ trait WritesMaintenance
 
     /**
      * The rules of the fields of work. $partial: a change, in which each is
-     * optional, but tasks and the start can't be emptied, and the merged
-     * result is checked (checkMerged()).
+     * optional, but tasks and the start can't be emptied; the tool checks
+     * the merged result (assertWork()).
      *
      * @return array<string, mixed>
      */
@@ -91,6 +93,30 @@ trait WritesMaintenance
             'ends_at' => ['nullable', new Moment],
             ...$this->linkRules($partial),
         ];
+    }
+
+    /**
+     * The plan, for the input schema; $partial: null clears it.
+     */
+    protected function planSchema(JsonSchema $schema, bool $partial = false): Type
+    {
+        return $schema->string()->max(Serializer::MAX_TEXT)->nullable($partial)->description('Markdown: the steps, what goes down, how to roll back.'.($partial ? ' Null clears it.' : ''));
+    }
+
+    /**
+     * The report, for the input schema; $partial: null clears it.
+     */
+    protected function reportSchema(JsonSchema $schema, bool $partial = false): Type
+    {
+        return $schema->string()->max(Serializer::MAX_TEXT)->nullable($partial)->description('Markdown: what was done, what stood out, what is still to do.'.($partial ? ' Null clears it; given, it replaces the one there is.' : ''));
+    }
+
+    /**
+     * How an agent gives a moment, for descriptions.
+     */
+    protected static function momentFormat(): string
+    {
+        return 'ISO 8601: 2026-11-12T22:00 (in '.config('herdbook.display_timezone').'), or with an offset (Z, +01:00).';
     }
 
     /**
@@ -243,40 +269,6 @@ trait WritesMaintenance
     }
 
     /**
-     * The maintenance with this id, or the answer that there is none.
-     */
-    protected function findMaintenance(int $id): Maintenance|Response
-    {
-        return Maintenance::query()->find($id) ?? $this->notFound($id);
-    }
-
-    protected function notFound(mixed $id): Response
-    {
-        return Response::error(__('There is no maintenance with id :id. list_maintenance finds them.', ['id' => $id]));
-    }
-
-    /**
-     * A plan or report longer than an agent reads whole (get_maintenance cuts
-     * it) is not overwritten by one: what it didn't see would be lost.
-     *
-     * @param  array<string, mixed>  $changes
-     */
-    protected function refuseCutTexts(Maintenance $maintenance, array $changes): void
-    {
-        $messages = [];
-
-        foreach (['plan', 'report'] as $field) {
-            if (array_key_exists($field, $changes) && mb_strlen((string) $maintenance->{$field}) > Serializer::MAX_TEXT) {
-                $messages[$field] = __('This text is longer than an agent reads whole: change it in Herdbook itself.');
-            }
-        }
-
-        if ($messages !== []) {
-            throw ValidationException::withMessages($messages);
-        }
-    }
-
-    /**
      * The stored maintenance (times with their offset: a timezone mistake
      * shows at once), and the planned maintenance it shares a server or
      * project with: it may have been planned already, or be the one to
@@ -307,12 +299,27 @@ trait WritesMaintenance
     }
 
     /**
-     * What a description tells an agent about checking first and the answer.
+     * What a description of a new maintenance tells an agent to check first.
      */
-    protected static function beforeWriting(): string
+    protected static function checkFirst(): string
     {
-        return 'Check first with list_maintenance (status planned, the same server_ids or project_ids) whether the work is already there: nothing written can be deleted by an agent. '
-            .'The answer has the maintenance as stored, and in "other_planned" up to '.self::OTHER_PLANNED.' planned maintenances it shares a server or project with, in the order they are due.';
+        return 'Check first with list_maintenance (status planned, the same server_ids or project_ids) whether the work is already there, and if it is, change that one with update_maintenance: nothing written can be deleted by an agent. ';
+    }
+
+    /**
+     * What a description tells an agent about the texts it writes.
+     */
+    protected static function textsSentence(string $what = 'A plan or report'): string
+    {
+        return $what.' is markdown of at most '.number_format(Serializer::MAX_TEXT).' characters, and refuses passwords, tokens, private keys, images and HTML (put tags and placeholders between backticks). ';
+    }
+
+    /**
+     * What a description tells an agent about the answer.
+     */
+    protected static function answerSentence(): string
+    {
+        return 'The answer has the maintenance as stored, with its "version", and in "other_planned" up to '.self::OTHER_PLANNED.' planned maintenances it shares a server or project with, in the order they are due.';
     }
 
     /**

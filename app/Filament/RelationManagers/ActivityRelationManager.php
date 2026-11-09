@@ -73,7 +73,7 @@ class ActivityRelationManager extends RelationManager
             ->paginated([10, 25, 50])
             ->columns([
                 TextColumn::make('created_at')->label(__('When'))->dateTime(__('formats.datetime')),
-                TextColumn::make('causer.name')->label(__('By'))->placeholder(__('System')),
+                TextColumn::make('causer.name')->label(__('By'))->state(fn (Activity $record): ?string => ActivityPresenter::causer($record))->placeholder(__('System')),
                 TextColumn::make('description')
                     ->label(__('What'))
                     ->state(fn (Activity $record): string => ActivityPresenter::description($record, $ownerType))

@@ -78,11 +78,22 @@ trait ActsAsAgent
             'clientInfo' => ['name' => 'claude-code', 'version' => '2.0.0'],
         ] : [];
 
-        return $this->postJson('/mcp', ['jsonrpc' => '2.0', 'id' => 1, 'method' => $method, 'params' => (object) $params], [
+        // A request of its own: whoever the test was acting as before acts on after it.
+        $before = $this->app['auth']->guard()->user();
+
+        $response = $this->postJson('/mcp', ['jsonrpc' => '2.0', 'id' => 1, 'method' => $method, 'params' => (object) $params], [
             'Accept' => 'application/json, text/event-stream',
             ...($method !== 'initialize' ? ['MCP-Protocol-Version' => '2025-06-18'] : []),
             ...($token !== null ? ['Authorization' => "Bearer {$token}"] : []),
             ...$headers,
         ]);
+
+        $this->app['auth']->forgetGuards();
+
+        if ($before !== null) {
+            $this->actingAs($before);
+        }
+
+        return $response;
     }
 }

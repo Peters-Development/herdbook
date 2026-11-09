@@ -3,8 +3,10 @@
 namespace Tests\Feature\Mcp;
 
 use App\Models\User;
+use Illuminate\Auth\Events\Authenticated;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Tests\Concerns\ActsAsAgent;
@@ -179,12 +181,28 @@ class McpEndpointTest extends TestCase
     {
         $user = User::factory()->withAppAuthentication()->create(['locale' => 'en']);
         [$agent, $token] = $this->agentToken($user);
+        Event::listen(Authenticated::class, function (Authenticated $event) use (&$authenticated): void {
+            $authenticated = $event->user;
+        });
 
         $this->mcp($token)->assertOk();
 
-        $this->assertTrue(auth()->user()->is($user));
-        $this->assertTrue(auth()->user()->currentAgentToken()->is($agent));
-        $this->assertSame('en', app()->getLocale());
+        $this->assertTrue($authenticated->is($user));
+        $this->assertTrue($authenticated->currentAgentToken()->is($agent));
+        $this->assertSame('There is no maintenance with id 999. list_maintenance finds them.', $this->callToolError($token, 'get_maintenance', ['id' => 999]));
+    }
+
+    public function test_after_a_request_the_test_acts_as_before(): void
+    {
+        $person = User::factory()->withAppAuthentication()->create();
+        [, $token] = $this->agentToken();
+        $this->actingAs($person);
+
+        $this->mcp($token)->assertOk();
+
+        // A request of its own: the agent's account doesn't stay signed in.
+        $this->assertTrue(auth()->user()->is($person));
+        $this->assertNull(auth()->user()->currentAgentToken());
     }
 
     public function test_an_agent_is_seen_at_most_once_a_minute(): void

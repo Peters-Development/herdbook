@@ -12,6 +12,7 @@ use Filament\Actions\Action;
 use Filament\Actions\Contracts\HasActions;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\MarkdownEditor;
 use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
@@ -171,21 +172,45 @@ final class MaintenanceSchema
             ->modalHeading(fn (Maintenance $record): string => __('Complete :title', ['title' => $record->title]))
             ->modalDescription(__('Sets the maintenance to "Done".'))
             ->modalSubmitActionLabel(__('Complete'))
-            ->fillForm(fn (Maintenance $record, Action $action): array => self::stillPlanned($record, $action)->completionDefaults())
+            ->fillForm(fn (Maintenance $record, Action $action): array => [
+                ...self::stillPlanned($record, $action)->completionDefaults(),
+                'version' => $record->version(),
+            ])
             ->schema([
                 self::doneAt(__('Start')),
                 self::end(),
                 self::report(),
+                // The report shown is the one as the modal opened: not saved over a newer one.
+                Hidden::make('version'),
             ])
-            ->action(function (Maintenance $record, array $data): void {
-                if (! $record->complete($data)) {
-                    self::noLongerPlanned();
+            ->action(function (Maintenance $record, array $data, Action $action): void {
+                if ($record->complete($data, version: $data['version'] ?? '')) {
+                    Notification::make()->success()->title(__('Maintenance completed'))->send();
 
                     return;
                 }
 
-                Notification::make()->success()->title(__('Maintenance completed'))->send();
+                if ($record->exists && $record->status === MaintenanceStatus::Planned) {
+                    // The modal stays open: what was typed can still be copied.
+                    self::changedMeanwhile();
+                    $action->halt();
+                }
+
+                self::noLongerPlanned();
             });
+    }
+
+    /**
+     * Saving would undo a change someone else made since the form was opened.
+     */
+    public static function changedMeanwhile(): void
+    {
+        Notification::make()
+            ->warning()
+            ->title(__('This maintenance was changed meanwhile.'))
+            ->body(__('Reload the page to see the change; yours was not saved.'))
+            ->persistent()
+            ->send();
     }
 
     /**

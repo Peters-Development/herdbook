@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools;
 
 use App\Mcp\Serializer;
+use App\Mcp\Tools\Concerns\FindsMaintenance;
 use App\Mcp\Tools\Concerns\ValidatesArguments;
 use App\Models\Maintenance;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -19,7 +20,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 #[IsOpenWorld(false)]
 class GetMaintenance extends Tool
 {
-    use ValidatesArguments;
+    use FindsMaintenance, ValidatesArguments;
 
     public function description(): string
     {
@@ -31,20 +32,18 @@ class GetMaintenance extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'id' => $schema->integer()->min(1)->required()->description('From list_maintenance.'),
+            'id' => $this->idSchema($schema),
         ];
     }
 
     public function handle(Request $request): Response|ResponseFactory
     {
-        $id = (int) $this->validated($request, ['id' => ['required', 'integer', 'min:1']])['id'];
+        $maintenance = $this->findMaintenance((int) $this->validated($request, ['id' => $this->idRules()])['id']);
 
-        $maintenance = Maintenance::query()->with(Serializer::MAINTENANCE_RELATIONS)->find($id);
-
-        if ($maintenance === null) {
-            return Response::error(__('There is no maintenance with id :id. list_maintenance finds them.', ['id' => $id]));
+        if (! $maintenance instanceof Maintenance) {
+            return $maintenance;
         }
 
-        return Response::structured(Serializer::maintenanceWithTexts($maintenance));
+        return Response::structured(Serializer::maintenanceWithTexts($maintenance->load(Serializer::MAINTENANCE_RELATIONS)));
     }
 }

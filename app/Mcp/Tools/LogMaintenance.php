@@ -3,7 +3,6 @@
 namespace App\Mcp\Tools;
 
 use App\Enums\MaintenanceStatus;
-use App\Mcp\Serializer;
 use App\Mcp\Tools\Concerns\WritesMaintenance;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -28,15 +27,15 @@ class LogMaintenance extends Tool
     {
         return 'Write down maintenance that has been done: the work, when it started (default now; not in the future), what was done in markdown, and the servers and projects it concerns (ids from search_inventory; at least one). '
             .'One maintenance may cover many servers. If the work was planned, complete that one with complete_maintenance instead. '
-            .'The report is at most '.number_format(Serializer::MAX_TEXT).' characters and refuses passwords, tokens, private keys, images and HTML (put tags and placeholders between backticks). '
-            .self::beforeWriting();
+            .self::textsSentence('The report')
+            .self::checkFirst().self::answerSentence();
     }
 
     public function schema(JsonSchema $schema): array
     {
         return [
             ...$this->workSchema($schema, MaintenanceStatus::Done),
-            'report' => $schema->string()->max(Serializer::MAX_TEXT)->description('Markdown: what was done, what stood out, what is still to do.'),
+            'report' => $this->reportSchema($schema),
         ];
     }
 

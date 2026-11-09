@@ -132,12 +132,13 @@ class Maintenance extends Model
 
     /**
      * Planned → done (completionAttributes()). False: it was no longer
-     * planned; its status says what it is now.
+     * planned, or no longer $version; the model says what it is now.
      *
      * @param  array<string, mixed>  $data
      * @param  (Closure(array<string, mixed>, self): void)|null  $check  sees what will be stored, on the current row; may throw to refuse
+     * @param  string|null  $version  version() as it was read: false when it changed since
      */
-    public function complete(array $data, ?Closure $check = null): bool
+    public function complete(array $data, ?Closure $check = null, ?string $version = null): bool
     {
         return $this->updateWhileStill(MaintenanceStatus::Planned, function () use ($data, $check): array {
             $attributes = $this->completionAttributes($data);
@@ -147,31 +148,32 @@ class Maintenance extends Model
             }
 
             return $attributes;
-        });
+        }, $version);
     }
 
     /**
-     * Planned → called off. False: it was no longer planned; its status says
-     * what it is now.
+     * Planned → called off. False: it was no longer planned, or no longer
+     * $version (if given); the model says what it is now.
      */
-    public function cancel(): bool
+    public function cancel(?string $version = null): bool
     {
-        return $this->updateWhileStill(MaintenanceStatus::Planned, ['status' => MaintenanceStatus::Cancelled]);
+        return $this->updateWhileStill(MaintenanceStatus::Planned, ['status' => MaintenanceStatus::Cancelled], $version);
     }
 
     /**
-     * Updates it only if it still has $status, from the row as it is now: the
-     * row is locked and read first, so a change someone else made meanwhile
-     * is neither overwritten nor logged as this one's. Through Eloquent, so
-     * the saving hook and the activity log run. Either way the model holds
-     * the row as it is afterwards; a row that is gone leaves it not existing.
+     * Updates it only if it still has $status, and still is the $version
+     * that was read (if given), from the row as it is now: the row is locked
+     * and read first, so a change someone else made meanwhile is neither
+     * overwritten nor logged as this one's. Through Eloquent, so the saving
+     * hook and the activity log run. Either way the model holds the row as
+     * it is afterwards; a row that is gone leaves it not existing.
      *
      * @param  array<string, mixed>|(Closure(): array<string, mixed>)  $attributes  a closure sees the current row
      */
-    public function updateWhileStill(MaintenanceStatus $status, array|Closure $attributes): bool
+    public function updateWhileStill(MaintenanceStatus $status, array|Closure $attributes, ?string $version = null): bool
     {
-        return DB::transaction(function () use ($status, $attributes): bool {
-            $current = self::query()->lockForUpdate()->find($this->getKey());
+        return DB::transaction(function () use ($status, $attributes, $version): bool {
+            $current = self::locked($this->getKey());
 
             if ($current === null) {
                 $this->exists = false;
@@ -180,13 +182,52 @@ class Maintenance extends Model
             }
 
             $this->setRawAttributes($current->getAttributes(), sync: true);
+            $this->setRelations($current->getRelations());
 
-            if ($this->status !== $status) {
+            if ($this->status !== $status || ($version !== null && $this->version() !== $version)) {
                 return false;
             }
 
             return $this->fill(value($attributes))->save();
         });
+    }
+
+    /**
+     * The row and its links, locked: what a save over it compares its
+     * version() with. Inside a transaction. The links with a locking read
+     * too: MySQL's plain reads see the transaction's first snapshot, which
+     * an earlier query in it (a form's options) may have fixed already.
+     */
+    public static function locked(int|string $id): ?self
+    {
+        return self::query()
+            ->lockForUpdate()
+            ->with(['servers' => fn ($query) => $query->sharedLock(), 'projects' => fn ($query) => $query->sharedLock()])
+            ->find($id);
+    }
+
+    /**
+     * A fingerprint of everything a person or an agent can change, its links
+     * included: compared before saving over it, so a change made meanwhile
+     * (an agent, another tab) isn't undone. Not updated_at: that counts in
+     * seconds, and linking a server doesn't touch it. Loads servers and
+     * projects if they aren't.
+     */
+    public function version(): string
+    {
+        $this->loadMissing(['servers', 'projects']);
+
+        return substr(hash('sha256', json_encode([
+            $this->title,
+            $this->tasks,
+            $this->status->value,
+            $this->starts_at?->toJSON(),
+            $this->ends_at?->toJSON(),
+            $this->plan,
+            $this->report,
+            collect($this->servers->modelKeys())->sort()->values()->all(),
+            collect($this->projects->modelKeys())->sort()->values()->all(),
+        ], JSON_THROW_ON_ERROR)), 0, 16);
     }
 
     /**

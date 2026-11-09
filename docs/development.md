@@ -120,7 +120,7 @@ docker compose exec app ./vendor/bin/pint --dirty
 
 | Path | Contents |
 |---|---|
-| `app/Models` | Eloquent models. `Concerns/` holds the shared behavior: `HasRenewal`, `HasCost`, `Linkable` and `LinksToInventory` (the "related to" links), `RecordsActivity` (the activity log; `attributesNotLogged()` keeps long texts out, and a change to one is logged by name, labelled in `ActivityPresenter::textLabels()`). `Contracts/Renewable` is the interface of everything that renews. |
+| `app/Models` | Eloquent models. `Concerns/` holds the shared behavior: `HasRenewal`, `HasCost`, `Linkable` and `LinksToInventory` (the "related to" links), `RecordsActivity` (the activity log; `attributesNotLogged()` keeps long texts out, and a change to one is logged by name, labelled in `ActivityPresenter::textLabels()`; a change made through an agent stores `via` and `agent_token_id`, shown by `ActivityPresenter::causer()`). `Contracts/Renewable` is the interface of everything that renews. |
 | `app/Enums` | Backed enums (mostly strings) with a label (`HasLabel`) and often a color (`HasColor`). |
 | `app/Services/Checks` | The monitoring engine: `CheckRunner`, `CheckStateMachine`, `ConnectivityGuard`, `DefaultChecks`, `DnsExpectation`, `NetworkProbe` and its real implementation `SocketProbe`, `CheckHistory`, `CheckIncidents`, `MonitoringPulse`, `Uptime`. |
 | `app/Services/Alerts` | `AlertChannels`, the Pushover, ntfy and mail channels, `CheckAlerts` (alerts for check events), `AlertMessage`. |

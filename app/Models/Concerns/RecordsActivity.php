@@ -2,6 +2,7 @@
 
 namespace App\Models\Concerns;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
@@ -28,12 +29,18 @@ trait RecordsActivity
     /**
      * Called by the activity log before it saves an entry about this model:
      * stores activityContext() with it, so the entry also shows up on the
-     * page of what this model belongs to, even after it was deleted; and
-     * which long texts changed ("texts").
+     * page of what this model belongs to, even after it was deleted; which
+     * long texts changed ("texts"); and the agent that acted for the causer
+     * ("via", "agent_token_id": its name may be reused once it is revoked).
      */
     public function beforeActivityLogged(Model $activity, string $eventName): void
     {
         $context = $this->activityContext();
+
+        if ($activity->causer instanceof User && ($agent = $activity->causer->currentAgentToken()) !== null) {
+            $context['via'] = $agent->name;
+            $context['agent_token_id'] = $agent->id;
+        }
 
         if ($eventName === 'updated' && ($texts = $this->changedTextsNotLogged()) !== []) {
             $context['texts'] = $texts;

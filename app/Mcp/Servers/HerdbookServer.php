@@ -2,11 +2,14 @@
 
 namespace App\Mcp\Servers;
 
+use App\Mcp\Tools\CancelMaintenance;
+use App\Mcp\Tools\CompleteMaintenance;
 use App\Mcp\Tools\GetMaintenance;
 use App\Mcp\Tools\ListMaintenance;
 use App\Mcp\Tools\LogMaintenance;
 use App\Mcp\Tools\ScheduleMaintenance;
 use App\Mcp\Tools\SearchInventory;
+use App\Mcp\Tools\UpdateMaintenance;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Attributes\Version;
@@ -27,6 +30,9 @@ class HerdbookServer extends Server
         GetMaintenance::class,
         ScheduleMaintenance::class,
         LogMaintenance::class,
+        UpdateMaintenance::class,
+        CompleteMaintenance::class,
+        CancelMaintenance::class,
     ];
 
     /**

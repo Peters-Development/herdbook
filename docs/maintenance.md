@@ -74,7 +74,7 @@ You can also create maintenance from **Knowledge → Maintenance** directly and 
 
 **Call off** sets it to *Called off*. If you want to do it after all, edit it and set the status back to *Planned*.
 
-Both actions are available on the maintenance itself, on the Maintenance tab of servers and projects, and on the dashboard. If someone else completed or called it off since you opened the page, Herdbook says so and changes nothing.
+Both actions are available on the maintenance itself, on the Maintenance tab of servers and projects, and on the dashboard. If someone else completed or called it off since you opened the page, Herdbook says so and changes nothing. The same goes for the edit form and for **Complete** when anything else changed meanwhile, its links included: saving would undo that change, so Herdbook asks you to reload instead.
 
 <a name="one-maintenance-several-servers"></a>
 ## One Maintenance, Several Servers
