@@ -48,8 +48,8 @@ class ListIncidents extends Tool
         return [
             'status' => $schema->string()->enum(self::statuses())->default('unresolved')->description('Default unresolved: open and monitoring. "any" for everything.'),
             'severity' => $schema->string()->enum(IncidentSeverity::class)->description('Only incidents of this severity.'),
-            'server_ids' => $schema->array()->items($schema->integer())->max(self::MAX_LINKS)->description('Server ids from search_inventory: incidents linked to any of them directly.'),
-            'project_ids' => $schema->array()->items($schema->integer())->max(self::MAX_LINKS)->description('Project ids from search_inventory: the incidents of any of them, through the servers their production needs too.'),
+            'server_ids' => $this->linkSchema($schema, 'Server ids from search_inventory: incidents linked to any of them directly.'),
+            'project_ids' => $this->linkSchema($schema, 'Project ids from search_inventory: the incidents of any of them, through the servers their production needs too.'),
             'since' => $schema->string()->format('date')->description('YYYY-MM-DD: incidents that occurred on or after that day.'),
             'limit' => $schema->integer()->min(1)->max(self::MAX_LIMIT)->default(self::DEFAULT_LIMIT),
         ];

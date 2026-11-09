@@ -55,8 +55,8 @@ class OpenIncident extends Tool
             'occurred_on' => $schema->string()->format('date')->description('YYYY-MM-DD: the day it is filed under; default the day it started.'),
             'impact' => $schema->string()->max(Serializer::MAX_TEXT)->description('Plain text: who notices what, and for how long.'),
             'report' => $schema->string()->max(Serializer::MAX_TEXT)->description('Markdown: what is known so far. What happens next goes in timeline entries.'),
-            'server_ids' => $schema->array()->items($schema->integer())->max(self::MAX_LINKS)->description('From search_inventory; at least one server or project.'),
-            'project_ids' => $schema->array()->items($schema->integer())->max(self::MAX_LINKS)->description('From search_inventory: the projects that are affected.'),
+            'server_ids' => $this->linkSchema($schema, 'From search_inventory; at least one server or project.'),
+            'project_ids' => $this->linkSchema($schema, 'From search_inventory: the projects that are affected.'),
         ];
     }
 

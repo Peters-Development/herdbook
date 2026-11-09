@@ -61,8 +61,8 @@ class UpdateIncident extends Tool
             'impact' => $schema->string()->max(Serializer::MAX_TEXT)->nullable()->description('Plain text: who notices what. Null clears it.'),
             'root_cause' => $schema->string()->max(Serializer::MAX_TEXT)->nullable()->description('Markdown: why it happened. Null clears it.'),
             'report' => $schema->string()->max(Serializer::MAX_TEXT)->nullable()->description('Markdown: the full write-up. Null clears it.'),
-            'server_ids' => $schema->array()->items($schema->integer())->max(self::MAX_LINKS)->description('Replaces its servers; from search_inventory.'),
-            'project_ids' => $schema->array()->items($schema->integer())->max(self::MAX_LINKS)->description('Replaces its projects; from search_inventory.'),
+            'server_ids' => $this->linkSchema($schema, 'Replaces its servers; from search_inventory.'),
+            'project_ids' => $this->linkSchema($schema, 'Replaces its projects; from search_inventory.'),
         ];
     }
 

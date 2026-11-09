@@ -65,9 +65,9 @@ trait WritesMaintenance
                 $status === MaintenanceStatus::Done => "When it ended, if that matters; not before the start, which is now without starts_at. {$moment}",
                 default => "When it ends, for a window; not before the start. {$moment}",
             }),
-            'server_ids' => $schema->array()->items($schema->integer())->max(self::MAX_LINKS)->description(($partial ? 'Replaces its servers. ' : '')
+            'server_ids' => $this->linkSchema($schema, ($partial ? 'Replaces its servers. ' : '')
                 .'From search_inventory; at least one server or project. For "production of a project": the servers of that environment.'),
-            'project_ids' => $schema->array()->items($schema->integer())->max(self::MAX_LINKS)->description(($partial ? 'Replaces its projects. ' : '')
+            'project_ids' => $this->linkSchema($schema, ($partial ? 'Replaces its projects. ' : '')
                 .'From search_inventory, when the work concerns the project as a whole.'),
         ];
     }

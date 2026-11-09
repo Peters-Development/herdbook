@@ -5,7 +5,9 @@ namespace App\Mcp\Tools\Concerns;
 use App\Models\Project;
 use App\Models\Server;
 use Closure;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -83,6 +85,14 @@ trait ValidatesArguments
         });
 
         return ValidationException::withMessages($errors->all());
+    }
+
+    /**
+     * The schema of a list of server or project ids, as linkRules() takes it.
+     */
+    protected function linkSchema(JsonSchema $schema, string $description): Type
+    {
+        return $schema->array()->items($schema->integer())->max(self::MAX_LINKS)->description($description);
     }
 
     /**
