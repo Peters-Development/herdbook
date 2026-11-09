@@ -122,7 +122,7 @@ docker compose exec app ./vendor/bin/pint --dirty
 
 | Path | Contents |
 |---|---|
-| `app/Models` | Eloquent models. `Concerns/` holds the shared behavior: `HasRenewal`, `HasCost`, `Linkable` and `LinksToInventory` (the "related to" links), `GuardsChanges` (no lost updates: `version()`, `locked()`, `saveWhile()`), `RecordsActivity` (the activity log; `attributesNotLogged()` keeps long texts out, and a change to one is logged by name, labelled in `ActivityPresenter::textLabels()`; a change made through an agent stores `via` and `agent_token_id`, shown by `ActivityPresenter::causer()`, and, for a model that opts in with `keepsReplacedTexts()`, the long texts it replaced, `previous_texts`, shown by the activity table's **Previous text**). `Contracts/Renewable` is the interface of everything that renews. |
+| `app/Models` | Eloquent models. `Concerns/` holds the shared behavior: `HasRenewal`, `HasCost`, `Linkable` and `LinksToInventory` (the "related to" links), `GuardsChanges` (no lost updates: `version()`, `locked()`, `saveWhile()`), `RecordsAuthor` (who wrote it down, and through which agent), `RecordsActivity` (the activity log; `attributesNotLogged()` keeps long texts out, and a change to one is logged by name, labelled in `ActivityPresenter::textLabels()`; a change made through an agent stores `via` and `agent_token_id`, shown by `ActivityPresenter::causer()`, and, for a model that opts in with `keepsReplacedTexts()`, the long texts it replaced, `previous_texts`, shown by the activity table's **Previous text**). `Contracts/Renewable` is the interface of everything that renews. |
 | `app/Enums` | Backed enums (mostly strings) with a label (`HasLabel`) and often a color (`HasColor`). |
 | `app/Services/Checks` | The monitoring engine: `CheckRunner`, `CheckStateMachine`, `ConnectivityGuard`, `DefaultChecks`, `DnsExpectation`, `NetworkProbe` and its real implementation `SocketProbe`, `CheckHistory`, `CheckIncidents`, `MonitoringPulse`, `Uptime`. |
 | `app/Services/Alerts` | `AlertChannels`, the Pushover, ntfy and mail channels, `CheckAlerts` (alerts for check events), `AlertMessage`. |
@@ -131,10 +131,10 @@ docker compose exec app ./vendor/bin/pint --dirty
 | `app/Services/…` | `Impact/ImpactAnalyzer`, `Map/InfrastructureMap`, `Screen/StatusScreenPayload`, `IncidentImport/`, `RenewalAttention`, `BackupFreshness`. |
 | `app/Jobs/RunChecks.php` | Runs a batch of checks on the `checks` queue. |
 | `app/Console/Commands` | Every Artisan command (see [Commands](commands.md)). |
-| `app/Filament/Resources` | One resource per model, each with `Schemas/` (form, infolist), `Tables/`, `Pages/` and `RelationManagers/`. |
+| `app/Filament/Resources` | One resource per model, each with `Schemas/` (form, infolist), `Tables/`, `Pages/` and `RelationManagers/`. `Concerns/GuardsConcurrentEdits` keeps an edit page from undoing a change made since it was filled. |
 | `app/Filament/Pages` | The map, the costs page and the profile page. |
 | `app/Filament/Widgets` | The dashboard. |
-| `app/Filament/Support` | Schemas and actions shared between resources: `RenewalSchema`, `CostSchema`, `LinkSchema`, `MaintenanceSchema`, `CheckActions`, `ImpactSchema`, `DeleteConsequences`, `ActivityPresenter`. |
+| `app/Filament/Support` | Schemas and actions shared between resources: `RenewalSchema`, `CostSchema`, `LinkSchema`, `MaintenanceSchema`, `ChangedMeanwhile`, `CheckActions`, `ImpactSchema`, `DeleteConsequences`, `ActivityPresenter`. |
 | `app/Filament/RelationManagers` | Relation managers shared between resources (incidents, documents, credentials, maintenance, checks, activity). |
 | `app/Http` | `SecurityHeaders`, `SetUserLocale`, the status screen's controller and token middleware, and `AuthenticateAgent` (the MCP server's tokens). |
 | `app/Mcp` | The MCP server for agents ([The MCP Server](#the-mcp-server)): `Servers/HerdbookServer`, `Tools/` with their shared `Concerns/`, and `Serializer`, what a tool shows. |

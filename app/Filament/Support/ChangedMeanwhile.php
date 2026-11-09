@@ -15,7 +15,7 @@ final class ChangedMeanwhile
         Notification::make()
             ->warning()
             ->title($title)
-            ->body(__('Reload the page to see the change; yours was not saved.'))
+            ->body(__('Yours was not saved: copy what you typed, then reload the page to see the change.'))
             ->persistent()
             ->send();
     }

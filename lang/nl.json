@@ -649,7 +649,6 @@
     "Registered domains": "Geregistreerde domeinen",
     "Registrar": "Registrar",
     "Related to": "Gerelateerd aan",
-    "Reload the page to see the change; yours was not saved.": "Laad de pagina opnieuw om de wijziging te zien; die van jou is niet opgeslagen.",
     "Renew": "Verlengen",
     "Renew :name": ":name verlengen",
     "Renew selected items": "Geselecteerde items verlengen",
@@ -899,5 +898,6 @@
     "yes": "ja",
     "yesterday at :time": "gisteren :time",
     "You enter the expiry date yourself. \"Renew\" moves it on by one term.": "De verloopdatum vul je zelf in. \"Verlengen\" schuift hem één termijn op.",
-    "You will get no more reminders. You can undo this later.": "Er komen geen herinneringen meer. Je kunt dit later terugdraaien."
+    "You will get no more reminders. You can undo this later.": "Er komen geen herinneringen meer. Je kunt dit later terugdraaien.",
+    "Yours was not saved: copy what you typed, then reload the page to see the change.": "Jouw wijziging is niet opgeslagen: kopieer wat je typte en laad de pagina opnieuw om de wijziging te zien."
 }

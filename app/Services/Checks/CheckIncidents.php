@@ -39,13 +39,13 @@ final class CheckIncidents
         // Each down event is decided on once (incident_evaluated_at): an
         // incident deleted by hand does not come back, and events that need
         // none are not looked at again every minute.
+        // Only their ids: each attempt reads the event and its check again.
         $events = CheckEvent::query()
-            ->with(['check.hostname.environment.project', 'check.server'])
             ->where('to_state', CheckState::Down)
             ->whereNull('incident_evaluated_at')
             ->where('occurred_at', '<=', $now->subMinutes($minutes))
             ->orderBy('id')
-            ->get();
+            ->get(['id', 'check_id']);
 
         foreach ($events as $listed) {
             $opened += DB::transaction(function () use ($listed): int {

@@ -4,6 +4,7 @@ namespace Tests\Feature\Checks;
 
 use App\Enums\AlertLevel;
 use App\Enums\CheckState;
+use App\Enums\IncidentStatus;
 use App\Models\Check;
 use App\Models\CheckEvent;
 use App\Models\CheckResult;
@@ -65,7 +66,26 @@ class CheckIncidentsRetryTest extends TestCase
 
         $this->assertSame(1, app(CheckIncidents::class)->openForLongOutages(now()->toImmutable()));
 
-        $this->assertSame(1, Incident::query()->sole()->timelineEntries()->count());
+        $incident = Incident::query()->sole();
+        $event = CheckEvent::query()->sole();
+        $this->assertSame([1, $incident->id], [$incident->timelineEntries()->count(), $event->incident_id]);
+        $this->assertNotNull($event->incident_evaluated_at);
+    }
+
+    public function test_a_recovery_tried_again_after_a_deadlock_is_written_once_and_the_incident_watched(): void
+    {
+        $check = $this->downCheck(Environment::factory()->create());
+        app(CheckIncidents::class)->openForLongOutages(now()->toImmutable());
+        $check->forceFill(['state' => CheckState::Up])->save();
+        $up = $check->events()->create(['from_state' => CheckState::Down, 'to_state' => CheckState::Up, 'occurred_at' => '2026-10-22 13:25:00']);
+        $this->deadlockOnTimelineEntry(1);
+
+        app(CheckIncidents::class)->recovered($up);
+
+        $incident = Incident::query()->sole();
+        $this->assertSame(IncidentStatus::Monitoring, $incident->status);
+        $this->assertSame(1, $incident->timelineEntries()->where('note', 'like', '%'.$check->name)->where('occurred_at', '2026-10-22 13:25:00')->count());
+        $this->assertSame(2, $incident->timelineEntries()->count());
     }
 
     /**
