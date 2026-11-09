@@ -108,6 +108,20 @@ final class MaintenanceSchema
             ->rules([new NoSecretMaterial]);
     }
 
+    /**
+     * Who wrote it down, and through which agent. Named after user.name, so
+     * Filament loads the user with the table.
+     */
+    public static function byColumn(): TextColumn
+    {
+        return TextColumn::make('user.name')->label(__('By'))->state(fn (Maintenance $record): ?string => $record->recordedBy())->placeholder('—')->toggleable();
+    }
+
+    public static function byEntry(): TextEntry
+    {
+        return TextEntry::make('user.name')->label(__('By'))->state(fn (Maintenance $record): ?string => $record->recordedBy())->placeholder('—');
+    }
+
     public static function tasksColumn(): TextColumn
     {
         return TextColumn::make('tasks')

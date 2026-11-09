@@ -32,7 +32,7 @@ class MaintenancesTable
                     ->description(fn (Maintenance $record): ?string => MaintenanceSchema::linkedTo($record)),
                 MaintenanceSchema::tasksColumn(),
                 MaintenanceSchema::statusColumn(),
-                TextColumn::make('user.name')->label(__('By'))->placeholder('—')->toggleable(),
+                MaintenanceSchema::byColumn(),
             ])
             ->filters([
                 // Not when the record of an open modal is looked up: completed

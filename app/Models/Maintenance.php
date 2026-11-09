@@ -27,6 +27,11 @@ class Maintenance extends Model
     /** @use HasFactory<MaintenanceFactory> */
     use HasFactory, LinksToInventory, RecordsActivity;
 
+    /**
+     * What complete() takes from its caller.
+     */
+    public const array COMPLETION_FIELDS = ['starts_at', 'ends_at', 'report'];
+
     protected $attributes = [
         'status' => 'done',
     ];
@@ -66,9 +71,13 @@ class Maintenance extends Model
     }
 
     /**
-     * What complete() takes from its caller.
+     * Who wrote it down, and through which agent ("Ada via deploy-agent").
+     * Eager-load: user.
      */
-    public const array COMPLETION_FIELDS = ['starts_at', 'ends_at', 'report'];
+    public function recordedBy(): ?string
+    {
+        return AgentToken::byline($this->user?->name, $this->recorded_via);
+    }
 
     /**
      * The first moment its timestamp columns hold (MySQL).
@@ -102,24 +111,42 @@ class Maintenance extends Model
     }
 
     /**
-     * Planned → done, with when it was done and what was done: starts_at,
-     * ends_at and report from $data, completionDefaults() for those it leaves
-     * out. False: it was no longer planned; its status says what it is now.
+     * What completing it stores: starts_at, ends_at and report from $data,
+     * completionDefaults() for those it leaves out, and done.
      *
      * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
      */
-    public function complete(array $data): bool
+    public function completionAttributes(array $data): array
     {
-        return $this->updateWhileStill(MaintenanceStatus::Planned, function () use ($data): array {
-            $attributes = [...$this->completionDefaults(), ...Arr::only($data, self::COMPLETION_FIELDS)];
+        $attributes = [...$this->completionDefaults(), ...Arr::only($data, self::COMPLETION_FIELDS)];
 
-            // The planned end is no end of work that started after it.
-            if (! array_key_exists('ends_at', $data) && $attributes['ends_at'] !== null
-                && $this->asDateTime($attributes['ends_at'])->lt($this->asDateTime($attributes['starts_at']))) {
-                $attributes['ends_at'] = null;
+        // The planned end is no end of work that started after it.
+        if (! array_key_exists('ends_at', $data) && $attributes['ends_at'] !== null
+            && $this->asDateTime($attributes['ends_at'])->lt($this->asDateTime($attributes['starts_at']))) {
+            $attributes['ends_at'] = null;
+        }
+
+        return [...$attributes, 'status' => MaintenanceStatus::Done];
+    }
+
+    /**
+     * Planned → done (completionAttributes()). False: it was no longer
+     * planned; its status says what it is now.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  (Closure(array<string, mixed>, self): void)|null  $check  sees what will be stored, on the current row; may throw to refuse
+     */
+    public function complete(array $data, ?Closure $check = null): bool
+    {
+        return $this->updateWhileStill(MaintenanceStatus::Planned, function () use ($data, $check): array {
+            $attributes = $this->completionAttributes($data);
+
+            if ($check !== null) {
+                $check($attributes, $this);
             }
 
-            return [...$attributes, 'status' => MaintenanceStatus::Done];
+            return $attributes;
         });
     }
 

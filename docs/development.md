@@ -135,7 +135,7 @@ docker compose exec app ./vendor/bin/pint --dirty
 | `app/Filament/Support` | Schemas and actions shared between resources: `RenewalSchema`, `CostSchema`, `LinkSchema`, `MaintenanceSchema`, `CheckActions`, `ImpactSchema`, `DeleteConsequences`, `ActivityPresenter`. |
 | `app/Filament/RelationManagers` | Relation managers shared between resources (incidents, documents, credentials, maintenance, checks, activity). |
 | `app/Http` | `SecurityHeaders`, `SetUserLocale`, and the status screen's controller and token middleware. |
-| `app/Rules` | `NoSecretMaterial`, `DistinctItems`, `Subnet`. |
+| `app/Rules` | `NoSecretMaterial`, `DistinctItems`, `Subnet`; for what agents write, also `NoCredentials` (token shapes, passwords) and `NoImagesOrHtml` (markdown without images or HTML). |
 | `routes/` | `web.php`, `screen.php` (the status screen and its API, outside the `web` group: no session), `console.php` (the schedule). |
 | `config/herdbook.php` | Herdbook's own settings. |
 | `lang/` | `nl.json`, and the formats and Laravel messages per language. |

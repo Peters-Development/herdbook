@@ -25,9 +25,10 @@ use Illuminate\Support\Collection;
 final class Serializer
 {
     /**
-     * A plan or report is cut here, so that both fit in one answer an agent
-     * reads whole (the package sends structured content twice: as data and
-     * as text).
+     * The length of a plan or report: what an agent may write, and where one
+     * written in the panel is cut when an agent reads it, so that both fit
+     * in one answer it reads whole (the package sends structured content
+     * twice: as data and as text).
      */
     public const int MAX_TEXT = 10000;
 
@@ -72,6 +73,8 @@ final class Serializer
             'servers' => self::references($maintenance->servers),
             'projects' => self::references($maintenance->projects),
             'created_by' => $maintenance->user?->name,
+            // The agent it was recorded through, if any.
+            'via' => $maintenance->recorded_via,
             'url' => MaintenanceResource::getUrl('view', ['record' => $maintenance]),
         ];
     }

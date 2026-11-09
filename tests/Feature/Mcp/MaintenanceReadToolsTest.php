@@ -58,6 +58,7 @@ class MaintenanceReadToolsTest extends TestCase
             'servers' => [['id' => $server->id, 'name' => 'app-1']],
             'projects' => [['id' => $project->id, 'name' => 'Shop']],
             'created_by' => 'Ada',
+            'via' => null,
             'url' => rtrim(config('app.url'), '/')."/maintenances/{$maintenance->id}",
         ]], $found['maintenance']);
         $this->assertStringNotContainsString('the-plan', json_encode($found));

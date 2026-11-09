@@ -8,6 +8,7 @@ use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator as ValidatorInstance;
 use Laravel\Mcp\Request;
 
@@ -16,7 +17,8 @@ use Laravel\Mcp\Request;
  * JSON, without the ConvertEmptyStringsToNull a form passes through, and
  * models send "" for an optional argument they leave empty: so a blank
  * string counts as absent. Values are not trimmed: a plan's markdown may
- * start with an indented line.
+ * start with an indented line. An argument the tool doesn't take is refused,
+ * not ignored: a "plan" sent to a tool that takes a "report" would be lost.
  */
 trait ValidatesArguments
 {
@@ -37,37 +39,51 @@ trait ValidatesArguments
             ->reject(fn (mixed $value): bool => is_string($value) && trim($value) === '')
             ->all();
 
+        $known = array_values(array_filter(array_keys($rules), fn (string $key): bool => ! str_contains($key, '.')));
+        $unknown = array_diff(array_keys($arguments), $known);
+
+        if ($unknown !== []) {
+            throw ValidationException::withMessages(['arguments' => __('Unknown argument: :unknown. This tool takes: :known.', [
+                'unknown' => Str::limit(implode(', ', $unknown), 100),
+                'known' => implode(', ', $known),
+            ])]);
+        }
+
         // Messages name a parameter as the agent sends it: server_ids, not "server ids".
         $attributes = collect(array_keys($rules))->mapWithKeys(fn (string $key): array => [$key => Str::before($key, '.*')])->all();
 
         // The arguments themselves first: a rule for each item of an array
         // runs on every item, so an array of a million ids is refused by its
-        // size before that.
+        // size before that. Then the items, then the arguments as a whole.
         $outer = array_filter($rules, fn (string $key): bool => ! str_contains($key, '*'), ARRAY_FILTER_USE_KEY);
-        Validator::make($arguments, $outer, $messages, $attributes)->validate();
+        $valid = Validator::make($arguments, $outer, $messages, $attributes)->validate();
 
-        $validator = Validator::make($arguments, $rules, $messages, $attributes);
+        $validator = Validator::make($arguments, array_diff_key($rules, $outer), $messages, $attributes);
 
         if ($after !== null) {
             $validator->after(fn (ValidatorInstance $validator) => $validator->errors()->isEmpty() ? $after($validator) : null);
         }
 
-        return $validator->validate();
+        return [...$valid, ...$validator->validate()];
     }
 
     /**
      * server_ids and project_ids: lists of existing ids, checked in one query
-     * each, with a message that says where to find them.
+     * each, with a message that says where to find them. $partial: a change,
+     * in which a list given replaces the links of its kind, so it may be
+     * empty but not null.
      *
      * @return array<string, mixed>
      */
-    protected function linkRules(): array
+    protected function linkRules(bool $partial = false): array
     {
+        $given = $partial ? 'sometimes' : 'nullable';
+
         return [
-            'server_ids' => ['nullable', 'list', 'max:'.self::MAX_LINKS, $this->existing(Server::class, fn (string $ids): string => __('No server has id :ids. search_inventory finds the ids.', ['ids' => $ids]))],
-            'server_ids.*' => ['required', 'integer'],
-            'project_ids' => ['nullable', 'list', 'max:'.self::MAX_LINKS, $this->existing(Project::class, fn (string $ids): string => __('No project has id :ids. search_inventory finds the ids.', ['ids' => $ids]))],
-            'project_ids.*' => ['required', 'integer'],
+            'server_ids' => ['bail', $given, 'list', 'max:'.self::MAX_LINKS, $this->existing(Server::class, fn (string $ids): string => __('No server has id :ids. search_inventory finds the ids.', ['ids' => $ids]))],
+            'server_ids.*' => ['required', 'numeric', 'integer', 'distinct'],
+            'project_ids' => ['bail', $given, 'list', 'max:'.self::MAX_LINKS, $this->existing(Project::class, fn (string $ids): string => __('No project has id :ids. search_inventory finds the ids.', ['ids' => $ids]))],
+            'project_ids.*' => ['required', 'numeric', 'integer', 'distinct'],
         ];
     }
 

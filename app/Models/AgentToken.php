@@ -72,6 +72,20 @@ class AgentToken extends Model
         return $revoked;
     }
 
+    /**
+     * "Ada via deploy-agent": a person and the agent that acted for them;
+     * "via deploy-agent" once the account is gone; the person alone without
+     * an agent.
+     */
+    public static function byline(?string $person, ?string $agent): ?string
+    {
+        return match (true) {
+            $agent === null => $person,
+            $person === null => __('via :agent', ['agent' => $agent]),
+            default => __(':name via :agent', ['name' => $person, 'agent' => $agent]),
+        };
+    }
+
     public static function findByToken(string $token): ?self
     {
         return self::query()->with('user')->where('token_hash', self::hash($token))->first();
