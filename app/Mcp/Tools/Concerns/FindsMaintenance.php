@@ -18,11 +18,13 @@ trait FindsMaintenance
     }
 
     /**
+     * Numeric first: Laravel's integer rule takes JSON true for 1.
+     *
      * @return list<string>
      */
     protected function idRules(): array
     {
-        return ['required', 'integer', 'min:1'];
+        return ['required', 'numeric', 'integer', 'min:1'];
     }
 
     /**

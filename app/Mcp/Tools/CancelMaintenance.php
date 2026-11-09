@@ -29,7 +29,7 @@ class CancelMaintenance extends Tool
     public function description(): string
     {
         return 'Cancel planned maintenance that will not happen. Give its "version" to be sure nobody changed it since (refused then). '
-            .'Called again on maintenance that is cancelled, it returns it; maintenance that is done can\'t be cancelled. A person can set it back to planned in Herdbook. '
+            .'Called again on maintenance that is cancelled, it returns it with "unchanged": true (it may have been cancelled by someone else); maintenance that is done can\'t be cancelled. A person can set it back to planned in Herdbook. '
             .self::answerSentence();
     }
 
@@ -56,7 +56,7 @@ class CancelMaintenance extends Tool
             $cancelled => $this->answer($maintenance),
             ! $maintenance->exists => $this->notFound($maintenance->getKey()),
             // Cancelled already: called again, it gets the same answer.
-            $maintenance->status === MaintenanceStatus::Cancelled => $this->answer($maintenance),
+            $maintenance->status === MaintenanceStatus::Cancelled => $this->answer($maintenance, unchanged: true),
             $maintenance->status === MaintenanceStatus::Planned => $this->changedSince($maintenance),
             default => Response::error(__('This maintenance is done and can\'t be called off.')),
         };

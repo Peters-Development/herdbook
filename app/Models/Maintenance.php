@@ -237,21 +237,24 @@ class Maintenance extends Model
     }
 
     /**
-     * The last change to the plan and to the report since it was created
-     * (null: none), from the activity log, which records who changed a text
-     * and through which agent, but not the text: so a plan someone rewrote
-     * doesn't pass for its creator's.
+     * The last logged change to the plan and to the report (null: none),
+     * from the activity log, which records who changed a text and through
+     * which agent, but not the text: so a plan someone rewrote doesn't pass
+     * for its creator's. Changes from before Herdbook logged them ("texts")
+     * aren't there.
      *
      * @return array{plan: ?Activity, report: ?Activity}
      */
     public function lastTextChanges(): array
     {
-        $updates = $this->activitiesAsSubject()->where('event', 'updated')->with('causer')->latest('id')->limit(100)->get();
+        $last = fn (string $text): ?Activity => $this->activitiesAsSubject()
+            ->where('event', 'updated')
+            ->whereJsonContains('properties->texts', $text)
+            ->with('causer')
+            ->latest('id')
+            ->first();
 
-        return [
-            'plan' => $updates->first(fn (Activity $activity): bool => in_array('plan', (array) $activity->properties?->get('texts'), true)),
-            'report' => $updates->first(fn (Activity $activity): bool => in_array('report', (array) $activity->properties?->get('texts'), true)),
-        ];
+        return ['plan' => $last('plan'), 'report' => $last('report')];
     }
 
     /**

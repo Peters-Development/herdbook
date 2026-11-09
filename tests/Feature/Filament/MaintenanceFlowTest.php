@@ -27,10 +27,12 @@ use App\Models\Project;
 use App\Models\Server;
 use App\Models\User;
 use Filament\Actions\Testing\TestAction;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
+use PDOException;
 use Spatie\Activitylog\Models\Activity;
 use Tests\Concerns\SignsIn;
 use Tests\TestCase;
@@ -564,6 +566,29 @@ class MaintenanceFlowTest extends TestCase
         $form->fillForm(['plan' => 'Reboot last.'])->call('save')->assertHasNoFormErrors();
 
         $this->assertSame(['Updates en herstart', 'Reboot last.'], [$maintenance->refresh()->title, $maintenance->plan]);
+    }
+
+    public function test_a_save_that_deadlocks_saves_nothing_says_so_and_saves_the_next_time(): void
+    {
+        $this->signIn();
+        $maintenance = Maintenance::factory()->planned()->create(['title' => 'Upgrade', 'starts_at' => '2026-11-20 20:00:00']);
+        $maintenance->servers()->attach(Server::factory()->create());
+        $deadlocks = 1;
+
+        Maintenance::saving(function () use (&$deadlocks): void {
+            if ($deadlocks-- > 0) {
+                throw new QueryException('mysql', 'update maintenances', [], new PDOException('Deadlock found when trying to get lock; try restarting transaction'));
+            }
+        });
+
+        $form = Livewire::test(EditMaintenance::class, ['record' => $maintenance->getRouteKey()])
+            ->fillForm(['title' => 'Upgrade to 24.04'])
+            ->call('save')
+            ->assertNotified('Iemand anders sloeg tegelijk op.');
+        $this->assertSame('Upgrade', $maintenance->refresh()->title);
+
+        $form->call('save')->assertHasNoFormErrors();
+        $this->assertSame('Upgrade to 24.04', $maintenance->refresh()->title);
     }
 
     public function test_the_activity_log_lists_changes_in_the_order_of_the_form_whatever_order_they_were_stored_in(): void

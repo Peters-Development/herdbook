@@ -38,7 +38,7 @@ class CompleteMaintenance extends Tool
             .'Left out, starts_at is the planned start, or now if that is still to come; ends_at is the planned end if that has passed, else none; the report stays. '
             .'A report given replaces the one there is (null clears it), so it needs the "version" you read: refused when someone changed it since. '
             .self::cutTextsSentence()
-            .'Called again on maintenance that is done (by anyone) with only its id, or with what is stored, it returns it unchanged; anything else is refused: change done work with update_maintenance. Cancelled maintenance can\'t be completed: write the work down with log_maintenance instead. '
+            .'Called again on maintenance that is done (by anyone) with only its id, or with what is stored, it returns it with "unchanged": true (it may have been done by someone else); anything else is refused: change done work with update_maintenance. Cancelled maintenance can\'t be completed: write the work down with log_maintenance instead. '
             .self::textsSentence('The report').self::answerSentence();
     }
 
@@ -90,7 +90,7 @@ class CompleteMaintenance extends Tool
             $completed => $this->answer($maintenance),
             ! $maintenance->exists => $this->notFound($maintenance->getKey()),
             // Done already: called again (its answer lost), it gets the same answer.
-            $maintenance->status === MaintenanceStatus::Done && $this->asStored($maintenance, $given) => $this->answer($maintenance),
+            $maintenance->status === MaintenanceStatus::Done && $this->asStored($maintenance, $given) => $this->answer($maintenance, unchanged: true),
             $maintenance->status === MaintenanceStatus::Done => Response::error(__('This maintenance is done already. Change it with update_maintenance.')),
             $maintenance->status === MaintenanceStatus::Cancelled => Response::error(__('This maintenance was called off. Write the work down with log_maintenance, or ask a person to set it back to planned in Herdbook.')),
             default => $this->changedSince($maintenance),

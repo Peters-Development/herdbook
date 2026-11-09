@@ -85,7 +85,7 @@ final class Serializer
     /**
      * maintenance() with its plan and report, each cut at MAX_TEXT; "truncated"
      * names the ones that were longer, and "texts_changed" who last changed
-     * each since it was created (null: nobody).
+     * each (null: no change in the activity log).
      *
      * @return array<string, mixed>
      */

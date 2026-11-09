@@ -276,7 +276,11 @@ trait WritesMaintenance
      * project with: it may have been planned already, or be the one to
      * complete instead.
      */
-    protected function answer(Maintenance $maintenance): ResponseFactory
+    /**
+     * $unchanged: called again on what was done already (by this agent, or
+     * by someone else): the agent shouldn't report that it did it now.
+     */
+    protected function answer(Maintenance $maintenance, bool $unchanged = false): ResponseFactory
     {
         $maintenance->load(Serializer::MAINTENANCE_RELATIONS);
         $servers = $maintenance->servers->modelKeys();
@@ -297,6 +301,7 @@ trait WritesMaintenance
         return Response::structured([
             'maintenance' => Serializer::maintenance($maintenance),
             'other_planned' => $others->map(Serializer::maintenance(...))->all(),
+            ...($unchanged ? ['unchanged' => true] : []),
         ]);
     }
 

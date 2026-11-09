@@ -58,7 +58,7 @@ class ListMaintenance extends Tool
             'status' => ['nullable', Rule::in(self::statuses())],
             'task' => ['nullable', Rule::enum(MaintenanceTask::class)],
             ...$this->linkRules(),
-            'limit' => ['nullable', 'integer', 'between:1,'.self::MAX_LIMIT],
+            'limit' => ['nullable', 'numeric', 'integer', 'between:1,'.self::MAX_LIMIT],
         ]);
 
         $status = $input['status'] ?? null;

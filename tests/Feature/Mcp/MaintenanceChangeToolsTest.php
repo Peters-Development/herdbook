@@ -293,7 +293,8 @@ class MaintenanceChangeToolsTest extends TestCase
         $call = ['id' => $maintenance->id, 'version' => $maintenance->version(), 'starts_at' => '2026-11-08T22:30', 'report' => 'All done.'];
 
         $first = $this->callToolSuccessfully($this->token, 'complete_maintenance', $call);
-        $this->assertSame($first['maintenance'], $this->callToolSuccessfully($this->token, 'complete_maintenance', $call)['maintenance']);
+        $again = $this->callToolSuccessfully($this->token, 'complete_maintenance', $call);
+        $this->assertSame([$first['maintenance'], null, true], [$again['maintenance'], $first['unchanged'] ?? null, $again['unchanged']]);
 
         $this->assertSame('Dit onderhoud is al gedaan. Wijzig het met update_maintenance.', $this->callToolError($this->token, 'complete_maintenance', [...$call, 'report' => 'Something else.']));
         $this->assertSame('All done.', $maintenance->refresh()->report);
@@ -321,12 +322,25 @@ class MaintenanceChangeToolsTest extends TestCase
         $this->assertSame('Dit onderhoud is afgelast. Leg het werk vast met log_maintenance, of vraag een mens het in Herdbook terug te zetten op gepland.', $this->callToolError($this->token, 'complete_maintenance', ['id' => $this->planned(['status' => MaintenanceStatus::Cancelled])->id]));
     }
 
+    public function test_true_is_no_id(): void
+    {
+        $maintenance = $this->planned();
+        $this->assertSame(1, $maintenance->id);
+
+        foreach (['get_maintenance', 'update_maintenance', 'complete_maintenance', 'cancel_maintenance'] as $tool) {
+            $this->assertSame('Het veld id moet een getal zijn.', $this->callToolError($this->token, $tool, ['id' => true, ...($tool === 'update_maintenance' ? ['version' => $maintenance->version(), 'title' => 'x'] : [])]), $tool);
+        }
+
+        $this->assertSame(MaintenanceStatus::Planned, $maintenance->refresh()->status);
+    }
+
     public function test_cancelling_twice_is_once_and_done_work_stays_done(): void
     {
         $maintenance = $this->planned();
 
-        $this->assertSame('cancelled', $this->callToolSuccessfully($this->token, 'cancel_maintenance', ['id' => $maintenance->id])['maintenance']['status']);
-        $this->assertSame('cancelled', $this->callToolSuccessfully($this->token, 'cancel_maintenance', ['id' => $maintenance->id])['maintenance']['status']);
+        $first = $this->callToolSuccessfully($this->token, 'cancel_maintenance', ['id' => $maintenance->id]);
+        $again = $this->callToolSuccessfully($this->token, 'cancel_maintenance', ['id' => $maintenance->id]);
+        $this->assertSame(['cancelled', null, 'cancelled', true], [$first['maintenance']['status'], $first['unchanged'] ?? null, $again['maintenance']['status'], $again['unchanged']]);
         $this->assertSame(1, Activity::query()->where('subject_type', 'maintenance')->where('subject_id', $maintenance->id)->where('event', 'updated')->count());
 
         $done = Maintenance::factory()->create();
