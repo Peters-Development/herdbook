@@ -45,9 +45,15 @@ final class Serializer
 
     /**
      * What incident() reads, to eager-load: who wrote it down, its links,
-     * and its action items (counted; listed by incidentWithTexts()).
+     * and its action items (counted).
      */
-    public const array INCIDENT_RELATIONS = ['user', 'projects', 'servers', 'domains', 'networks', 'clients', 'actions.user', 'actions.completedBy'];
+    public const array INCIDENT_RELATIONS = ['user', 'projects', 'servers', 'domains', 'networks', 'clients', 'actions'];
+
+    /**
+     * What incidentWithTexts() reads besides: who wrote down and completed
+     * each action item it lists.
+     */
+    public const array INCIDENT_WITH_TEXTS_RELATIONS = [...self::INCIDENT_RELATIONS, 'actions.user', 'actions.completedBy'];
 
     /**
      * How much of a timeline incidentWithTexts() shows: its latest entries,
@@ -245,6 +251,7 @@ final class Serializer
      * that were longer), who last changed the root cause and report
      * ("texts_changed"), as much of its timeline as fits, in order
      * ("more_timeline": there are earlier entries), and its action items.
+     * Eager-load: INCIDENT_WITH_TEXTS_RELATIONS.
      *
      * @return array<string, mixed>
      */

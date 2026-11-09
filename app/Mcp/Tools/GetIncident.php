@@ -44,6 +44,6 @@ class GetIncident extends Tool
             return $incident;
         }
 
-        return Response::structured(Serializer::incidentWithTexts($incident->load(Serializer::INCIDENT_RELATIONS)));
+        return Response::structured(Serializer::incidentWithTexts($incident->load(Serializer::INCIDENT_WITH_TEXTS_RELATIONS)));
     }
 }
