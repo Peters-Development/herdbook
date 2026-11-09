@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Incidents\RelationManagers;
 
+use App\Filament\Support\RecordedBy;
 use App\Rules\NoSecretMaterial;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -47,7 +48,7 @@ class TimelineEntriesRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('occurred_at')->label(__('When'))->dateTime(__('formats.datetime')),
                 TextColumn::make('note')->label(__('What'))->wrap(),
-                TextColumn::make('user.name')->label(__('By'))->placeholder('—'),
+                RecordedBy::column(),
             ])
             ->headerActions([
                 // Not "create another": Filament casts the default "now" a second time

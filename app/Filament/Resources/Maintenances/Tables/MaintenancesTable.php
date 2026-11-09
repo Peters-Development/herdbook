@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Maintenances\Tables;
 use App\Enums\MaintenanceStatus;
 use App\Enums\MaintenanceTask;
 use App\Filament\Support\MaintenanceSchema;
+use App\Filament\Support\RecordedBy;
 use App\Models\Maintenance;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -32,7 +33,7 @@ class MaintenancesTable
                     ->description(fn (Maintenance $record): ?string => MaintenanceSchema::linkedTo($record)),
                 MaintenanceSchema::tasksColumn(),
                 MaintenanceSchema::statusColumn(),
-                MaintenanceSchema::byColumn(),
+                RecordedBy::column(),
             ])
             ->filters([
                 // Not when the record of an open modal is looked up: completed

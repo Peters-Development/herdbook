@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Incidents\RelationManagers;
 
+use App\Filament\Support\RecordedBy;
 use App\Models\IncidentAction;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
@@ -49,6 +50,7 @@ class ActionsRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('description')->label(__('Action'))->wrap(),
                 TextColumn::make('due_on')->label(__('Due'))->date(__('formats.date'))->placeholder('—'),
+                RecordedBy::column()->toggledHiddenByDefault(),
                 TextColumn::make('done_at')->label(__('Completed'))->dateTime(__('formats.date'))->placeholder(__('Open')),
             ])
             ->filters([

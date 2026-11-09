@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Incidents\Schemas;
 
 use App\Filament\Support\LinkSchema;
+use App\Filament\Support\RecordedBy;
 use App\Models\Incident;
 use Carbon\CarbonInterval;
 use Filament\Infolists\Components\TextEntry;
@@ -23,6 +24,7 @@ class IncidentInfolist
                         TextEntry::make('status')->label(__('Status'))->badge(),
                         TextEntry::make('occurred_on')->label(__('Date'))->date(__('formats.date')),
                         TextEntry::make('source')->label(__('Source'))->badge()->color('gray'),
+                        RecordedBy::entry(),
                         TextEntry::make('started_at')->label(__('Started'))->dateTime(__('formats.datetime'))->placeholder('—'),
                         TextEntry::make('detected_at')->label(__('Detected'))->dateTime(__('formats.datetime'))->placeholder('—'),
                         TextEntry::make('resolved_at')->label(__('Resolved'))->dateTime(__('formats.datetime'))->placeholder('—'),

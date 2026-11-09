@@ -7,6 +7,7 @@ use App\Filament\RelationManagers\Concerns\CreatesLinkedRecords;
 use App\Filament\Resources\Maintenances\MaintenanceResource;
 use App\Filament\Resources\Maintenances\Schemas\MaintenanceForm;
 use App\Filament\Support\MaintenanceSchema;
+use App\Filament\Support\RecordedBy;
 use App\Models\Maintenance;
 use Filament\Actions\Action;
 use Filament\Actions\AttachAction;
@@ -52,7 +53,7 @@ class MaintenancesRelationManager extends RelationManager
                 TextColumn::make('title')->label(__('Maintenance'))->searchable()->wrap(),
                 MaintenanceSchema::tasksColumn(),
                 MaintenanceSchema::statusColumn(),
-                MaintenanceSchema::byColumn(),
+                RecordedBy::column(),
             ])
             ->headerActions([
                 $this->tellsThePage(CreateAction::make('log'))
