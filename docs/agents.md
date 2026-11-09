@@ -78,9 +78,9 @@ Times are ISO 8601, such as `2026-11-12T22:00`, in minutes as in the forms: seco
 <a name="changes-made-meanwhile"></a>
 ### Changes Made Meanwhile
 
-Every maintenance an agent reads comes with a `version`, a fingerprint of everything that can be changed, its servers and projects included. To change maintenance or an incident, to resolve an incident, or to complete maintenance with a report (or clear it), the agent gives that version back. If someone changed the maintenance since, the agent is told to read it again, and nothing is saved. Completing maintenance without a report, and calling it off, only need it to be still planned.
+Every maintenance and incident an agent reads comes with a `version`, a fingerprint of everything that can be changed, its servers and projects included. To change maintenance or an incident, to resolve an incident, or to complete maintenance with a report (or clear it), the agent gives that version back. If someone changed it since, the agent is told to read it again, and nothing is saved. Completing maintenance without a report, and calling it off, only need it to be still planned.
 
-It works the other way too. An edit form or a **Complete** modal left open in the panel doesn't undo what an agent (or another tab) did meanwhile: saving refuses, keeps what the agent wrote, and says the maintenance was changed meanwhile, or that it is no longer planned.
+It works the other way too. An edit form or a **Complete** modal left open in the panel doesn't undo what an agent (or another tab) did meanwhile: saving refuses, keeps what the agent wrote, and says it was changed meanwhile, or that the maintenance is no longer planned.
 
 <a name="turning-it-on"></a>
 ## Turning It On
@@ -246,7 +246,7 @@ Then store the new token with the [same command](#the-token-in-your-keychain) as
 ## Security
 
 - **A token is a key without a second factor.** Treat it like a password.
-- **What an agent reads leaves your network.** Everything a tool returns becomes part of the conversation, which goes to the agent's model provider and stays in its local history (for Claude Code, under `~/.claude`). That is why tools return no addresses, notes or contact details, but names, plans and reports are sent as written.
+- **What an agent reads leaves your network.** Everything a tool returns becomes part of the conversation, which goes to the agent's model provider and stays in its local history (for Claude Code, under `~/.claude`). That is why tools return no addresses, notes or contact details, and mask the addresses in what they do return; names, plans, reports and incidents are otherwise sent as written.
 - **Plans and reports are written by people and other agents.** Herdbook tells agents to treat them as data, to act on a plan only when you ask, and to tell you when a plan was changed by someone other than its creator, but that is no guarantee: a text can try to steer an agent. Don't let an agent that carries out a plan run without asking for permission, so you see each command before it reaches your servers.
 - **An agent acts within its token.** A misled agent with a write token can plan, change, complete or call off maintenance, and open incidents and add to them: an open SEV1 colours the dashboard and the status screen red. It can't delete anything, and the activity log names it and keeps the plans and reports it replaced, but changes to its servers and projects aren't logged.
 - **Revoking.** `agents:revoke` (one, an account's, or all), or switch the MCP server off. A backup restored from before a revoke brings the token back: revoke it again ([Disaster Recovery](backups.md#disaster-recovery)).

@@ -95,7 +95,7 @@ Only maintenance linked to the server itself counts here: work logged on a proje
 <a name="from-an-agent"></a>
 ## From an Agent
 
-An agent such as Claude Code can do most of this for you through Herdbook's MCP server: find a server by its hostname, see when it was last updated, plan an upgrade with a work plan, write down what it did, and complete or call off what was planned ([Agents](agents.md)). It needs a token of its own, created on the host with `agents:create`.
+An agent such as Claude Code can do most of this for you through Herdbook's MCP server: find a server by its hostname, see when it was last updated, plan an upgrade with a work plan, write down what it did, and complete or call off what was planned ([Agents](agents.md)). It needs a token of its own, created on the host with `agents:create`. Addresses in the plans and reports it reads are masked ([What It Gets](agents.md#what-it-gets)).
 
 Maintenance an agent creates shows "Ada via deploy-agent" in the list and on the maintenance. What an agent may write: [Agents](agents.md#what-it-may-write); how it avoids saving over your changes: [Changes Made Meanwhile](agents.md#changes-made-meanwhile).
 
