@@ -14,15 +14,22 @@ final class Money
 {
     public static function format(Number|string $amount, int $decimals = 2): string
     {
+        return __('formats.money', ['symbol' => config('herdbook.currency_symbol'), 'amount' => self::number($amount, $decimals)]);
+    }
+
+    /**
+     * format() without the symbol ("1.234,56"): next to a field that shows it.
+     */
+    public static function number(Number|string $amount, int $decimals = 2): string
+    {
         // Amounts are never negative (the forms say so).
         [$whole, $fraction] = array_pad(explode('.', (string) (new Number((string) $amount))->round($decimals), 2), 2, '');
 
         // Groups of three from the right; the separator is not reversed, it may be more than one byte.
         $groups = array_map(strrev(...), array_reverse(str_split(strrev($whole), 3)));
-        $number = implode(__('formats.thousands_separator'), $groups)
-            .($decimals > 0 ? __('formats.decimal_separator').str_pad($fraction, $decimals, '0') : '');
 
-        return __('formats.money', ['symbol' => config('herdbook.currency_symbol'), 'amount' => $number]);
+        return implode(__('formats.thousands_separator'), $groups)
+            .($decimals > 0 ? __('formats.decimal_separator').str_pad($fraction, $decimals, '0') : '');
     }
 
     /**
@@ -40,14 +47,15 @@ final class Money
     }
 
     /**
-     * "€9.95 per year", as it was entered; null without an amount.
+     * "€9.95 per year", as it was entered (or comes from a price list:
+     * Domain::costAmount()); null without an amount.
      */
     public static function describe(Renewable $item): ?string
     {
-        if ($item->cost_amount === null) {
+        if ($item->costAmount() === null) {
             return null;
         }
 
-        return trim(self::format($item->cost_amount).' '.$item->cost_period?->getLabel());
+        return trim(self::format($item->costAmount()).' '.$item->costPeriod()?->getLabel());
     }
 }

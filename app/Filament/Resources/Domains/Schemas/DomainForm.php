@@ -5,19 +5,28 @@ namespace App\Filament\Resources\Domains\Schemas;
 use App\Enums\CostPeriod;
 use App\Enums\ProviderKind;
 use App\Enums\ServerStatus;
+use App\Filament\Resources\Providers\Schemas\ProviderForm;
 use App\Filament\Support\CostSchema;
 use App\Filament\Support\RenewalSchema;
+use App\Models\Domain;
+use App\Models\DomainPrice;
 use App\Models\Server;
 use App\Rules\NoSecretMaterial;
+use App\Services\Costs\Money;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Once;
 
 class DomainForm
 {
@@ -35,9 +44,11 @@ class DomainForm
                             ->required()
                             ->maxLength(255)
                             // A local zone may be a single label ("internal", "lan").
-                            ->regex(fn (Get $get): string => $get('local_only') ? '/^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)*$/i' : '/^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)+$/i')
+                            ->regex(fn (Get $get): string => $get('local_only') ? Domain::LOCAL_NAME_PATTERN : Domain::NAME_PATTERN)
                             ->validationMessages(['regex' => __('Enter just the domain name, such as example.com.')])
-                            ->unique(ignoreRecord: true),
+                            ->unique(ignoreRecord: true)
+                            // Its extension picks the price from the list.
+                            ->live(onBlur: true),
                         Select::make('client_id')
                             ->label(__('Belongs to client'))
                             ->relationship('client', 'name')
@@ -49,6 +60,7 @@ class DomainForm
                             ->relationship('registrar', 'name', fn (Builder $query, ?Model $record) => $query->offering(ProviderKind::Registrar, $record?->registrar_id))
                             ->searchable()
                             ->preload()
+                            ->live()
                             ->hidden(fn (Get $get): bool => (bool) $get('local_only')),
                         // Before the DNS host, which it hides: so it does not move when chosen.
                         self::dnsServerField(),
@@ -72,7 +84,7 @@ class DomainForm
                             ->columnSpanFull(),
                     ]),
                 // A local domain is registered nowhere (Domain::hasContract()).
-                CostSchema::formSection(CostPeriod::Year)->hidden(fn (Get $get): bool => (bool) $get('local_only')),
+                CostSchema::formSection(CostPeriod::Year, self::priceListAmount(...))->hidden(fn (Get $get): bool => (bool) $get('local_only')),
                 RenewalSchema::formSection()->hidden(fn (Get $get): bool => (bool) $get('local_only')),
             ]);
     }
@@ -106,6 +118,108 @@ class DomainForm
                     default => __('DNS host: :provider, the provider of this server.', ['provider' => $server->provider_name]),
                 };
             });
+    }
+
+    /**
+     * Empty, the price list of the registrar counts (Domain::costAmount()):
+     * the field shows that price, or that there is none and how to add it.
+     */
+    private static function priceListAmount(TextInput $amount): TextInput
+    {
+        return $amount
+            ->live(onBlur: true)
+            ->placeholder(function (Get $get): ?string {
+                if (($domain = self::formDomain($get)) === null) {
+                    return null;
+                }
+
+                // The field shows the currency symbol already.
+                return $domain->listPrice() === null
+                    ? __('No price for .:extension at :registrar', ['extension' => Domain::extensionOf($domain->name), 'registrar' => $domain->registrar->name])
+                    : __(':amount from the price list', ['amount' => Money::number($domain->listPrice()->cost_amount)]);
+            })
+            ->explain(fn (Get $get): ?string => self::formDomain($get) === null ? null : __("Leave it empty to use the registrar's price list: a price change there counts here too."))
+            // State, not an explanation: always shown, so not in the helper text
+            // (explain()) or the hint (excluding VAT). An amount of its own that
+            // is just the list price would not follow a price change.
+            ->aboveContent(fn (Get $get): ?string => self::formDomain($get)?->isAtListPrice() ? __('Same as the price list: leave it empty to follow price changes.') : null)
+            ->hintAction(self::addToPriceListAction());
+    }
+
+    /**
+     * The first domain with an extension fills the price list: the next ones
+     * need no amount.
+     */
+    private static function addToPriceListAction(): Action
+    {
+        return Action::make('addToPriceList')
+            ->label(__('Add to the price list'))
+            ->icon(Heroicon::OutlinedPlus)
+            ->visible(fn (Get $schemaGet): bool => ($domain = self::formDomain($schemaGet)) !== null && $domain->listPrice() === null)
+            ->modalHeading(fn (Get $schemaGet): string => __('Add .:extension to the price list', ['extension' => Domain::extensionOf((string) self::formDomain($schemaGet)?->name)]))
+            ->modalDescription(__('What a domain with this extension costs per year at this registrar, excluding VAT. It counts for each of its domains without an amount of their own.'))
+            ->fillForm(fn (Get $schemaGet): array => ['cost_amount' => self::period($schemaGet) === CostPeriod::Month ? null : $schemaGet('cost_amount')])
+            ->schema([ProviderForm::priceInput()])
+            ->action(function (array $data, Get $schemaGet, Set $schemaSet): void {
+                if (($domain = self::formDomain($schemaGet)) === null) {
+                    return;
+                }
+
+                $extension = Domain::extensionOf($domain->name);
+
+                DomainPrice::query()->firstOrCreate(
+                    ['provider_id' => $domain->registrar_id, 'extension' => $extension],
+                    ['cost_amount' => $data['cost_amount']],
+                );
+                // The domain of this request knew no price for it.
+                Once::flush();
+
+                // Its own amount was the price: now the list says it.
+                $cleared = (bool) self::formDomain($schemaGet)?->isAtListPrice();
+
+                if ($cleared) {
+                    $schemaSet('cost_amount', null);
+                }
+
+                Notification::make()
+                    ->success()
+                    ->title(__('Added .:extension to the price list.', ['extension' => $extension]))
+                    ->body($cleared ? __('Save the domain to keep its changes.') : null)
+                    ->send();
+            });
+    }
+
+    /**
+     * The domain in the form, unsaved, so Domain::listPrice() and
+     * isAtListPrice() answer for it as for a stored one; once per request
+     * and state. Null when no price of a list can apply to it: no valid,
+     * registered name, or no registrar that exists.
+     */
+    private static function formDomain(Get $get): ?Domain
+    {
+        $name = mb_strtolower(trim((string) $get('name')));
+        $registrar = (int) $get('registrar_id');
+        $local = (bool) $get('local_only');
+        // Only a plain amount: a browser lets "1e3" through.
+        $amount = preg_match('/^\d+(\.\d+)?$/', trim((string) $get('cost_amount'))) ? trim((string) $get('cost_amount')) : null;
+        $period = self::period($get);
+
+        if ($local || $registrar === 0 || ! preg_match(Domain::NAME_PATTERN, $name) || mb_strlen(Domain::extensionOf($name)) > 63) {
+            return null;
+        }
+
+        return once(function () use ($name, $registrar, $amount, $period): ?Domain {
+            $domain = new Domain(['name' => $name, 'registrar_id' => $registrar, 'cost_amount' => $amount, 'cost_period' => $period]);
+
+            return $domain->registrar === null ? null : $domain;
+        });
+    }
+
+    private static function period(Get $get): ?CostPeriod
+    {
+        $period = $get('cost_period');
+
+        return $period instanceof CostPeriod ? $period : CostPeriod::tryFrom((string) $period);
     }
 
     /**

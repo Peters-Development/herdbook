@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 /**
  * A hosting company, registrar, DNS, mail or internet provider.
@@ -30,6 +31,29 @@ class Provider extends Model
     public function registeredDomains(): HasMany
     {
         return $this->hasMany(Domain::class, 'registrar_id');
+    }
+
+    /**
+     * Its price list as a registrar: per extension, per year
+     * (Domain::costAmount()).
+     *
+     * @return HasMany<DomainPrice, $this>
+     */
+    public function domainPrices(): HasMany
+    {
+        return $this->hasMany(DomainPrice::class);
+    }
+
+    /**
+     * Its domains with an amount of their own that is just its price for
+     * them: they would not follow a price change. Clearing their amount
+     * puts them on the price list.
+     *
+     * @return Collection<int, Domain>
+     */
+    public function domainsAtListPrice(): Collection
+    {
+        return $this->registeredDomains()->atListPrice()->orderBy('name')->get();
     }
 
     /** @return HasMany<Domain, $this> */

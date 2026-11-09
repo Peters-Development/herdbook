@@ -16,6 +16,7 @@ use App\Models\Subscription;
 use BcMath\Number;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 
@@ -30,8 +31,8 @@ use Illuminate\Support\Collection;
  * @property bool $auto_renews
  * @property int $renewal_period_months
  * @property ?CarbonImmutable $renewal_stopped_at
- * @property ?string $cost_amount
- * @property ?CostPeriod $cost_period
+ * @property ?string $cost_amount its own; what counts is costAmount()
+ * @property ?CostPeriod $cost_period its own; what counts is costPeriod()
  *
  * @see HasRenewal
  * @see HasCost
@@ -101,6 +102,23 @@ interface Renewable
     public function resumeRenewal(): void;
 
     public function canHaveCost(): bool;
+
+    public function costAmount(): ?string;
+
+    public function costPeriod(): ?CostPeriod;
+
+    public function costSource(): ?string;
+
+    /**
+     * @return list<string>
+     */
+    public static function costAmountRelations(): array;
+
+    /**
+     * @param  Builder<Model&Renewable>  $query
+     * @return array{string, list<mixed>}
+     */
+    public static function yearlyCostSql(Builder $query): array;
 
     public function hasCost(): bool;
 

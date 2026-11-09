@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\CredentialReference;
 use App\Models\Document;
 use App\Models\Domain;
+use App\Models\DomainPrice;
 use App\Models\Environment;
 use App\Models\EnvironmentServer;
 use App\Models\Hostname;
@@ -74,6 +75,7 @@ class AppServiceProvider extends ServiceProvider
             'credential_reference' => CredentialReference::class,
             'document' => Document::class,
             'domain' => Domain::class,
+            'domain_price' => DomainPrice::class,
             'environment' => Environment::class,
             'environment_server' => EnvironmentServer::class,
             'hostname' => Hostname::class,

@@ -14,8 +14,8 @@ use Spatie\Activitylog\Models\Activity;
  * Who changed what, and when (RecordsActivity). Besides the record itself,
  * the parts that belong to it: a project shows its environments and which
  * servers they run on, a server its assignments and dependencies, a domain
- * its hostnames, a network its addresses (stored as activityContext(), so
- * deletes stay visible).
+ * its hostnames, a network its addresses, a provider its price list
+ * (stored as activityContext(), so deletes stay visible).
  */
 class ActivityRelationManager extends RelationManager
 {
@@ -37,6 +37,7 @@ class ActivityRelationManager extends RelationManager
         'domain' => ['domain_id'],
         'hostname' => ['hostname_id'],
         'network' => ['network_id'],
+        'provider' => ['provider_id'],
     ];
 
     public function isReadOnly(): bool

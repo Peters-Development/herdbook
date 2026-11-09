@@ -13,6 +13,7 @@ use App\Models\Project;
 use App\Services\Costs\CostLine;
 use App\Services\Costs\Money;
 use App\Services\Costs\RecurringCosts;
+use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Forms\Components\Select;
@@ -37,9 +38,13 @@ use Illuminate\Support\Collection;
  */
 final class CostSchema
 {
-    public static function formSection(CostPeriod $default): Section
+    /**
+     * @param  ?Closure(TextInput): TextInput  $configureAmount  adds to the amount field (a domain's price list)
+     */
+    public static function formSection(CostPeriod $default, ?Closure $configureAmount = null): Section
     {
         [$amount, $period] = self::fields($default);
+        $amount = $configureAmount === null ? $amount : $configureAmount($amount);
 
         return Section::make(__('Costs'))
             ->explain(__('A monthly amount counts every month, a yearly amount at every renewal.'))
@@ -63,9 +68,9 @@ final class CostSchema
         return TextEntry::make('cost')
             ->label(__('Costs'))
             ->state(fn (Renewable $record): ?string => Money::describe($record))
-            ->helperText(fn (Renewable $record): ?string => $record->hasCost() && $record->cost_period === CostPeriod::Month
+            ->helperText(fn (Renewable $record): ?string => $record->costSource() ?? ($record->hasCost() && $record->costPeriod() === CostPeriod::Month
                 ? __(':amount per year', ['amount' => Money::format($record->yearlyCost())])
-                : null)
+                : null))
             ->placeholder('—');
     }
 
@@ -129,7 +134,7 @@ final class CostSchema
         return [
             ...self::describe($line->item),
             'yearly' => Money::format($line->yearly),
-            'monthly' => $line->item->cost_period === CostPeriod::Month ? Money::describe($line->item) : null,
+            'monthly' => $line->item->costPeriod() === CostPeriod::Month ? Money::describe($line->item) : null,
             'detail' => $line->detail,
         ];
     }
@@ -165,10 +170,13 @@ final class CostSchema
         return TextColumn::make('cost_amount')
             ->label(__('Costs'))
             ->state(fn (Renewable $record): ?string => Money::describe($record))
-            ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderByRaw(
-                "{$query->qualifyColumn('cost_amount')} * (case when {$query->qualifyColumn('cost_period')} = ? then 12 else 1 end) ".($direction === 'desc' ? 'desc' : 'asc'),
-                [CostPeriod::Month->value],
-            ))
+            ->description(fn (Renewable $record): ?string => $record->costSource())
+            ->sortable(query: function (Builder $query, string $direction): Builder {
+                // A domain without an amount of its own sorts on its price list.
+                [$sql, $bindings] = $query->getModel()::yearlyCostSql($query);
+
+                return $query->orderByRaw("{$sql} ".($direction === 'desc' ? 'desc' : 'asc'), $bindings);
+            })
             ->placeholder('—');
     }
 
@@ -183,13 +191,13 @@ final class CostSchema
      * Many domains at one registrar cost the same: one amount for the
      * selection. Through Eloquent, so each change is logged.
      */
-    public static function bulkAction(CostPeriod $default): BulkAction
+    public static function bulkAction(CostPeriod $default, ?string $description = null): BulkAction
     {
         return BulkAction::make('setCost')
             ->label(__('Set amount'))
             ->icon(Heroicon::OutlinedCurrencyEuro)
             ->modalHeading(__('Set amount'))
-            ->modalDescription(__('For everything you selected.'))
+            ->modalDescription($description ?? __('For everything you selected.'))
             ->modalSubmitActionLabel(__('Set'))
             ->schema(array_map(fn (TextInput|Select $field): TextInput|Select => $field->required(), self::fields($default)))
             ->action(function (Collection $records, array $data): void {

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CostPeriod;
 use App\Models\Concerns\HasCost;
 use App\Models\Concerns\HasRenewal;
 use App\Models\Concerns\Linkable;
@@ -17,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * A registered domain ("example.com"). Its expiry date is entered by hand:
@@ -31,7 +33,17 @@ use Illuminate\Support\Facades\DB;
 class Domain extends Model implements Renewable
 {
     /** @use HasFactory<DomainFactory> */
-    use HasCost, HasFactory, HasRenewal, Linkable, RecordsActivity;
+    use HasCost, HasFactory, HasRenewal, Linkable, RecordsActivity {
+        HasCost::yearlyCostSql as ownYearlyCostSql;
+    }
+
+    /**
+     * A registered name: two labels or more ("example.com"). A local one may
+     * be a single label ("internal").
+     */
+    public const string NAME_PATTERN = '/^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)+$/i';
+
+    public const string LOCAL_NAME_PATTERN = '/^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)*$/i';
 
     protected $attributes = [
         'local_only' => false,
@@ -185,6 +197,156 @@ class Domain extends Model implements Renewable
     public function canHaveCost(): bool
     {
         return ! $this->local_only;
+    }
+
+    /**
+     * Everything after its first label: a domain is a registered name, one
+     * label under its extension ("example.co.uk": "co.uk"). A name without a
+     * dot (a local one) is its own extension, as in extensionSql().
+     */
+    public static function extensionOf(string $name): string
+    {
+        return Str::after($name, '.');
+    }
+
+    /**
+     * extensionOf() in SQL: the same on MySQL and SQLite. For a query on the
+     * domains table itself (not aliased).
+     */
+    public static function extensionSql(): string
+    {
+        return "substr(domains.name, instr(domains.name, '.') + 1)";
+    }
+
+    /**
+     * The line of its registrar's price list for its extension, when it can
+     * cost anything. Reads the registrar's prices once loaded
+     * (costAmountRelations()).
+     */
+    public function listPrice(): ?DomainPrice
+    {
+        if (! $this->canHaveCost() || $this->registrar_id === null || $this->name === null) {
+            return null;
+        }
+
+        // A registrar loaded before the registrar changed (a form) is not this one.
+        if ($this->relationLoaded('registrar') && (int) $this->registrar?->getKey() !== (int) $this->registrar_id) {
+            $this->unsetRelation('registrar');
+        }
+
+        $extension = self::extensionOf($this->name);
+
+        // Strictly: "10" is no "1e1".
+        return $this->registrar?->domainPrices->first(fn (DomainPrice $price): bool => $price->extension === $extension);
+    }
+
+    /**
+     * Its own amount, or else the price list of its registrar (per year).
+     * An amount without a period is its own still, and missing.
+     */
+    public function costAmount(): ?string
+    {
+        return $this->cost_amount ?? $this->listPrice()?->cost_amount;
+    }
+
+    public function costPeriod(): ?CostPeriod
+    {
+        if ($this->cost_amount !== null) {
+            return $this->cost_period;
+        }
+
+        return $this->listPrice() === null ? null : CostPeriod::Year;
+    }
+
+    /**
+     * Whether what it costs comes from the price list of its registrar.
+     */
+    public function usesPriceList(): bool
+    {
+        return $this->cost_amount === null && $this->listPrice() !== null;
+    }
+
+    /**
+     * An amount of its own per year that is just its list price: it would
+     * not follow a price change.
+     */
+    public function isAtListPrice(): bool
+    {
+        return $this->cost_amount !== null
+            && $this->cost_period === CostPeriod::Year
+            && $this->cost_amount === $this->listPrice()?->cost_amount;
+    }
+
+    /**
+     * Its own amount goes: the price list counts. Through Eloquent, so it is
+     * logged.
+     */
+    public function usePriceList(): void
+    {
+        $this->update(['cost_amount' => null, 'cost_period' => null]);
+    }
+
+    public function costSource(): ?string
+    {
+        return $this->usesPriceList() ? __('From the price list of :registrar', ['registrar' => $this->registrar->name]) : null;
+    }
+
+    public static function costAmountRelations(): array
+    {
+        return ['registrar.domainPrices'];
+    }
+
+    /**
+     * Its own amount per year, or else the price for it in its registrar's
+     * list.
+     */
+    public static function yearlyCostSql(Builder $query): array
+    {
+        [$own, $bindings] = self::ownYearlyCostSql($query);
+
+        return ["coalesce({$own}, (".self::listPriceSql().'))', $bindings];
+    }
+
+    /**
+     * The price of its registrar for its extension, as a subquery.
+     */
+    private static function listPriceSql(): string
+    {
+        return 'select domain_prices.cost_amount from domain_prices where domains.local_only = 0 and domain_prices.provider_id = domains.registrar_id and domain_prices.extension = '.self::extensionSql();
+    }
+
+    /**
+     * isAtListPrice() in a query.
+     *
+     * @param  Builder<Domain>  $query
+     */
+    public function scopeAtListPrice(Builder $query): void
+    {
+        $query
+            ->whereNotNull('cost_amount')
+            ->where('cost_period', CostPeriod::Year)
+            ->whereRaw('cost_amount = ('.self::listPriceSql().')');
+    }
+
+    /**
+     * usesPriceList() in a query.
+     *
+     * @param  Builder<Domain>  $query
+     */
+    public function scopeUsingPriceList(Builder $query): void
+    {
+        $query->whereNull('cost_amount')->whereRaw('exists ('.self::listPriceSql().')');
+    }
+
+    /**
+     * An own amount without a period, or no own amount and no price for it
+     * in its registrar's list.
+     */
+    protected function whereNoAmount(Builder $query): void
+    {
+        $query
+            ->where(fn (Builder $query) => $query->whereNotNull('cost_amount')->whereNull('cost_period'))
+            ->orWhere(fn (Builder $query) => $query->whereNull('cost_amount')->whereRaw('not exists ('.self::listPriceSql().')'));
     }
 
     /**

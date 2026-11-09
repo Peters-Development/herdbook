@@ -26,7 +26,7 @@ class ResetDemo extends Command
         'maintainables', 'maintenances',
         'document_revisions', 'documents', 'credential_references',
         'hostnames', 'environment_server', 'server_dependencies', 'environments',
-        'domains', 'subscriptions', 'projects', 'servers', 'network_addresses', 'networks', 'clients', 'providers',
+        'domains', 'subscriptions', 'projects', 'servers', 'network_addresses', 'networks', 'clients', 'domain_prices', 'providers',
         'activity_log',
     ];
 

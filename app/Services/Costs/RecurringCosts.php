@@ -74,7 +74,7 @@ final class RecurringCosts
             counted: $running->count(),
             months: $months,
             expired: $running->filter(fn (Renewable $item): bool => $item->expires_on?->lt($today) ?? false)->sortBy('expires_on')->values()->all(),
-            undated: $running->filter(fn (Renewable $item): bool => $item->cost_period === CostPeriod::Year && $item->expires_on === null)->values()->all(),
+            undated: $running->filter(fn (Renewable $item): bool => $item->costPeriod() === CostPeriod::Year && $item->expires_on === null)->values()->all(),
             unused: $running->filter(fn (Renewable $item): bool => $item instanceof Server && $item->status === ServerStatus::Decommissioned)->values()->all(),
             archived: $running->filter($this->onlyForArchived(...))->values()->all(),
             unpriced: $unpriced->all(),
@@ -93,7 +93,7 @@ final class RecurringCosts
     private function items(): Collection
     {
         return collect(Renewable::MODELS)->flatMap(fn (string $model): Collection => $model::query()
-            ->with([$model::renewalProviderRelation(), ...$model::costRelations()])
+            ->with([$model::renewalProviderRelation(), ...$model::costRelations(), ...$model::costAmountRelations()])
             ->get());
     }
 
@@ -112,8 +112,8 @@ final class RecurringCosts
             return [];
         }
 
-        if ($item->cost_period === CostPeriod::Month) {
-            $amount = new Number($item->cost_amount);
+        if ($item->costPeriod() === CostPeriod::Month) {
+            $amount = new Number($item->costAmount());
             // The contract pays the months up to its expiry whatever is decided;
             // from the month it expires in, someone decides.
             $decidedFrom = $item->expires_on?->startOfMonth() ?? $first;

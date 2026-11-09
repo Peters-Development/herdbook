@@ -2,6 +2,7 @@
 
 - [Introduction](#introduction)
 - [Amounts and Periods](#amounts-and-periods)
+    - [Price Lists for Domains](#price-lists-for-domains)
 - [Subscriptions](#subscriptions)
 - [When You Pay](#when-you-pay)
     - [Monthly Amounts](#monthly-amounts)
@@ -32,6 +33,23 @@ Amounts are **excluding VAT**, everywhere: the forms and the costs page say so.
 All amounts are in one currency, with the symbol set by `HERDBOOK_CURRENCY_SYMBOL` (default `€`; see [Configuration](configuration.md)). Herdbook does not convert between currencies. Where the symbol goes and which separators are used follows the language of the interface: `€1,234.56` in English, `€ 1.234,56` in Dutch.
 
 Herdbook calculates with exact decimals, never with floating point numbers, and rounds each payment to the cent.
+
+<a name="price-lists-for-domains"></a>
+### Price Lists for Domains
+
+A registrar usually charges the same for every domain with one extension. Rather than typing that amount on every domain, give the registrar a **price list** on its form (shown for a registrar, and for a provider that still has prices or registered domains): per extension (`com`, `nl`, `co.uk`), its price per year, excluding VAT. The extension of a domain is everything after its first label, so `example.co.uk` is a `co.uk` domain.
+
+What a domain costs is the first of:
+
+1. its own amount and period (an amount without a period does not fall back to the price list: it counts nowhere until it has one);
+2. the price of its registrar for its extension, per year;
+3. nothing: it is listed under [To Sort Out](#to-sort-out).
+
+Leave a domain's amount empty to use the price list: the form shows the price it then gets, or that the registrar has no price for its extension, with **Add to the price list** to add it there and then. A domain that costs something else (a premium name, a different deal) keeps an amount of its own.
+
+When the registrar raises its prices, change the price list once: every domain without an amount of its own follows, in the totals, the coming payments and the renewal digest. A domain with an amount of its own does not, even when that amount is the same as the list price; the form says so ("Same as the price list"). To move such domains onto the price list, use **Use the price list**, which appears on the page of the registrar when it has domains whose own yearly amount equals their list price, or the bulk action **Use the price list** in the domains list, which names the domains whose cost changes and skips those without a price in the list.
+
+The page of a registrar shows its price list, with per extension how many running domains it has (cancelled ones not counted) and how many of those have an amount of their own. In the domains list, an amount from the price list says so; the **Amount** filter shows the domains on the price list or those with an amount of their own, and **Without an amount** those with neither. Changes to the price list are in the activity log of the registrar. A local domain costs nothing, price list or not.
 
 <a name="subscriptions"></a>
 ## Subscriptions
@@ -126,7 +144,7 @@ A server that runs three projects is **shared**. Dividing its cost evenly betwee
 
 Until these are sorted out, the numbers are not quite right. The costs page lists:
 
-- items **without an amount or period**, per kind, with a link to the list filtered on them: they count nowhere;
+- items **without an amount or period**, per kind, with a link to the list filtered on them: they count nowhere. Domains whose registrar has no price for their extension are also listed per registrar and extension ("Gandi has no price for .nl (3 domains)"), with a link to the registrar's form, where the price list is: one price fixes them all (or give the domains an amount of their own);
 - items that **expired** and were neither renewed nor cancelled;
 - **decommissioned servers** that are still paid for: cancel the contract, or for a machine of your own without a contract, remove the amount;
 - items that are **only used by archived** projects or clients, but keep running (never an internet line: the network needs it whatever runs there);
@@ -144,6 +162,6 @@ The page of a project and of a client has a **Costs** section: what it costs per
 <a name="filling-in-amounts"></a>
 ## Filling In Amounts
 
-The lists of domains, servers, subscriptions and networks have a **Costs** column (it sorts by the yearly amount, so monthly and yearly amounts compare) and a **Without an amount** filter. Many domains at one registrar cost the same, so the domains list has a bulk action **Set amount**: select the domains, and give them one amount and period at once. Local domains in the selection are skipped: they cost nothing.
+The lists of domains, servers, subscriptions and networks have a **Costs** column (it sorts by the yearly amount, so monthly and yearly amounts compare) and a **Without an amount** filter. For domains, a [price list](#price-lists-for-domains) on the registrar is the easiest: most domains then need no amount at all. The domains list also has a bulk action **Set amount**: select the domains, and give them one amount and period of their own at once, instead of the price list. Local domains in the selection are skipped: they cost nothing.
 
 A new domain starts with a yearly amount, a new server, subscription or network with a monthly one. A network's amount is what its internet line costs; its contract appears once you choose an internet provider.

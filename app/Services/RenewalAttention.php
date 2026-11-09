@@ -39,7 +39,8 @@ final class RenewalAttention
         $today ??= now(config('herdbook.display_timezone'));
 
         return $this->computed[$model.'@'.$today->toDateString()] ??= $model::query()
-            ->with($model::renewalProviderRelation())
+            // The digest names what a renewal costs.
+            ->with([$model::renewalProviderRelation(), ...$model::costAmountRelations()])
             ->withContract()
             ->whereNull('renewal_stopped_at')
             ->whereNotNull('expires_on')
