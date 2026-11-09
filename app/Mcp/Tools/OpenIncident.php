@@ -106,11 +106,14 @@ class OpenIncident extends Tool
         $occurredOn = $input['occurred_on'] ?? $given['started_at']->timezone(config('herdbook.display_timezone'))->toDateString();
 
         return self::once(
-            Incident::query()->unresolved()->where('title', $attributes['title'])->with(['servers', 'projects']),
-            fn (Incident $incident): bool => $this->asStored($incident, [...$attributes, ...$fixed])
-                && (! isset($input['occurred_on']) || $incident->occurred_on?->toDateString() === $occurredOn)
-                && self::sameIds($incident->servers->modelKeys(), $serverIds)
-                && self::sameIds($incident->projects->modelKeys(), $projectIds),
+            Incident::query(),
+            [
+                ...$attributes,
+                ...array_map(fn (CarbonImmutable $moment): string => $moment->toIso8601String(), $fixed),
+                'occurred_on' => $input['occurred_on'] ?? null,
+                'server_ids' => collect($serverIds)->sort()->values()->all(),
+                'project_ids' => collect($projectIds)->sort()->values()->all(),
+            ],
             fn (): Incident => DB::transaction(function () use ($attributes, $given, $occurredOn, $serverIds, $projectIds): Incident {
                 $incident = Incident::query()->create([
                     ...$attributes,
@@ -127,18 +130,5 @@ class OpenIncident extends Tool
             }),
             fn (Incident $incident, bool $unchanged) => $this->answer($incident, unchanged: $unchanged),
         );
-    }
-
-    /**
-     * @param  array<int|string>  $stored
-     * @param  list<int>  $given
-     */
-    private static function sameIds(array $stored, array $given): bool
-    {
-        $stored = array_map(intval(...), $stored);
-        sort($stored);
-        sort($given);
-
-        return $stored === $given;
     }
 }

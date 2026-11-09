@@ -86,6 +86,17 @@ class AgentToken extends Model
         };
     }
 
+    /**
+     * The agent the account signed in now came in with; null in the panel,
+     * on the command line and in jobs.
+     */
+    public static function current(): ?self
+    {
+        $user = auth()->user();
+
+        return $user instanceof User ? $user->currentAgentToken() : null;
+    }
+
     public static function findByToken(string $token): ?self
     {
         return self::query()->with('user')->where('token_hash', self::hash($token))->first();

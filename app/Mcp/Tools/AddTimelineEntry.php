@@ -63,8 +63,8 @@ class AddTimelineEntry extends Tool
         $occurredAt = self::moment($input['occurred_at'] ?? null);
 
         return self::once(
-            IncidentTimelineEntry::query()->where('incident_id', $incident->id)->where('note', $input['note']),
-            fn (IncidentTimelineEntry $entry): bool => $entry->note === $input['note'] && ($occurredAt === null || $occurredAt->eq($entry->occurred_at)),
+            IncidentTimelineEntry::query(),
+            ['incident_id' => $incident->id, 'note' => $input['note'], 'occurred_at' => $occurredAt?->toIso8601String()],
             fn (): IncidentTimelineEntry => $incident->timelineEntries()->create([
                 'occurred_at' => $occurredAt ?? CarbonImmutable::now()->startOfMinute(),
                 'note' => $input['note'],

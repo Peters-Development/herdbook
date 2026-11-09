@@ -59,8 +59,8 @@ class AddIncidentAction extends Tool
         $dueOn = $input['due_on'] ?? null;
 
         return self::once(
-            IncidentAction::query()->where('incident_id', $incident->id)->where('description', $input['description'])->open(),
-            fn (IncidentAction $action): bool => $action->description === $input['description'] && $action->due_on?->toDateString() === $dueOn,
+            IncidentAction::query()->open(),
+            ['incident_id' => $incident->id, 'description' => $input['description'], 'due_on' => $dueOn],
             fn (): IncidentAction => $incident->actions()->create(['description' => $input['description'], 'due_on' => $dueOn]),
             fn (IncidentAction $action, bool $unchanged) => $this->answer($incident, ['action' => Serializer::incidentAction($action->load(['user', 'completedBy']))], $unchanged),
         );

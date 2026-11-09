@@ -71,7 +71,7 @@ The same rules as the forms apply, with the same messages: work that is done can
 - writes at most 10,000 characters per plan, report, impact or root cause, and doesn't overwrite one that is longer (as it read it, masked), whoever wrote it: it would lose what it couldn't read;
 - writes an incident's impact, its timeline entries (at most 1,000 characters) and its action items (at most 255) as plain text: no passwords, tokens or masks, and moments that lie in the past;
 - changes the status of maintenance only by completing or calling off, and doesn't change maintenance that was called off; an incident's status it may change (also to reopen it) and resolve, and only a resolved incident gets a resolution time;
-- writes nothing twice when it tries a call again because the answer got lost: the same incident, timeline entry or action item from the same agent within ten minutes returns the first, marked as unchanged. A note it means to write twice gets a moment of its own.
+- writes nothing twice when it tries a call again because the answer got lost: the same call by the same agent within ten minutes returns what the first wrote, marked as unchanged, also when someone changed that since. A note it means to write twice gets a moment of its own.
 
 Times are ISO 8601, such as `2026-11-12T22:00`, in minutes as in the forms: seconds are dropped. Without an offset, they are in the display timezone (`HERDBOOK_DISPLAY_TIMEZONE`). Answers carry the offset, so a mistake shows at once.
 

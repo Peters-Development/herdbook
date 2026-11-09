@@ -3,8 +3,8 @@
 namespace App\Mcp\Tools\Concerns;
 
 use App\Mcp\Serializer;
+use App\Models\AgentToken;
 use App\Models\Incident;
-use App\Models\User;
 use App\Rules\Moment;
 use Carbon\CarbonImmutable;
 use Closure;
@@ -39,36 +39,42 @@ trait WritesIncidents
     private const int REPEAT_MINUTES = 10;
 
     /**
-     * Writes what $write writes, unless this agent wrote the same moments
-     * ago: then the answer is that one ("unchanged"), as a call tried again
-     * after its answer was lost would write it twice, and an agent can't
-     * delete what it wrote. One call of an agent at a time, so a call tried
-     * again while the first still writes finds what that one wrote.
+     * Writes what $write writes, unless this agent made the same call
+     * moments ago: then the answer is what that one wrote ("unchanged"), as
+     * a call tried again after its answer was lost would write it twice, and
+     * an agent can't delete what it wrote. The same call, not the same
+     * record: someone may have changed what it wrote since. One call of an
+     * agent at a time, so a call tried again while the first still writes
+     * finds what that one wrote.
      *
      * @template TModel of Model
      *
-     * @param  Builder<TModel>  $candidates  what may be the same, narrowed in SQL
-     * @param  Closure(TModel): bool  $same  whether it is, compared in PHP: MySQL compares text regardless of case and accents
+     * @param  Builder<TModel>  $records  where what it wrote still counts
+     * @param  array<string, mixed>  $call  what makes it the same call: what it writes, as stored (compared exactly, not as MySQL compares text)
      * @param  Closure(): TModel  $write
      * @param  Closure(TModel, bool): ResponseFactory  $answer  the record, and whether it was there already
      */
-    protected static function once(Builder $candidates, Closure $same, Closure $write, Closure $answer): Response|ResponseFactory
+    protected static function once(Builder $records, array $call, Closure $write, Closure $answer): Response|ResponseFactory
     {
-        $user = auth()->user();
-        $token = $user instanceof User ? $user->currentAgentToken() : null;
+        $agent = auth()->id().':'.AgentToken::current()?->getKey();
+        $key = 'mcp-call:'.$agent.':'.hash('sha256', $records->getModel()->getTable()."\n".json_encode($call, JSON_THROW_ON_ERROR));
 
         try {
-            [$record, $unchanged] = Cache::lock('mcp-write:'.$user?->getAuthIdentifier().':'.$token?->getKey(), 30)->block(10, function () use ($candidates, $same, $write, $user, $token): array {
-                $repeat = $candidates
-                    ->where('user_id', $user?->getAuthIdentifier())
-                    ->where('recorded_via', $token?->name)
-                    ->where('created_at', '>=', now()->subMinutes(self::REPEAT_MINUTES))
-                    ->latest('id')
-                    ->get()
-                    ->first($same);
+            [$record, $unchanged] = Cache::lock('mcp-write:'.$agent, 30)
+                ->betweenBlockedAttemptsSleepFor(50)
+                ->block(10, function () use ($records, $key, $write): array {
+                    $id = Cache::get($key);
+                    $repeat = $id === null ? null : $records->whereKey($id)->first();
 
-                return $repeat !== null ? [$repeat, true] : [$write(), false];
-            });
+                    if ($repeat !== null) {
+                        return [$repeat, true];
+                    }
+
+                    $record = $write();
+                    Cache::put($key, $record->getKey(), now()->addMinutes(self::REPEAT_MINUTES));
+
+                    return [$record, false];
+                });
         } catch (LockTimeoutException) {
             return Response::error(__('Another call of this agent is still writing. Try again in a moment.'));
         }

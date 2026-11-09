@@ -97,6 +97,9 @@ class IncidentWriteToolsTest extends TestCase
     public function test_a_call_tried_again_after_its_answer_was_lost_writes_nothing_twice(): void
     {
         $first = $this->callToolSuccessfully($this->token, 'open_incident', ['title' => 'Uploads fail', 'server_ids' => [$this->server->id]]);
+        // Also when monitoring or a person changed it meanwhile.
+        Incident::query()->sole()->update(['severity' => IncidentSeverity::Sev1]);
+        Incident::query()->sole()->servers()->attach(Server::factory()->create());
         $again = $this->callToolSuccessfully($this->token, 'open_incident', ['title' => ' Uploads  fail', 'server_ids' => [$this->server->id]]);
         $this->assertSame([1, $first['incident']['id'], true], [Incident::count(), $again['incident']['id'], $again['unchanged']]);
 
