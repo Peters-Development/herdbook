@@ -175,7 +175,7 @@ Never add a field that stores a password, private key or token. A credential is 
 - Timestamps are stored in **UTC** and shown in `config('herdbook.display_timezone')`, which Filament is told about in `AppServiceProvider`. A local zone would make the repeated hour at the end of daylight saving time ambiguous.
 - Dates that count in **calendar days** (expiry dates, due dates) are `date` columns, not `datetime`, and "today" for them is taken in the display timezone, not in UTC.
 - Dates are `CarbonImmutable` (`Date::use()` in `AppServiceProvider`), so a shared instance can never be shifted by accident.
-- Format dates with the formats of the language (`__('formats.date')` and friends), never with a hard-coded pattern.
+- Format dates with the formats of the language (`__('formats.date')` and friends), never with a hard-coded pattern. Date inputs are the browser's own (native `DatePicker`/`DateTimePicker`, never `->native(false)`): Filament's calendar cannot be typed in. Their format follows the browser.
 
 <a name="money"></a>
 ### Money
