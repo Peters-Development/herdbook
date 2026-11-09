@@ -267,6 +267,20 @@ class IncidentReadToolsTest extends TestCase
             'a network address and its MAC' => ['nas at 10.20.0.9 (00-11-22-33-44-55)', 'nas at [adres van nas] ([adres van nas])'],
             'not times, versions, hashes or methods' => ['At 12:30:45, PHP 8.5.0 (a1b2c3d4) in Class::method.', 'At 12:30:45, PHP 8.5.0 (a1b2c3d4) in Class::method.'],
             'not the start of a longer address' => ['192.0.2.100 is another', '[adres] is another'],
+            'a range' => ['range 192.0.2.10-192.0.2.20', 'range [adres van app-1]-[adres]'],
+            'before a dash' => ['iface 192.0.2.10-eth0', 'iface [adres van app-1]-eth0'],
+            'URL-encoded, as a site\'s Location header' => ['next=https%3A%2F%2F192.0.2.10%2F', 'next=https%3A%2F%2F[adres van app-1]%2F'],
+            'glued to a letter' => ['x192.0.2.10 and 192.0.2.10x', 'x[adres van app-1] and [adres van app-1]x'],
+            'more numbers in front' => ['1.192.0.2.10', '[adres van app-1]'],
+            'with leading zeros' => ['192.000.002.010', '[adres van app-1]'],
+            'IPv4 inside IPv6' => ['via ::ffff:192.0.2.10 and [64:ff9b::192.0.2.10]:80', 'via [adres] and [[adres]]:80'],
+            'IPv6 glued to a letter' => ['x2001:db8::10', 'x[adres van app-1]'],
+            'a cloud hostname with a dashed address' => ['ec2-192-0-2-10.compute', 'ec2-[adres van app-1].compute'],
+            'a MAC after a colon' => ['mac:00:11:22:33:44:55: link down', 'mac:[adres van nas]: link down'],
+            'a MAC as a DHCP client id' => ['client 01:00:11:22:33:44:55', 'client [adres van nas]'],
+            'a MAC written the Cisco way' => ['nas 0011.2233.4455', 'nas [adres van nas]'],
+            'a provider hostname glued to what comes before it' => ['%2Fvps-123.provider.example', '%2F[adres van app-1]'],
+            'not a provider hostname that is a name, or numbers that are no address' => ['hz-1 ran out of disk on 6.8.0-45-generic, call 06-12-34-56-78 on 2026-11-09', 'hz-1 ran out of disk on 6.8.0-45-generic, call 06-12-34-56-78 on 2026-11-09'],
         ];
     }
 
@@ -274,6 +288,7 @@ class IncidentReadToolsTest extends TestCase
     public function test_every_way_an_address_can_appear_in_a_text_is_masked(string $text, string $masked): void
     {
         Server::factory()->create(['name' => 'app-1', 'public_ipv4' => '192.0.2.10', 'public_ipv6' => '2001:db8::10', 'provider_hostname' => 'vps-123.provider.example']);
+        Server::factory()->create(['name' => 'hz-1', 'provider_hostname' => 'hz-1']);
         Network::factory()->create(['name' => 'Office', 'subnet' => '10.20.0.0/16', 'gateway' => '192.168.1.1']);
         Network::factory()->create(['name' => 'Home', 'gateway' => '192.168.1.1']);
         NetworkAddress::query()->create(['network_id' => Network::query()->firstWhere('name', 'Office')->id, 'name' => 'nas', 'address' => '10.20.0.9', 'mac_address' => '00:11:22:33:44:55']);
@@ -285,6 +300,27 @@ class IncidentReadToolsTest extends TestCase
 
         $this->assertSame([$masked, $masked], [$found['impact'], $found['timeline'][0]['note']]);
         $this->assertSame($masked, $found['actions'][0]['description']);
+    }
+
+    public function test_a_provider_hostname_is_known_however_it_was_stored(): void
+    {
+        Server::factory()->create(['name' => 'trail', 'provider_hostname' => 'trail.host.example.']);
+        Server::factory()->create(['name' => 'panel', 'provider_hostname' => 'https://panel.host.example/vm/77']);
+        Server::factory()->create(['name' => 'idn', 'provider_hostname' => 'bücher.example']);
+
+        $this->assertSame(
+            '[adres van trail], [adres van panel] and [adres van idn]',
+            app(HiddenValues::class)->mask('trail.host.example, panel.host.example and xn--bcher-kva.example'),
+        );
+    }
+
+    public function test_no_mask_is_masked_again(): void
+    {
+        // A name that is another server's provider hostname shows in the masks.
+        Server::factory()->create(['name' => 'vps-1.host.example', 'public_ipv4' => '192.0.2.10']);
+        Server::factory()->create(['name' => 'db-1', 'provider_hostname' => 'vps-1.host.example']);
+
+        $this->assertSame('Ping [adres van vps-1.host.example]', app(HiddenValues::class)->mask('Ping 192.0.2.10'));
     }
 
     public function test_an_address_where_a_text_is_cut_is_masked_before_it_is_cut(): void
