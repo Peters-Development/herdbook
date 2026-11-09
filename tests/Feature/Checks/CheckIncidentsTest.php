@@ -193,6 +193,16 @@ class CheckIncidentsTest extends TestCase
         $this->assertSame([1, 1], $incidents->map(fn (Incident $incident): int => $incident->timelineEntries()->count())->all());
     }
 
+    public function test_an_incident_from_monitoring_was_written_down_by_nobody(): void
+    {
+        $this->downCheck(Environment::factory()->create());
+        Date::setTestNow('2026-10-22 13:20:00');
+
+        $this->artisan('checks:incidents')->assertSuccessful();
+
+        $this->assertNull(Incident::query()->sole()->recordedBy());
+    }
+
     public function test_staging_and_normal_checks_open_no_incident(): void
     {
         $this->downCheck(Environment::factory()->staging()->create());

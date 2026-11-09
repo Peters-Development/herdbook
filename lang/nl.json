@@ -791,6 +791,7 @@
     "this client": "deze klant",
     "This client still has projects, domains or subscriptions": "Deze klant heeft nog projecten, domeinen of abonnementen",
     "This code is unknown or has been revoked.": "Deze code is onbekend of ingetrokken.",
+    "This incident was changed meanwhile.": "Dit incident is intussen gewijzigd.",
     "This is neither a link to a Vaultwarden item nor an item ID.": "Dit is geen link naar een Vaultwarden-item en geen item-id.",
     "This link is missing its access code. Make one with screens:create.": "Deze link mist de toegangscode. Maak er een met screens:create.",
     "This looks like a password or token. Secrets belong in Vaultwarden, not here; refer to them instead.": "Dit lijkt een wachtwoord of token. Geheimen horen in Vaultwarden, niet hier: verwijs ernaar.",

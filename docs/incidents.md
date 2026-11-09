@@ -25,6 +25,8 @@ Incidents live under **Knowledge → Incidents**. You write them yourself, Herdb
 
 Create an incident from **Knowledge → Incidents**, or from the incidents tab of a project, server, domain, network or client: then it is linked to that record from the start.
 
+Monitoring changes incidents too (see [Draft Incidents From Checks](#draft-incidents-from-checks)). If an incident changed since you opened its edit form, its links included, saving says so and changes nothing: reload the page to see the change.
+
 <a name="severity-and-status"></a>
 ### Severity and Status
 
