@@ -13,6 +13,7 @@ use App\Filament\Widgets\OpenIncidentActions;
 use App\Models\Client;
 use App\Models\Domain;
 use App\Models\Incident;
+use App\Models\IncidentAction;
 use App\Models\Network;
 use App\Models\Project;
 use App\Models\Server;
@@ -180,6 +181,11 @@ class IncidentChangesTest extends TestCase
 
         $manager->callAction(TestAction::make('reopen')->table($first));
         $this->assertSame([null, null, null], [$first->refresh()->done_at, $first->completed_by_id, $first->completed_via]);
+
+        // Deleted after the page was shown: completing it does nothing.
+        $gone = $incident->actions()->create(['description' => 'Gone']);
+        IncidentAction::query()->whereKey($gone->id)->delete();
+        $this->assertFalse($gone->complete());
     }
 
     private function incident(): Incident
