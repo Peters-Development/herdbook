@@ -120,7 +120,7 @@ docker compose exec app ./vendor/bin/pint --dirty
 
 | Path | Contents |
 |---|---|
-| `app/Models` | Eloquent models. `Concerns/` holds the shared behavior: `HasRenewal`, `HasCost`, `Linkable` and `LinksToInventory` (the "related to" links), `RecordsActivity` (the activity log). `Contracts/Renewable` is the interface of everything that renews. |
+| `app/Models` | Eloquent models. `Concerns/` holds the shared behavior: `HasRenewal`, `HasCost`, `Linkable` and `LinksToInventory` (the "related to" links), `RecordsActivity` (the activity log; `attributesNotLogged()` keeps long texts out, and a change to one is logged by name, labelled in `ActivityPresenter::textLabels()`). `Contracts/Renewable` is the interface of everything that renews. |
 | `app/Enums` | Backed enums (mostly strings) with a label (`HasLabel`) and often a color (`HasColor`). |
 | `app/Services/Checks` | The monitoring engine: `CheckRunner`, `CheckStateMachine`, `ConnectivityGuard`, `DefaultChecks`, `DnsExpectation`, `NetworkProbe` and its real implementation `SocketProbe`, `CheckHistory`, `CheckIncidents`, `MonitoringPulse`, `Uptime`. |
 | `app/Services/Alerts` | `AlertChannels`, the Pushover, ntfy and mail channels, `CheckAlerts` (alerts for check events), `AlertMessage`. |
@@ -175,6 +175,7 @@ Never add a field that stores a password, private key or token. A credential is 
 - Timestamps are stored in **UTC** and shown in `config('herdbook.display_timezone')`, which Filament is told about in `AppServiceProvider`. A local zone would make the repeated hour at the end of daylight saving time ambiguous.
 - Dates that count in **calendar days** (expiry dates, due dates) are `date` columns, not `datetime`, and "today" for them is taken in the display timezone, not in UTC.
 - Dates are `CarbonImmutable` (`Date::use()` in `AppServiceProvider`), so a shared instance can never be shifted by accident.
+- A `timestamp` column holds 1970-01-01 to 2038-01-19 03:14:07 UTC on MySQL, and the SQLite tests don't notice. A moment that can lie further ahead is a `dateTime` (`agent_tokens.expires_at`); the maintenance pickers stay within `Maintenance::earliestMoment()` and `latestMoment()`.
 - Format dates with the formats of the language (`__('formats.date')` and friends), never with a hard-coded pattern. Date inputs are the browser's own (native `DatePicker`/`DateTimePicker`, never `->native(false)`): Filament's calendar cannot be typed in. Their format follows the browser.
 
 <a name="money"></a>

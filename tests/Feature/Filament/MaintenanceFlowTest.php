@@ -24,6 +24,7 @@ use App\Models\Incident;
 use App\Models\Maintenance;
 use App\Models\Project;
 use App\Models\Server;
+use App\Models\User;
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
@@ -267,14 +268,238 @@ class MaintenanceFlowTest extends TestCase
         $this->assertSame(0, $maintenance->servers()->count());
     }
 
-    public function test_the_activity_log_names_the_work_and_leaves_the_texts_out(): void
+    public function test_the_activity_log_names_the_work_and_only_says_that_a_text_changed(): void
     {
         $maintenance = Maintenance::factory()->create(['tasks' => ['updates']]);
         $maintenance->update(['tasks' => ['updates', 'reboot'], 'report' => 'Lang verslag']);
 
         $activity = Activity::query()->where('event', 'updated')->sole();
 
-        $this->assertSame("Titel: Updates → Updates en herstart\nWerk: Updates → Updates, Herstart", ActivityPresenter::changes($activity));
+        $this->assertSame("Titel: Updates → Updates en herstart\nWerk: Updates → Updates, Herstart\nWat er gedaan is: gewijzigd", ActivityPresenter::changes($activity));
+        $this->assertStringNotContainsString('Lang verslag', $activity->toJson());
+    }
+
+    public function test_a_change_of_only_the_plan_is_logged_too_and_by_whom(): void
+    {
+        $user = $this->signIn();
+        $maintenance = Maintenance::factory()->planned()->create(['plan' => 'Old plan']);
+
+        $maintenance->update(['plan' => 'New plan']);
+
+        $activity = Activity::query()->where('event', 'updated')->sole();
+        $this->assertTrue($activity->causer->is($user));
+        $this->assertSame(['plan'], $activity->properties['texts']);
+        $this->assertSame('Plan: gewijzigd', ActivityPresenter::changes($activity));
+        foreach (['Old plan', 'New plan'] as $text) {
+            $this->assertStringNotContainsString($text, $activity->toJson());
+        }
+    }
+
+    public function test_completing_and_calling_off_are_logged_with_their_status(): void
+    {
+        $this->signIn();
+        $completed = Maintenance::factory()->planned()->create(['starts_at' => '2026-10-20 09:00:00']);
+        $calledOff = Maintenance::factory()->planned()->create();
+
+        Livewire::test(ListMaintenances::class)
+            ->callAction(TestAction::make('complete')->table($completed), ['report' => 'Done.'])
+            ->callAction(TestAction::make('cancel')->table($calledOff));
+
+        foreach ([$completed->id => 'done', $calledOff->id => 'cancelled'] as $id => $status) {
+            $activity = Activity::query()->where('subject_id', $id)->where('event', 'updated')->sole();
+            $this->assertSame(['planned', $status], [$activity->attribute_changes['old']['status'], $activity->attribute_changes['attributes']['status']]);
+        }
+    }
+
+    public function test_an_end_cleared_in_the_complete_form_stays_empty(): void
+    {
+        $this->signIn();
+        $maintenance = Maintenance::factory()->planned()->create(['starts_at' => '2026-10-20 09:00:00', 'ends_at' => '2026-10-20 11:00:00']);
+
+        Livewire::test(ListMaintenances::class)
+            ->callAction(TestAction::make('complete')->table($maintenance), ['ends_at' => null])
+            ->assertHasNoFormErrors();
+
+        $this->assertNull($maintenance->refresh()->ends_at);
+        $this->assertSame(MaintenanceStatus::Done, $maintenance->status);
+    }
+
+    public function test_completing_or_calling_off_what_is_no_longer_planned_changes_nothing_and_says_what_it_is(): void
+    {
+        $done = Maintenance::factory()->create(['report' => 'As it was.']);
+        $calledOff = Maintenance::factory()->planned()->create();
+        // Called off elsewhere, after this copy was loaded.
+        Maintenance::query()->whereKey($calledOff->id)->update(['status' => MaintenanceStatus::Cancelled]);
+
+        $this->assertFalse($done->complete(['report' => 'Again']));
+        $this->assertFalse($calledOff->cancel());
+        $this->assertFalse($calledOff->complete([]));
+
+        $this->assertSame('As it was.', $done->refresh()->report);
+        $this->assertSame(MaintenanceStatus::Cancelled, $calledOff->status, 'The model says what it is now.');
+        $this->assertSame(0, Activity::query()->where('event', 'updated')->count());
+    }
+
+    public function test_the_defaults_come_from_the_row_as_it_is_now(): void
+    {
+        $maintenance = Maintenance::factory()->planned()->create(['starts_at' => '2026-10-30 09:00:00']);
+        // Moved into the past elsewhere: it is no longer early.
+        Maintenance::query()->whereKey($maintenance->id)->update(['starts_at' => '2026-10-20 09:00:00']);
+
+        $maintenance->complete([]);
+
+        $this->assertSame('2026-10-20 09:00:00', $maintenance->refresh()->starts_at->toDateTimeString());
+    }
+
+    public function test_a_planned_end_before_the_start_given_is_no_end(): void
+    {
+        $maintenance = Maintenance::factory()->planned()->create(['starts_at' => '2026-10-20 09:00:00', 'ends_at' => '2026-10-20 11:00:00']);
+
+        $maintenance->complete(['starts_at' => '2026-10-23 10:00:00']);
+
+        $this->assertNull($maintenance->refresh()->ends_at);
+    }
+
+    public function test_a_maintenance_deleted_meanwhile_is_not_changed_and_no_longer_exists(): void
+    {
+        $maintenance = Maintenance::factory()->planned()->create();
+        Maintenance::query()->whereKey($maintenance->id)->delete();
+
+        $this->assertFalse($maintenance->cancel());
+        $this->assertFalse($maintenance->exists);
+    }
+
+    public function test_completing_works_from_the_row_as_it_is_now(): void
+    {
+        $maintenance = Maintenance::factory()->planned()->create(['title' => 'Updates', 'starts_at' => '2026-10-20 09:00:00']);
+        // Moved and renamed elsewhere, after this copy was loaded.
+        Maintenance::query()->whereKey($maintenance->id)->update(['title' => 'Moved elsewhere', 'starts_at' => '2026-12-01 09:00:00']);
+
+        $this->assertTrue($maintenance->complete(['starts_at' => '2026-10-20 09:00:00', 'report' => 'Done.']));
+
+        $this->assertSame(['Moved elsewhere', '2026-10-20 09:00:00'], [$maintenance->refresh()->title, $maintenance->starts_at->toDateTimeString()]);
+        $changes = Activity::query()->where('event', 'updated')->sole()->attribute_changes;
+        $this->assertArrayNotHasKey('title', $changes['attributes'], 'Not logged as this change.');
+    }
+
+    public function test_complete_takes_only_its_own_fields_and_the_defaults_for_the_rest(): void
+    {
+        $user = User::factory()->create();
+        $maintenance = Maintenance::factory()->planned()->create(['title' => 'Upgrade', 'plan' => 'The plan', 'starts_at' => '2026-10-30 09:00:00', 'ends_at' => '2026-10-30 11:00:00']);
+
+        $maintenance->complete(['title' => 'Other', 'plan' => 'Other plan', 'user_id' => $user->id, 'status' => MaintenanceStatus::Cancelled]);
+
+        $maintenance->refresh();
+        $this->assertSame(['Upgrade', 'The plan', MaintenanceStatus::Done], [$maintenance->title, $maintenance->plan, $maintenance->status]);
+        $this->assertNotSame($user->id, $maintenance->user_id);
+        // Done before its planned window: it started now, and the window's end is no end.
+        $this->assertSame('2026-10-24 12:00:00', $maintenance->starts_at->toDateTimeString());
+        $this->assertNull($maintenance->ends_at);
+    }
+
+    public function test_completing_early_starts_now_without_the_planned_end_and_completing_late_keeps_both(): void
+    {
+        $early = Maintenance::factory()->planned()->create(['starts_at' => '2026-10-30 09:00:00', 'ends_at' => '2026-10-30 11:00:00', 'report' => 'So far'])->completionDefaults();
+        $late = Maintenance::factory()->planned()->create(['starts_at' => '2026-10-20 09:00:00', 'ends_at' => '2026-10-20 11:00:00'])->completionDefaults();
+
+        $this->assertSame(['2026-10-24 12:00:00', null, 'So far'], [$early['starts_at']->toDateTimeString(), $early['ends_at'], $early['report']]);
+        $this->assertSame(['2026-10-20 09:00:00', '2026-10-20 11:00:00'], [$late['starts_at']->toDateTimeString(), $late['ends_at']->toDateTimeString()]);
+    }
+
+    public function test_a_modal_left_open_while_someone_else_completes_says_so(): void
+    {
+        $this->signIn();
+        $maintenance = Maintenance::factory()->planned()->create(['starts_at' => '2026-10-20 09:00:00']);
+
+        $page = Livewire::test(ViewMaintenance::class, ['record' => $maintenance->getRouteKey()])
+            ->mountAction('complete');
+        // An agent completes it meanwhile.
+        $maintenance->complete(['report' => 'By the agent.']);
+
+        $page->fillForm(['report' => 'By hand.'])
+            ->callMountedAction()
+            ->assertNotified('Dit onderhoud staat niet meer gepland.');
+
+        $this->assertSame('By the agent.', $maintenance->refresh()->report);
+    }
+
+    public function test_a_moment_outside_what_the_columns_hold_is_refused_in_words(): void
+    {
+        $this->signIn();
+        $outOfRange = 'Kies een moment tussen 1970 en 2038.';
+
+        Livewire::test(CreateMaintenance::class)
+            ->fillForm(['tasks' => ['upgrade'], 'status' => MaintenanceStatus::Planned, 'starts_at' => '2040-01-01 10:00'])
+            ->call('create')
+            ->assertHasFormErrors(['starts_at' => $outOfRange])
+            // A year typed as "26".
+            ->fillForm(['starts_at' => '0026-11-01 10:00'])
+            ->call('create')
+            ->assertHasFormErrors(['starts_at' => $outOfRange])
+            ->fillForm(['starts_at' => '2026-11-01 10:00', 'ends_at' => '2040-01-01 10:00'])
+            ->call('create')
+            ->assertHasFormErrors(['ends_at' => $outOfRange])
+            ->fillForm(['status' => MaintenanceStatus::Done, 'starts_at' => '0026-10-01 10:00', 'ends_at' => null])
+            ->call('create')
+            ->assertHasFormErrors(['starts_at' => $outOfRange])
+            ->fillForm(['starts_at' => '2026-12-01 10:00'])
+            ->call('create')
+            ->assertHasFormErrors(['starts_at' => 'Wat al gedaan is, kan niet in de toekomst liggen.']);
+    }
+
+    public function test_the_last_moment_is_compared_in_the_display_timezone(): void
+    {
+        $this->signIn();
+
+        // 03:14 UTC is 04:14 in Amsterdam.
+        Livewire::test(CreateMaintenance::class)
+            ->fillForm(['tasks' => ['upgrade'], 'status' => MaintenanceStatus::Planned, 'starts_at' => '2038-01-19 04:15'])
+            ->call('create')
+            ->assertHasFormErrors(['starts_at'])
+            ->fillForm(['starts_at' => '2038-01-19 04:14'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('2038-01-19 03:14', Maintenance::query()->sole()->starts_at->format('Y-m-d H:i'));
+    }
+
+    public function test_a_button_on_a_page_loaded_before_someone_else_completed_it_says_so_at_once(): void
+    {
+        $this->signIn();
+        $maintenance = Maintenance::factory()->planned()->create(['starts_at' => '2026-10-20 09:00:00']);
+        $page = Livewire::test(ViewMaintenance::class, ['record' => $maintenance->getRouteKey()]);
+
+        $maintenance->complete(['report' => 'By the agent.']);
+
+        $page->mountAction('complete')
+            ->assertNotified('Dit onderhoud staat niet meer gepland.')
+            ->assertActionNotMounted('complete');
+    }
+
+    public function test_a_modal_left_open_in_a_filtered_list_or_the_widget_says_so_too(): void
+    {
+        $this->signIn();
+        [$listed, $called, $widgeted] = Maintenance::factory()->planned()->count(3)->create(['starts_at' => '2026-10-20 09:00:00']);
+        Maintenance::factory()->planned()->create();
+
+        // Filtered on planned: once completed, it is no longer in the list.
+        $list = Livewire::test(ListMaintenances::class)
+            ->filterTable('status', MaintenanceStatus::Planned->value)
+            ->mountAction(TestAction::make('complete')->table($listed));
+        $listed->complete(['report' => 'By the agent.']);
+        $list->fillForm(['report' => 'By hand.'])->callMountedAction()->assertNotified('Dit onderhoud staat niet meer gepland.');
+
+        $list = Livewire::test(ListMaintenances::class)
+            ->filterTable('overdue')
+            ->mountAction(TestAction::make('cancel')->table($called));
+        $called->complete(['report' => 'By the agent.']);
+        $list->callMountedAction()->assertNotified('Dit onderhoud staat niet meer gepland.');
+
+        $widget = Livewire::test(PlannedMaintenance::class)->mountAction(TestAction::make('complete')->table($widgeted));
+        $widgeted->complete(['report' => 'By the agent.']);
+        $widget->fillForm(['report' => 'By hand.'])->callMountedAction()->assertNotified('Dit onderhoud staat niet meer gepland.');
+
+        $this->assertSame(['By the agent.'], Maintenance::query()->whereKey([$listed->id, $called->id, $widgeted->id])->pluck('report')->unique()->values()->all());
     }
 
     public function test_the_report_renders_markdown_without_running_scripts(): void

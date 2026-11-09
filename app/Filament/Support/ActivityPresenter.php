@@ -86,24 +86,27 @@ final class ActivityPresenter
     }
 
     /**
-     * "Field: old → new", one change per line, for updates and renewals.
+     * "Field: old → new", one change per line, for updates and renewals; a
+     * long text that is kept out of the log only says that it changed.
      */
     public static function changes(Activity $activity): ?string
     {
-        $changes = $activity->attribute_changes;
-
-        if ($changes === null || ! in_array($activity->event, ['updated', 'renewed'], true)) {
+        if (! in_array($activity->event, ['updated', 'renewed'], true)) {
             return null;
         }
 
+        $changes = $activity->attribute_changes;
         $casts = self::castsOf($activity);
-        $old = $changes->get('old', []);
+        $old = $changes?->get('old', []) ?? [];
 
-        $lines = collect($changes->get('attributes', []))->map(
-            fn (mixed $value, string $attribute): string => self::label($attribute).': '
+        $lines = collect($changes?->get('attributes', []) ?? [])
+            ->map(fn (mixed $value, string $attribute): string => self::label($attribute).': '
                 .self::value($attribute, $old[$attribute] ?? null, $casts[$attribute] ?? null)
-                .' → '.self::value($attribute, $value, $casts[$attribute] ?? null),
-        );
+                .' → '.self::value($attribute, $value, $casts[$attribute] ?? null))
+            ->values()
+            ->merge(collect($activity->properties?->get('texts', []))->map(
+                fn (string $attribute): string => (self::textLabels()["{$activity->subject_type}.{$attribute}"] ?? self::label($attribute)).': '.__('changed'),
+            ));
 
         return $lines->isEmpty() ? null : $lines->implode("\n");
     }
@@ -130,6 +133,25 @@ final class ActivityPresenter
         }
 
         return (string) $activity->description;
+    }
+
+    /**
+     * The long texts models keep out of the log (attributesNotLogged()), by
+     * the name their forms give them, per morph alias: a maintenance's plan
+     * is a work plan, not a server's hosting plan, and an incident's body is
+     * its report.
+     *
+     * @return array<string, string>
+     */
+    private static function textLabels(): array
+    {
+        return [
+            'maintenance.plan' => __('Work plan'),
+            'maintenance.report' => __('What was done'),
+            'document.body' => __('Content'),
+            'incident.body' => __('Report'),
+            'incident.root_cause' => __('Root cause'),
+        ];
     }
 
     /**

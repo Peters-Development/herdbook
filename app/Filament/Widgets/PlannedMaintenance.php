@@ -29,7 +29,10 @@ class PlannedMaintenance extends TableWidget
     {
         return $table
             ->heading(__('Planned maintenance'))
-            ->query(fn (): Builder => Maintenance::query()->planned()->with(['servers', 'projects'])->orderByDue())
+            ->query(fn (): Builder => Maintenance::query()->with(['servers', 'projects'])->orderByDue())
+            // The record of an open modal is looked up without it: completed
+            // meanwhile, it is still found, and the action can say so.
+            ->modifyQueryUsing(fn (Builder $query, bool $isResolvingRecord): Builder => $isResolvingRecord ? $query : $query->planned())
             ->paginated([5, 10, 25])
             ->defaultPaginationPageOption(5)
             ->emptyStateHeading(__('Nothing planned'))

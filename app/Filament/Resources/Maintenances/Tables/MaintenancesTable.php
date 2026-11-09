@@ -35,8 +35,10 @@ class MaintenancesTable
                 TextColumn::make('user.name')->label(__('By'))->placeholder('—')->toggleable(),
             ])
             ->filters([
-                SelectFilter::make('status')->label(__('Status'))->options(MaintenanceStatus::class),
-                Filter::make('overdue')->label(__('Overdue'))->query(fn (Builder $query): Builder => $query->overdue()),
+                // Not when the record of an open modal is looked up: completed
+                // meanwhile, it is still found, and the action can say so.
+                SelectFilter::make('status')->label(__('Status'))->options(MaintenanceStatus::class)->excludeWhenResolvingRecord(),
+                Filter::make('overdue')->label(__('Overdue'))->query(fn (Builder $query): Builder => $query->overdue())->excludeWhenResolvingRecord(),
                 SelectFilter::make('tasks')
                     ->label(__('Work'))
                     ->options(MaintenanceTask::class)

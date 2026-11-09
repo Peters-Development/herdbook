@@ -74,7 +74,7 @@ You can also create maintenance from **Knowledge → Maintenance** directly and 
 
 **Call off** sets it to *Called off*. If you want to do it after all, edit it and set the status back to *Planned*.
 
-Both actions are available on the maintenance itself, on the Maintenance tab of servers and projects, and on the dashboard.
+Both actions are available on the maintenance itself, on the Maintenance tab of servers and projects, and on the dashboard. If someone else completed or called it off since you opened the page, Herdbook says so and changes nothing.
 
 <a name="one-maintenance-several-servers"></a>
 ## One Maintenance, Several Servers
@@ -98,7 +98,7 @@ When anything is planned, the dashboard shows a **Planned maintenance** table: w
 
 The [status page](dashboard.md#the-project-status-page) of a project draws maintenance as a band over its window above the uptime bars: blue, dashed while it is planned, orange when it is overdue. It shows the maintenance of the project and of the servers its production needs, so an update of a shared database server shows up on every project that uses it.
 
-The activity log records changes to a maintenance, except its plan and report, which are long texts.
+The activity log records the changes to a maintenance and who made them, but not its links to servers and projects. Of its plan and report, which are long texts, it only records that they changed.
 
 > [!NOTE]
 > Alerts are not silenced during a planned maintenance window: a check that goes down during your work still alerts as usual. Pause the checks involved if you expect downtime (see [Monitoring](monitoring.md#creating-a-check-by-hand)).

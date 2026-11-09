@@ -12,7 +12,9 @@ use Spatie\Activitylog\Support\LogOptions;
  */
 trait RecordsActivity
 {
-    use LogsActivity;
+    use LogsActivity {
+        shouldSkipEmptyLog as private skipsEmptyLog;
+    }
 
     public function getActivitylogOptions(): LogOptions
     {
@@ -26,15 +28,42 @@ trait RecordsActivity
     /**
      * Called by the activity log before it saves an entry about this model:
      * stores activityContext() with it, so the entry also shows up on the
-     * page of what this model belongs to, even after it was deleted.
+     * page of what this model belongs to, even after it was deleted; and
+     * which long texts changed ("texts").
      */
     public function beforeActivityLogged(Model $activity, string $eventName): void
     {
         $context = $this->activityContext();
 
+        if ($eventName === 'updated' && ($texts = $this->changedTextsNotLogged()) !== []) {
+            $context['texts'] = $texts;
+        }
+
         if ($context !== []) {
             $activity->properties = collect($activity->properties)->merge($context);
         }
+    }
+
+    /**
+     * Also when only a long text changed: the text stays out of the log, but
+     * that it changed, and who changed it, goes in ("texts").
+     *
+     * @param  array<string, mixed>  $changes
+     */
+    protected function shouldSkipEmptyLog(array $changes): bool
+    {
+        return $this->changedTextsNotLogged() === [] && $this->skipsEmptyLog($changes);
+    }
+
+    /**
+     * Which of attributesNotLogged() this save changes (still dirty while
+     * the "updated" event runs).
+     *
+     * @return list<string>
+     */
+    private function changedTextsNotLogged(): array
+    {
+        return array_values(array_intersect($this->attributesNotLogged(), array_keys($this->getDirty())));
     }
 
     /**
@@ -49,7 +78,8 @@ trait RecordsActivity
     }
 
     /**
-     * Long texts that would bloat the log (documents keep revisions instead).
+     * Long texts that would bloat the log (documents keep revisions instead):
+     * a change to one is logged by its name only.
      *
      * @return list<string>
      */

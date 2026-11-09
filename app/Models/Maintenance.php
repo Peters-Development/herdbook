@@ -6,12 +6,16 @@ use App\Enums\MaintenanceStatus;
 use App\Enums\MaintenanceTask;
 use App\Models\Concerns\LinksToInventory;
 use App\Models\Concerns\RecordsActivity;
+use Carbon\CarbonImmutable;
+use Closure;
 use Database\Factories\MaintenanceFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Work on servers and projects, planned ahead or written down afterwards:
@@ -59,6 +63,103 @@ class Maintenance extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * What complete() takes from its caller.
+     */
+    public const array COMPLETION_FIELDS = ['starts_at', 'ends_at', 'report'];
+
+    /**
+     * The first moment its timestamp columns hold (MySQL).
+     */
+    public static function earliestMoment(): CarbonImmutable
+    {
+        return CarbonImmutable::parse('1970-01-01 00:00:01', 'UTC');
+    }
+
+    /**
+     * The last moment its timestamp columns hold (MySQL).
+     */
+    public static function latestMoment(): CarbonImmutable
+    {
+        return CarbonImmutable::parse('2038-01-19 03:14:07', 'UTC');
+    }
+
+    /**
+     * What completing it starts from: done before its planned time, it
+     * started now; a planned end that hasn't come is no end; its report so far.
+     *
+     * @return array{starts_at: CarbonImmutable, ends_at: ?CarbonImmutable, report: ?string}
+     */
+    public function completionDefaults(): array
+    {
+        return [
+            'starts_at' => $this->starts_at->isFuture() ? now() : $this->starts_at,
+            'ends_at' => $this->ends_at?->isPast() ? $this->ends_at : null,
+            'report' => $this->report,
+        ];
+    }
+
+    /**
+     * Planned → done, with when it was done and what was done: starts_at,
+     * ends_at and report from $data, completionDefaults() for those it leaves
+     * out. False: it was no longer planned; its status says what it is now.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function complete(array $data): bool
+    {
+        return $this->updateWhileStill(MaintenanceStatus::Planned, function () use ($data): array {
+            $attributes = [...$this->completionDefaults(), ...Arr::only($data, self::COMPLETION_FIELDS)];
+
+            // The planned end is no end of work that started after it.
+            if (! array_key_exists('ends_at', $data) && $attributes['ends_at'] !== null
+                && $this->asDateTime($attributes['ends_at'])->lt($this->asDateTime($attributes['starts_at']))) {
+                $attributes['ends_at'] = null;
+            }
+
+            return [...$attributes, 'status' => MaintenanceStatus::Done];
+        });
+    }
+
+    /**
+     * Planned → called off. False: it was no longer planned; its status says
+     * what it is now.
+     */
+    public function cancel(): bool
+    {
+        return $this->updateWhileStill(MaintenanceStatus::Planned, ['status' => MaintenanceStatus::Cancelled]);
+    }
+
+    /**
+     * Updates it only if it still has $status, from the row as it is now: the
+     * row is locked and read first, so a change someone else made meanwhile
+     * is neither overwritten nor logged as this one's. Through Eloquent, so
+     * the saving hook and the activity log run. Either way the model holds
+     * the row as it is afterwards; a row that is gone leaves it not existing.
+     *
+     * @param  array<string, mixed>|(Closure(): array<string, mixed>)  $attributes  a closure sees the current row
+     */
+    public function updateWhileStill(MaintenanceStatus $status, array|Closure $attributes): bool
+    {
+        return DB::transaction(function () use ($status, $attributes): bool {
+            $current = self::query()->lockForUpdate()->find($this->getKey());
+
+            if ($current === null) {
+                $this->exists = false;
+
+                return false;
+            }
+
+            $this->setRawAttributes($current->getAttributes(), sync: true);
+
+            if ($this->status !== $status) {
+                return false;
+            }
+
+            return $this->fill(value($attributes))->save();
+        });
     }
 
     /**
