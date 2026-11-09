@@ -30,7 +30,7 @@ class AddIncidentAction extends Tool
         return 'Add an action item to an incident: what has to change so it doesn\'t happen again, such as "Alert on NFS latency", with a due date if there is one. '
             .'Check get_incident first: it may be there already, and an agent can\'t delete one. '
             .'Plain text of at most 255 characters; it refuses passwords, tokens, private keys and masks such as [address of app-1]. '
-            .self::repeatSentence('description').self::answerSentence('in "action" the action item');
+            .self::repeatSentence('description and due_on, while the first is open').self::answerSentence('in "action" the action item');
     }
 
     public function schema(JsonSchema $schema): array
@@ -56,13 +56,13 @@ class AddIncidentAction extends Tool
             return $incident;
         }
 
-        $repeat = self::repeated(IncidentAction::query()->where('incident_id', $incident->id)->where('description', $input['description'])->whereNull('done_at'));
+        $dueOn = $input['due_on'] ?? null;
 
-        $action = $repeat ?? $incident->actions()->create([
-            'description' => $input['description'],
-            'due_on' => $input['due_on'] ?? null,
-        ]);
-
-        return $this->answer($incident, ['action' => Serializer::incidentAction($action)], unchanged: $repeat !== null);
+        return self::once(
+            IncidentAction::query()->where('incident_id', $incident->id)->where('description', $input['description'])->open(),
+            fn (IncidentAction $action): bool => $action->description === $input['description'] && $action->due_on?->toDateString() === $dueOn,
+            fn (): IncidentAction => $incident->actions()->create(['description' => $input['description'], 'due_on' => $dueOn]),
+            fn (IncidentAction $action, bool $unchanged) => $this->answer($incident, ['action' => Serializer::incidentAction($action->load(['user', 'completedBy']))], $unchanged),
+        );
     }
 }

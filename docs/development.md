@@ -283,7 +283,7 @@ Tests call the tools over HTTP with `Tests\Concerns\ActsAsAgent` (`agentToken()`
 
 1. A class in `app/Mcp/Tools` with its `Name` and its annotations, listed in `HerdbookServer::$tools`.
 2. A tool that writes uses `RequiresWriteAccess`, and deletes nothing. Text it writes gets `WritesTexts::textRules()` (or `plainTextRules()`), and it doesn't overwrite a text longer than `Serializer::MAX_TEXT` or one with other links (`WritesTexts::checkTexts()` on the locked row).
-3. A tool that changes existing maintenance takes its `version` and saves through `updateWhileStill()`, `complete()` or `cancel()`.
+3. A tool that changes existing maintenance or an incident takes its `version` and saves through `GuardsChanges::saveWhile()` (maintenance: `updateWhileStill()`, `complete()` or `cancel()`). A tool that adds to an incident, or opens one, writes through `WritesIncidents::once()`, so a call tried again writes nothing twice.
 4. Its arguments through `ValidatesArguments`, its answer through `Serializer`, with a test that it returns no field an agent never gets. New kinds of data also go into the lists in [Agents](agents.md#what-it-gets) and [Security](security.md#agents).
 5. Its errors in `__()`, with their Dutch in `lang/nl.json`.
 6. A feature test through `ActsAsAgent`.

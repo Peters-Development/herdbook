@@ -131,6 +131,7 @@
     "Amounts excluding VAT.": "Bedragen exclusief btw.",
     "An alert goes out through the first channel that works. Critical: Pushover, ntfy, email. Everything else: ntfy, email, Pushover. On an iPhone, only Pushover breaks through Do Not Disturb.": "Een melding gaat via het eerste kanaal dat werkt. Kritiek: Pushover, ntfy, e-mail. De rest: ntfy, e-mail, Pushover. Op een iPhone komt alleen Pushover door Niet storen heen.",
     "and :count more": "en nog :count",
+    "Another call of this agent is still writing. Try again in a moment.": "Een andere aanroep van deze agent schrijft nog. Probeer het zo opnieuw.",
     "API token": "API-token",
     "App": "App",
     "Applies to the domains and contracts with this provider, unless they set their own.": "Geldt voor de domeinen en contracten bij deze leverancier, tenzij die zelf iets anders zeggen.",

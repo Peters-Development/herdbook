@@ -113,6 +113,38 @@ class IncidentWriteToolsTest extends TestCase
         $this->assertSame([2, null], [Incident::query()->sole()->timelineEntries()->count(), $later['unchanged'] ?? null]);
     }
 
+    public function test_only_the_same_call_by_the_same_agent_counts_as_tried_again(): void
+    {
+        $open = fn (array $arguments): array => $this->callToolSuccessfully($this->token, 'open_incident', ['title' => 'Uploads fail', 'server_ids' => [$this->server->id], ...$arguments]);
+
+        $id = $open([])['incident']['id'];
+        $this->assertTrue($open(['severity' => 'sev2'])['unchanged']);
+        // Anything else that differs is another incident: compared as written, not as MySQL compares text.
+        foreach ([['severity' => 'sev1'], ['title' => 'uploads fail'], ['server_ids' => [$this->server->id, Server::factory()->create()->id]], ['impact' => 'Slow'], ['started_at' => '2026-11-09T11:00']] as $other) {
+            $this->assertArrayNotHasKey('unchanged', $open($other));
+        }
+        $this->assertTrue($open(['started_at' => '2026-11-09T11:00'])['unchanged']);
+        $this->assertSame(6, Incident::count());
+
+        $entry = fn (array $arguments, ?string $token = null): array => $this->callToolSuccessfully($token ?? $this->token, 'add_timeline_entry', ['id' => $id, 'note' => 'Restarted php-fpm.', ...$arguments]);
+        $entry(['occurred_at' => '2026-11-09T12:50']);
+        $this->assertTrue($entry(['occurred_at' => '2026-11-09T12:50'])['unchanged']);
+        // The same note, when it happened again; in another case; through another agent.
+        [, $other] = $this->agentToken($this->user, AgentAccess::Write, name: 'other-agent');
+        foreach ([[['occurred_at' => '2026-11-09T12:55']], [['note' => 'restarted php-fpm.']], [[], $other]] as $arguments) {
+            $this->assertArrayNotHasKey('unchanged', $entry(...$arguments));
+        }
+        $this->assertSame(4, Incident::query()->find($id)->timelineEntries()->count());
+
+        $action = fn (array $arguments): array => $this->callToolSuccessfully($this->token, 'add_incident_action', ['id' => $id, 'description' => 'Alert on NFS latency', ...$arguments]);
+        $first = $action(['due_on' => '2026-11-20'])['action']['id'];
+        $this->assertArrayNotHasKey('unchanged', $action(['due_on' => '2026-11-27']));
+        $this->callToolSuccessfully($this->token, 'complete_incident_action', ['id' => $first]);
+        // Completed, the same action item is a new one.
+        $this->assertArrayNotHasKey('unchanged', $action(['due_on' => '2026-11-20']));
+        $this->assertSame(3, Incident::query()->find($id)->actions()->count());
+    }
+
     public function test_the_day_it_is_filed_under_is_the_start_in_the_display_timezone(): void
     {
         // 23:30 in UTC is half past midnight the next day in Amsterdam.

@@ -40,7 +40,7 @@ class OpenIncident extends Tool
             .'Severity sev1 only when production is down or data is at risk; sev2, the default, when it is serious but has a workaround or a limited reach; sev3 for a small problem. '
             .'Link it to the servers and projects it concerns (ids from search_inventory; at least one). '
             .'The title and the impact are plain text and refuse passwords, tokens, private keys and masks such as [address of app-1]. '.self::textsSentence('The report', replacing: false)
-            .self::repeatSentence('title').self::answerSentence();
+            .self::repeatSentence('arguments').self::answerSentence();
     }
 
     public function schema(JsonSchema $schema): array
@@ -90,30 +90,55 @@ class OpenIncident extends Tool
         });
 
         $given = $moments($input);
-        $title = Str::squish($input['title']);
+        $serverIds = self::ids($input['server_ids'] ?? []);
+        $projectIds = self::ids($input['project_ids'] ?? []);
+        $attributes = [
+            'title' => Str::squish($input['title']),
+            'severity' => IncidentSeverity::tryFrom($input['severity'] ?? '') ?? IncidentSeverity::Sev2,
+            'impact' => $input['impact'] ?? null,
+            'body' => $input['report'] ?? null,
+        ];
+        // The moments it was given: those it wasn't are the call's own.
+        $fixed = array_intersect_key($given, array_filter([
+            'started_at' => isset($input['started_at']) || isset($input['detected_at']),
+            'detected_at' => isset($input['detected_at']),
+        ]));
+        $occurredOn = $input['occurred_on'] ?? $given['started_at']->timezone(config('herdbook.display_timezone'))->toDateString();
 
-        if (($repeat = self::repeated(Incident::query()->unresolved()->where('title', $title))) !== null) {
-            return $this->answer($repeat, unchanged: true);
-        }
+        return self::once(
+            Incident::query()->unresolved()->where('title', $attributes['title'])->with(['servers', 'projects']),
+            fn (Incident $incident): bool => $this->asStored($incident, [...$attributes, ...$fixed])
+                && (! isset($input['occurred_on']) || $incident->occurred_on?->toDateString() === $occurredOn)
+                && self::sameIds($incident->servers->modelKeys(), $serverIds)
+                && self::sameIds($incident->projects->modelKeys(), $projectIds),
+            fn (): Incident => DB::transaction(function () use ($attributes, $given, $occurredOn, $serverIds, $projectIds): Incident {
+                $incident = Incident::query()->create([
+                    ...$attributes,
+                    'status' => IncidentStatus::Open,
+                    'occurred_on' => $occurredOn,
+                    'started_at' => $given['started_at'],
+                    'detected_at' => $given['detected_at'],
+                ]);
 
-        $incident = DB::transaction(function () use ($input, $given, $title): Incident {
-            $incident = Incident::query()->create([
-                'title' => $title,
-                'severity' => $input['severity'] ?? IncidentSeverity::Sev2,
-                'status' => IncidentStatus::Open,
-                'occurred_on' => $input['occurred_on'] ?? $given['started_at']->timezone(config('herdbook.display_timezone'))->toDateString(),
-                'started_at' => $given['started_at'],
-                'detected_at' => $given['detected_at'],
-                'impact' => $input['impact'] ?? null,
-                'body' => $input['report'] ?? null,
-            ]);
+                $incident->servers()->attach($serverIds);
+                $incident->projects()->attach($projectIds);
 
-            $incident->servers()->attach(self::ids($input['server_ids'] ?? []));
-            $incident->projects()->attach(self::ids($input['project_ids'] ?? []));
+                return $incident;
+            }),
+            fn (Incident $incident, bool $unchanged) => $this->answer($incident, unchanged: $unchanged),
+        );
+    }
 
-            return $incident;
-        });
+    /**
+     * @param  array<int|string>  $stored
+     * @param  list<int>  $given
+     */
+    private static function sameIds(array $stored, array $given): bool
+    {
+        $stored = array_map(intval(...), $stored);
+        sort($stored);
+        sort($given);
 
-        return $this->answer($incident);
+        return $stored === $given;
     }
 }

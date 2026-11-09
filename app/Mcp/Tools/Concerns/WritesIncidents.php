@@ -8,8 +8,11 @@ use App\Models\Maintenance;
 use App\Models\User;
 use App\Rules\Moment;
 use Carbon\CarbonImmutable;
+use Closure;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Validator;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
@@ -37,33 +40,51 @@ trait WritesIncidents
     private const int REPEAT_MINUTES = 10;
 
     /**
-     * What this agent wrote the same moments ago, if it did: the tool
-     * answers with that one ("unchanged") instead of writing it twice, as an
-     * agent can't delete what it wrote.
+     * Writes what $write writes, unless this agent wrote the same moments
+     * ago: then the answer is that one ("unchanged"), as a call tried again
+     * after its answer was lost would write it twice, and an agent can't
+     * delete what it wrote. One call of an agent at a time, so a call tried
+     * again while the first still writes finds what that one wrote.
      *
      * @template TModel of Model
      *
-     * @param  Builder<TModel>  $same  what counts as the same
-     * @return TModel|null
+     * @param  Builder<TModel>  $candidates  what may be the same, narrowed in SQL
+     * @param  Closure(TModel): bool  $same  whether it is, compared in PHP: MySQL compares text regardless of case and accents
+     * @param  Closure(): TModel  $write
+     * @param  Closure(TModel, bool): ResponseFactory  $answer  the record, and whether it was there already
      */
-    protected static function repeated(Builder $same): ?Model
+    protected static function once(Builder $candidates, Closure $same, Closure $write, Closure $answer): Response|ResponseFactory
     {
         $user = auth()->user();
+        $token = $user instanceof User ? $user->currentAgentToken() : null;
 
-        return $same
-            ->where('user_id', $user?->getAuthIdentifier())
-            ->where('recorded_via', $user instanceof User ? $user->currentAgentToken()?->name : null)
-            ->where('created_at', '>=', now()->subMinutes(self::REPEAT_MINUTES))
-            ->latest('id')
-            ->first();
+        try {
+            [$record, $unchanged] = Cache::lock('mcp-write:'.$user?->getAuthIdentifier().':'.$token?->getKey(), 30)->block(10, function () use ($candidates, $same, $write, $user, $token): array {
+                $repeat = $candidates
+                    ->where('user_id', $user?->getAuthIdentifier())
+                    ->where('recorded_via', $token?->name)
+                    ->where('created_at', '>=', now()->subMinutes(self::REPEAT_MINUTES))
+                    ->latest('id')
+                    ->get()
+                    ->first($same);
+
+                return $repeat !== null ? [$repeat, true] : [$write(), false];
+            });
+        } catch (LockTimeoutException) {
+            return Response::error(__('Another call of this agent is still writing. Try again in a moment.'));
+        }
+
+        return $answer($record, $unchanged);
     }
 
     /**
      * What a description tells an agent about calling it again.
+     *
+     * @param  string  $what  what makes it the same
      */
-    protected static function repeatSentence(string $what): string
+    protected static function repeatSentence(string $what, string $again = ''): string
     {
-        return 'Called again with the same '.$what.' within '.self::REPEAT_MINUTES.' minutes (its answer lost), it returns the first with "unchanged": true. ';
+        return 'Called again with the same '.$what.' within '.self::REPEAT_MINUTES.' minutes (its answer lost), it writes nothing and returns the first with "unchanged": true'.($again === '' ? '' : '; '.$again).'. ';
     }
 
     /**
