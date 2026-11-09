@@ -292,7 +292,8 @@ class HiddenValues
     {
         $last = (string) array_pop($labels);
 
-        for ($dash = strrpos(substr($last, 0, self::MAX_LABEL + 1), '-'); $dash !== false && $dash > 0; $dash = strrpos(substr($last, 0, $dash), '-')) {
+        // In characters: a label outside ASCII takes more bytes.
+        for ($dash = strrpos(mb_substr($last, 0, self::MAX_LABEL + 1), '-'); $dash !== false && $dash > 0; $dash = strrpos(substr($last, 0, $dash), '-')) {
             $name = [...$labels, substr($last, 0, $dash)];
             $mask = $this->known()[mb_strtolower(implode('.', $name))] ?? null;
             $masked = $mask !== null ? $this->hold($mask) : $this->glued($name[0], implode('.', array_slice($name, 1)));
