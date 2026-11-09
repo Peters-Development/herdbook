@@ -4,6 +4,7 @@ namespace Tests\Feature\Checks;
 
 use App\Enums\CheckState;
 use App\Enums\CheckType;
+use App\Enums\IncidentSource;
 use App\Enums\IncidentStatus;
 use App\Jobs\RunChecks;
 use App\Models\Check;
@@ -87,7 +88,7 @@ class RunChecksTest extends TestCase
         Http::fake(['*' => Http::response('ok')]);
         $check = Check::factory()->create(['failure_threshold' => 1, 'success_threshold' => 1]);
         $check->forceFill(['state' => CheckState::Down])->save();
-        $incident = Incident::factory()->create(['status' => IncidentStatus::Open]);
+        $incident = Incident::factory()->create(['status' => IncidentStatus::Open, 'source' => IncidentSource::Check]);
         $check->events()->create(['from_state' => CheckState::Up, 'to_state' => CheckState::Down, 'occurred_at' => now()->subMinutes(10), 'incident_id' => $incident->id]);
 
         RunChecks::dispatchSync([$check->id]);

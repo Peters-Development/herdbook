@@ -646,6 +646,7 @@
     "Pushover did not accept the alert": "Pushover nam de melding niet aan",
     "Pushover user key": "Pushover user key",
     "Pushover works. Sent :time.": "Pushover werkt. Verstuurd :time.",
+    "Raised to SEV1: a critical production check is down.": "Verhoogd naar SEV1: een kritieke productiecheck is down.",
     "Reason given by Pushover: :reason": "Reden van Pushover: :reason",
     "Reboot": "Herstart",
     "reboot": "herstart",

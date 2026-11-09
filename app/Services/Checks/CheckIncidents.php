@@ -20,10 +20,12 @@ use Illuminate\Support\Str;
 /**
  * Draft incidents from long outages: a critical production check that is
  * down for a while opens one (or joins a recent unresolved one of its
- * projects or servers, also one a person or an agent opened), with the
- * start taken from the first failed result, so the detection time and the
- * time to detect are right. A recovery is added to its timeline; the
- * incident moves to "monitoring" once none of its checks is down any more.
+ * projects or servers, also one a person or an agent opened, raising it to
+ * SEV1), with the start taken from the first failed result, so the
+ * detection time and the time to detect are right. A recovery is added to
+ * its timeline; a draft of its own moves to "monitoring" once none of its
+ * checks is down any more (what a person or an agent wrote down may be
+ * about more than the checks: they decide).
  */
 final class CheckIncidents
 {
@@ -122,6 +124,16 @@ final class CheckIncidents
                     $incident->update(['status' => IncidentStatus::Open]);
                 }
 
+                // A critical production outage is SEV1, also in what a person
+                // or an agent wrote down as less: the overviews go by it.
+                if ($incident->severity !== IncidentSeverity::Sev1) {
+                    $incident->update(['severity' => IncidentSeverity::Sev1]);
+                    $incident->timelineEntries()->create([
+                        'occurred_at' => $event->occurred_at,
+                        'note' => __('Raised to SEV1: a critical production check is down.'),
+                    ]);
+                }
+
                 return 0;
             }, attempts: 3);
         }
@@ -162,7 +174,7 @@ final class CheckIncidents
                 ->whereIn('id', CheckEvent::query()->where('incident_id', $incident->id)->select('check_id'))
                 ->exists();
 
-            if ($incident->status === IncidentStatus::Open && ! $stillDown) {
+            if ($incident->source === IncidentSource::Check && $incident->status === IncidentStatus::Open && ! $stillDown) {
                 $incident->update(['status' => IncidentStatus::Monitoring]);
             }
         }, attempts: 3);
@@ -172,7 +184,7 @@ final class CheckIncidents
      * The unresolved incident of the same projects or servers, detected in
      * the last hours (without a detection time: written down in them),
      * whoever opened it: a person or an agent that was there first wrote down
-     * the same outage.
+     * the same outage. Not an imported one: that is a report of the past.
      */
     private function openIncidentFor(Check $check): ?Incident
     {
@@ -186,6 +198,7 @@ final class CheckIncidents
 
         return Incident::query()
             ->unresolved()
+            ->where('source', '!=', IncidentSource::Import)
             ->where(fn (Builder $query) => $query
                 ->where('detected_at', '>=', $since)
                 ->orWhere(fn (Builder $query) => $query->whereNull('detected_at')->where('created_at', '>=', $since)))

@@ -5,6 +5,7 @@ namespace Tests\Feature\Checks;
 use App\Enums\AlertLevel;
 use App\Enums\CheckState;
 use App\Enums\CheckType;
+use App\Enums\IncidentSeverity;
 use App\Enums\IncidentSource;
 use App\Enums\IncidentStatus;
 use App\Enums\ProjectStatus;
@@ -307,7 +308,28 @@ class CheckIncidentsTest extends TestCase
         $this->assertSame(IncidentSource::Manual, $incident->source);
         $this->assertSame($incident->id, $check->events()->sole()->incident_id);
         $this->assertTrue($incident->projects()->sole()->is($environment->project));
-        $this->assertStringStartsWith('Ook down:', $incident->timelineEntries()->sole()->note);
+        // Written down as SEV2, it is a critical production outage now.
+        $this->assertSame(IncidentSeverity::Sev1, $incident->severity);
+        $notes = $incident->timelineEntries()->orderBy('id')->pluck('note')->all();
+        $this->assertStringStartsWith('Ook down:', $notes[0]);
+        $this->assertSame('Verhoogd naar SEV1: een kritieke productiecheck is down.', $notes[1]);
+
+        // Back up, it stays open: what they wrote down may be about more than the check.
+        $check->forceFill(['state' => CheckState::Up])->save();
+        app(CheckIncidents::class)->recovered($check->events()->create(['from_state' => CheckState::Down, 'to_state' => CheckState::Up, 'occurred_at' => now()]));
+        $this->assertSame(IncidentStatus::Open, $incident->fresh()->status);
+        $this->assertSame(3, $incident->timelineEntries()->count());
+    }
+
+    public function test_an_imported_incident_is_not_joined(): void
+    {
+        [, $environment] = $this->criticalProductionOutage();
+        $imported = Incident::factory()->create(['source' => IncidentSource::Import, 'detected_at' => null]);
+        $imported->projects()->attach($environment->project_id);
+
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+
+        $this->assertSame(2, Incident::count());
     }
 
     public function test_an_incident_without_a_detection_time_is_joined_while_it_was_written_down_recently(): void
