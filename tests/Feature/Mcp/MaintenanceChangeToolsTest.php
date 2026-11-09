@@ -369,6 +369,31 @@ class MaintenanceChangeToolsTest extends TestCase
             ->assertSee('Ada via deploy-agent');
     }
 
+    public function test_a_plan_read_masked_is_not_written_back_with_its_masks_but_may_be_replaced(): void
+    {
+        Server::factory()->create(['name' => 'app-1', 'public_ipv4' => '192.0.2.10']);
+        $maintenance = $this->planned(['plan' => '1. ssh deploy@192.0.2.10']);
+        $read = $this->callToolSuccessfully($this->token, 'get_maintenance', ['id' => $maintenance->id]);
+
+        // Adding a step to the plan it read would put the mask where the address was.
+        $this->assertStringStartsWith('plan: Dit bevat een masker', $this->callToolError($this->token, 'update_maintenance', ['id' => $maintenance->id, 'version' => $read['version'], 'plan' => $read['plan']."\n2. Reboot."]));
+        $this->assertSame('1. ssh deploy@192.0.2.10', $maintenance->refresh()->plan);
+
+        // A plan of its own replaces it, and the activity log keeps the one with the address.
+        $this->update($maintenance, ['plan' => 'Reboot app-1.']);
+        $this->assertSame(['plan' => '1. ssh deploy@192.0.2.10'], Activity::query()->where('subject_type', 'maintenance')->where('subject_id', $maintenance->id)->where('event', 'updated')->sole()->properties['previous_texts']);
+    }
+
+    public function test_a_text_longer_than_an_agent_reads_once_masked_is_not_overwritten(): void
+    {
+        Server::factory()->create(['name' => 'app-1', 'public_ipv4' => '192.0.2.10']);
+        // Exactly MAX_TEXT long, longer once the address is masked: the agent read it cut.
+        $maintenance = $this->planned(['plan' => str_repeat('a', Serializer::MAX_TEXT - 11).' 192.0.2.10']);
+
+        $this->assertSame(['plan'], $this->callToolSuccessfully($this->token, 'get_maintenance', ['id' => $maintenance->id])['truncated']);
+        $this->assertStringStartsWith('plan: Deze tekst is langer', $this->callToolError($this->token, 'update_maintenance', ['id' => $maintenance->id, 'version' => $maintenance->version(), 'plan' => 'Short']));
+    }
+
     public function test_an_agent_keeps_the_links_a_person_wrote_but_adds_none(): void
     {
         $person = '1. Read [the changelog](https://elsewhere.example/changelog).';

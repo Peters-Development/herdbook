@@ -8,10 +8,6 @@ use App\Mcp\Serializer;
 use App\Models\Maintenance;
 use App\Models\User;
 use App\Rules\Moment;
-use App\Rules\NoCredentials;
-use App\Rules\NoImagesOrHtml;
-use App\Rules\NoNewLinks;
-use App\Rules\NoSecretMaterial;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Database\Eloquent\Builder;
@@ -34,7 +30,7 @@ use Laravel\Mcp\ResponseFactory;
  */
 trait WritesMaintenance
 {
-    use RequiresWriteAccess, ValidatesArguments;
+    use WritesTexts;
 
     /**
      * How many planned maintenances an answer names that share a server or project.
@@ -89,7 +85,7 @@ trait WritesMaintenance
         return [
             'tasks' => [...($partial ? ['sometimes', 'required'] : ['required']), 'list', 'max:'.count(MaintenanceTask::cases())],
             'tasks.*' => ['required', 'distinct', Rule::enum(MaintenanceTask::class)],
-            'title' => ['bail', 'nullable', 'string', 'max:255', new NoSecretMaterial, new NoCredentials],
+            'title' => $this->plainTextRules(255),
             'starts_at' => $partial ? ['sometimes', 'required', new Moment] : ['nullable', new Moment],
             'ends_at' => ['nullable', new Moment],
             ...$this->linkRules($partial),
@@ -110,29 +106,6 @@ trait WritesMaintenance
     protected function reportSchema(JsonSchema $schema, bool $partial = false): Type
     {
         return $schema->string()->max(Serializer::MAX_TEXT)->nullable($partial)->description('Markdown: what was done, what stood out, what is still to do.'.($partial ? ' Null clears it; given, it replaces the one there is.' : ''));
-    }
-
-    /**
-     * How an agent gives a moment, for descriptions.
-     */
-    protected static function momentFormat(): string
-    {
-        return 'ISO 8601: 2026-11-12T22:00 (in '.config('herdbook.display_timezone').'), or with an offset (Z, +01:00).';
-    }
-
-    /**
-     * Markdown that agents may write: what MAX_TEXT allows (first: the other
-     * checks take time on a long text), no private keys or credentials, no
-     * images or HTML, and no links to other sites. A text that replaces one
-     * may keep the links of the one it replaces, which only the locked row
-     * tells: a tool that passes $linksCheckedOnLockedRow must call
-     * ChangesMaintenance::checkTexts() there.
-     *
-     * @return list<mixed>
-     */
-    protected function textRules(bool $linksCheckedOnLockedRow = false): array
-    {
-        return ['bail', 'nullable', 'string', 'max:'.Serializer::MAX_TEXT, new NoSecretMaterial, new NoCredentials, new NoImagesOrHtml, ...($linksCheckedOnLockedRow ? [] : [new NoNewLinks])];
     }
 
     /**
@@ -319,27 +292,10 @@ trait WritesMaintenance
     }
 
     /**
-     * What a description tells an agent about the texts it writes.
-     */
-    protected static function textsSentence(string $what = 'A plan or report'): string
-    {
-        return $what.' is markdown of at most '.number_format(Serializer::MAX_TEXT).' characters, and refuses passwords, tokens, private keys, images, HTML and links to other sites (put tags, placeholders and web addresses between backticks; link into Herdbook with a path, such as [app-1](/servers/1); links already in the text you replace, and email addresses such as deploy@app-1.example.com in an ssh command, may stay). ';
-    }
-
-    /**
      * What a description tells an agent about the answer.
      */
     protected static function answerSentence(): string
     {
         return 'The answer has the maintenance as stored, with its "version", and in "other_planned" up to '.self::OTHER_PLANNED.' planned maintenances it shares a server or project with, in the order they are due.';
-    }
-
-    /**
-     * @param  array<int|string>  $ids
-     * @return list<int>
-     */
-    protected static function ids(array $ids): array
-    {
-        return array_values(array_unique(array_map(intval(...), $ids)));
     }
 }

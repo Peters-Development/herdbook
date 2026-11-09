@@ -98,7 +98,8 @@ final class Serializer
     {
         return [
             'id' => $maintenance->id,
-            'title' => $maintenance->title,
+            // Masked (HiddenValues), as everything people write.
+            'title' => app(HiddenValues::class)->mask($maintenance->title),
             'tasks' => array_values($maintenance->tasks ?? []),
             'status' => $maintenance->status->value,
             'overdue' => $maintenance->isOverdue(),
@@ -116,15 +117,16 @@ final class Serializer
     }
 
     /**
-     * maintenance() with its plan and report, each cut at MAX_TEXT; "truncated"
-     * names the ones that were longer, and "texts_changed" who last changed
-     * each (null: no change in the activity log).
+     * maintenance() with its plan and report, masked (HiddenValues) and each
+     * cut at MAX_TEXT; "truncated" names the ones that were longer, and
+     * "texts_changed" who last changed each (null: no change in the
+     * activity log).
      *
      * @return array<string, mixed>
      */
     public static function maintenanceWithTexts(Maintenance $maintenance): array
     {
-        $texts = ['plan' => $maintenance->plan, 'report' => $maintenance->report];
+        $texts = array_map(app(HiddenValues::class)->mask(...), ['plan' => $maintenance->plan, 'report' => $maintenance->report]);
 
         return [
             ...self::maintenance($maintenance),

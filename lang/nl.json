@@ -794,6 +794,7 @@
     "this client": "deze klant",
     "This client still has projects, domains or subscriptions": "Deze klant heeft nog projecten, domeinen of abonnementen",
     "This code is unknown or has been revoked.": "Deze code is onbekend of ingetrokken.",
+    "This holds a mask such as [address of app-1]: the address it stands for would be lost. Leave the masks out, or change the text in Herdbook itself.": "Dit bevat een masker zoals [adres van app-1]: het adres waar het voor staat zou verloren gaan. Laat de maskers weg, of wijzig de tekst in Herdbook zelf.",
     "This incident was changed meanwhile.": "Dit incident is intussen gewijzigd.",
     "This is neither a link to a Vaultwarden item nor an item ID.": "Dit is geen link naar een Vaultwarden-item en geen item-id.",
     "This link is missing its access code. Make one with screens:create.": "Deze link mist de toegangscode. Maak er een met screens:create.",

@@ -36,9 +36,9 @@ class UpdateMaintenance extends Tool
         return 'Change maintenance that is planned or done (not cancelled): its work, title, times, plan, report, or the servers and projects it concerns. '
             .'Read it first with get_maintenance and give its "version": as this overwrites what people wrote, the change is refused when someone changed it since. '
             .'Give only what changes; what you leave out stays, and an empty string counts as left out. Null clears ends_at, plan or report, and makes the title from the work again; server_ids or project_ids replace the links of that kind. '
-            .self::cutTextsSentence()
+            .self::cutTextsSentence('A plan or report', 'get_maintenance')
             .'To complete planned work use complete_maintenance; to cancel it, cancel_maintenance. '
-            .self::textsSentence().self::answerSentence();
+            .self::textsSentence('A plan or report').self::answerSentence();
     }
 
     public function schema(JsonSchema $schema): array
@@ -76,7 +76,7 @@ class UpdateMaintenance extends Tool
 
         $updated = DB::transaction(function () use ($maintenance, $changes, $status, $input): bool {
             $updated = $maintenance->updateWhileStill($status, function () use ($maintenance, $changes, $status): array {
-                $this->checkTexts($maintenance, $changes);
+                $this->checkPlanAndReport($maintenance, $changes);
                 $this->checkMerged($maintenance, $changes, $status);
 
                 return Arr::only($changes, ['tasks', 'title', 'starts_at', 'ends_at', 'plan', 'report']);

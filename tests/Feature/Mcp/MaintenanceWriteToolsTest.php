@@ -155,6 +155,10 @@ class MaintenanceWriteToolsTest extends TestCase
             'a token in the title' => [['title' => 'Rotate DB_PASSWORD=a1B2a1B2a1B2a1B2a1B2'], 'title: Dit lijkt een wachtwoord of token.'],
             'an image' => [['plan' => '![x](https://elsewhere.example/x.png)'], 'plan: Geen afbeeldingen of HTML'],
             'a link elsewhere' => [['plan' => 'Sign in at [the portal](https://elsewhere.example/login).'], 'plan: Geen links naar andere sites'],
+            'a mask in the plan' => [['plan' => 'Reboot [adres van app-1] last.'], 'plan: Dit bevat een masker'],
+            'a mask in another language' => [['plan' => 'Reboot [address of app-1] last.'], 'plan: Dit bevat een masker'],
+            'a hidden text' => [['plan' => 'Before: [tekst verborgen]'], 'plan: Dit bevat een masker'],
+            'a mask in the title' => [['title' => 'Reboot [address]'], 'title: Dit bevat een masker'],
         ];
     }
 

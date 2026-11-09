@@ -37,7 +37,7 @@ class CompleteMaintenance extends Tool
         return 'Complete planned maintenance: it becomes done, with when it was done and what was done. '
             .'Left out, starts_at is the planned start, or now if that is still to come; ends_at is the planned end if that has passed, else none; the report stays. '
             .'A report given replaces the one there is (null clears it), so it needs the "version" you read: refused when someone changed it since. '
-            .self::cutTextsSentence()
+            .self::cutTextsSentence('A report', 'get_maintenance')
             .'Called again on maintenance that is done (by anyone) with only its id, or with what is stored, it returns it with "unchanged": true (it may have been done by someone else); anything else is refused: change done work with update_maintenance. Cancelled maintenance can\'t be completed: write the work down with log_maintenance instead. '
             .self::textsSentence('The report').self::answerSentence();
     }
@@ -79,7 +79,7 @@ class CompleteMaintenance extends Tool
         $given = Arr::except($this->parseWork($input), ['id', 'version']);
 
         $completed = $maintenance->complete($given, function (array $attributes) use ($maintenance, $given): void {
-            $this->checkTexts($maintenance, $given);
+            $this->checkPlanAndReport($maintenance, $given);
             $this->assertWork([
                 'starts_at' => CarbonImmutable::make($attributes['starts_at']),
                 'ends_at' => CarbonImmutable::make($attributes['ends_at']),
