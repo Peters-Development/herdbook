@@ -182,6 +182,8 @@ Never add a field that stores a password, private key or token. A credential is 
 
 Amounts are `decimal` columns with a decimal cast, calculated with `BcMath\Number` and formatted with `Services\Costs\Money` (which follows the language and `config('herdbook.currency_symbol')`). Never use floats for money. Amounts are excluding VAT.
 
+What an item costs is `costAmount()`/`costPeriod()` (`HasCost`), never the columns: a domain without an amount of its own takes its registrar's price list. A query that reads costs eager-loads `$model::costAmountRelations()`; in SQL, sort with `yearlyCostSql()` and filter with `missingCost()`.
+
 <a name="morph-map-aliases"></a>
 ### Morph Map Aliases
 
@@ -264,7 +266,7 @@ The project is the center; see [Inventory](inventory.md#the-model-at-a-glance) f
 | Area | Tables |
 |---|---|
 | Accounts | `users` (with two-factor columns, `locale`, `pushover_user_key`, `receives_critical_alerts`, `receives_alert_mail`), `sessions` |
-| Inventory | `clients`, `providers` (`kinds` as JSON), `projects`, `environments`, `servers`, `environment_server` (with `role`), `server_dependencies` (`server_id` needs `depends_on_id`, with a `kind`), `networks`, `network_addresses`, `domains`, `hostnames`, `subscriptions` |
+| Inventory | `clients`, `providers` (`kinds` as JSON), `projects`, `environments`, `servers`, `environment_server` (with `role`), `server_dependencies` (`server_id` needs `depends_on_id`, with a `kind`), `networks`, `network_addresses`, `domains`, `domain_prices` (a registrar's price per extension, unique on `provider_id` + `extension`), `hostnames`, `subscriptions` |
 | Monitoring | `checks` (on a hostname or a server; `settings` as JSON), `check_results` (raw), `check_stats` (`hour` and `day`), `check_events` (switches between up and down, with notification and incident bookkeeping) |
 | Knowledge | `incidents`, `incident_timeline_entries`, `incident_actions`, `documents`, `document_revisions`, `credential_references`, `maintenances` |
 | Links | `incidentables`, `documentables`, `credentialables`, `maintainables`: one pivot per kind, polymorphic on the inventory side |

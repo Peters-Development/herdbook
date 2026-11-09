@@ -6,7 +6,10 @@ use App\Enums\ProviderKind;
 use App\Filament\Resources\Domains\DomainResource;
 use App\Filament\Resources\Servers\ServerResource;
 use App\Filament\Resources\Subscriptions\SubscriptionResource;
+use App\Models\Domain;
+use App\Models\DomainPrice;
 use App\Models\Provider;
+use App\Services\Costs\Money;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -61,6 +64,44 @@ class ProviderInfolist
                             ->visible(fn (Provider $record): bool => $record->networks()->exists()),
                         TextEntry::make('notes')->label(__('Notes'))->placeholder('—')->columnSpanFull(),
                     ]),
+                Section::make(__('Price list'))
+                    ->description(__('Per year, excluding VAT, for its domains without an amount of their own.'))
+                    ->visible(fn (Provider $record): bool => $record->domainPrices()->exists())
+                    ->schema([
+                        TextEntry::make('domainPrices')
+                            ->label(__('Price list'))
+                            ->hiddenLabel()
+                            ->state(fn (Provider $record): array => self::priceList($record))
+                            ->listWithLineBreaks(),
+                    ]),
             ]);
+    }
+
+    /**
+     * ".com: € 9,95 · 14 domains, 2 with an amount of their own".
+     *
+     * @return list<string>
+     */
+    private static function priceList(Provider $provider): array
+    {
+        // What it still costs: not local, not cancelled.
+        $domains = $provider->registeredDomains()
+            ->withContract()
+            ->whereNull('renewal_stopped_at')
+            ->get(['id', 'name', 'cost_amount'])
+            ->groupBy(fn (Domain $domain): string => Domain::extensionOf($domain->name));
+
+        return $provider->domainPrices()->orderBy('extension')->get()
+            ->map(function (DomainPrice $price) use ($domains): string {
+                $these = $domains->get($price->extension, collect());
+                $own = $these->whereNotNull('cost_amount')->count();
+
+                return implode(' · ', array_filter([
+                    ".{$price->extension}: ".Money::format($price->cost_amount),
+                    trans_choice(':count domain|:count domains', $these->count()),
+                    $own > 0 ? trans_choice(':count with an amount of its own|:count with an amount of their own', $own) : null,
+                ]));
+            })
+            ->all();
     }
 }

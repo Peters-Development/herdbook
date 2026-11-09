@@ -143,6 +143,6 @@ class RenewalStatusTest extends TestCase
         $attention->for(Domain::class);
         app(RenewalAttention::class)->for(Domain::class);
 
-        $this->assertCount(2, DB::getQueryLog()); // domains + their registrars, once
+        $this->assertCount(3, DB::getQueryLog()); // domains + their registrars + their price lists, once
     }
 }

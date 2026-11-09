@@ -11,6 +11,7 @@ use App\Filament\Resources\Providers\ProviderResource;
 use App\Filament\Support\CostSchema;
 use App\Filament\Support\RenewalSchema;
 use App\Models\Client;
+use App\Models\Domain;
 use App\Models\Network;
 use App\Models\Project;
 use App\Models\Provider;
@@ -296,6 +297,23 @@ class Costs extends Page
     {
         $todo = [];
 
+        // A missing price is fixed once in the price list, not per domain.
+        $priceless = collect($overview->unpriced)
+            ->filter(fn (Model $item): bool => $item instanceof Domain && $item->cost_amount === null && $item->registrar !== null)
+            ->groupBy(fn (Domain $domain): string => $domain->registrar_id.' '.Domain::extensionOf($domain->name));
+
+        foreach ($priceless as $domains) {
+            $todo[] = [
+                'text' => trans_choice(':registrar has no price for .:extension (:count domain): add it to its price list, or give the domain an amount of its own.|:registrar has no price for .:extension (:count domains): add it to its price list, or give the domains an amount of their own.', $domains->count(), [
+                    'registrar' => $domains->first()->registrar->name,
+                    'extension' => Domain::extensionOf($domains->first()->name),
+                ]),
+                'url' => ProviderResource::getUrl('edit', ['record' => $domains->first()->registrar_id]),
+                'color' => 'gray',
+            ];
+        }
+
+        // Also those above: the count is that of the list behind its link.
         foreach ($overview->missing() as $model => $count) {
             if ($count > 0) {
                 $resource = RenewalSchema::resource($model);
@@ -315,7 +333,7 @@ class Costs extends Page
                 'text' => __(':name expired on :date and was not renewed or cancelled (:amount).', [
                     'name' => $item->name,
                     'date' => $item->expires_on->translatedFormat(__('formats.date')),
-                    'amount' => $item->cost_period === CostPeriod::Month ? Money::describe($item) : Money::format($item->renewalCost()),
+                    'amount' => $item->costPeriod() === CostPeriod::Month ? Money::describe($item) : Money::format($item->renewalCost()),
                 ]),
                 'url' => RenewalSchema::url($item),
                 'color' => 'danger',

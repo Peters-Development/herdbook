@@ -21,6 +21,7 @@ use App\Models\CheckResult;
 use App\Models\CheckStat;
 use App\Models\Client;
 use App\Models\Domain;
+use App\Models\DomainPrice;
 use App\Models\Environment;
 use App\Models\EnvironmentServer;
 use App\Models\Hostname;
@@ -201,13 +202,19 @@ class DemoSeeder extends Seeder
     {
         $bakery = Client::create(['name' => 'Meadow Bakery', 'contact_name' => 'Anna Brooks', 'contact_phone' => '+44 7700 900142']);
 
-        // The last one has no amount yet: the cost page asks for it.
+        // Gandi has a price list: its domains need no amount of their own,
+        // except one that costs more, and one with the list price as its own
+        // (its registrar's page offers to move it onto the list). Namecheap
+        // has none: one of its domains has no amount yet, and the cost page
+        // asks for it.
+        DomainPrice::create(['provider_id' => $this->providers['Gandi']->id, 'extension' => 'test', 'cost_amount' => '9.95']);
+
         foreach ([
-            'studbook.test' => ['Gandi', 'Cloudflare', 40, true, null, '9.95'],
+            'studbook.test' => ['Gandi', 'Cloudflare', 40, true, null, null],
             'pastureplanner.test' => ['Gandi', 'Gandi', 10, false, null, '9.95'],
-            'meadowbakery.test' => ['Namecheap', 'Namecheap', 75, true, $bakery, '12.99'],
+            'meadowbakery.test' => ['Namecheap', 'Namecheap', 75, true, $bakery, null],
             'cartercycles.test' => ['Namecheap', 'Namecheap', -3, false, null, '12.99'],
-            'freerange.test' => ['Gandi', 'Cloudflare', 120, true, null, '9.95'],
+            'freerange.test' => ['Gandi', 'Cloudflare', 120, true, null, '14.50'],
             'herdbook-demo.test' => ['Gandi', 'Cloudflare', 300, true, null, null],
         ] as $name => [$registrar, $dns, $expiresInDays, $autoRenews, $client, $cost]) {
             $this->domains[$name] = Domain::create([

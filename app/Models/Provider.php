@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CostPeriod;
 use App\Enums\ProviderKind;
 use App\Models\Concerns\RecordsActivity;
 use Database\Factories\ProviderFactory;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 /**
  * A hosting company, registrar, DNS, mail or internet provider.
@@ -30,6 +32,42 @@ class Provider extends Model
     public function registeredDomains(): HasMany
     {
         return $this->hasMany(Domain::class, 'registrar_id');
+    }
+
+    /**
+     * Its price list as a registrar: per extension, per year
+     * (Domain::costAmount()).
+     *
+     * @return HasMany<DomainPrice, $this>
+     */
+    public function domainPrices(): HasMany
+    {
+        return $this->hasMany(DomainPrice::class);
+    }
+
+    /**
+     * Its domains with an amount of their own that is just its price for
+     * them: they would not follow a price change. Clearing their amount
+     * puts them on the price list.
+     *
+     * @return Collection<int, Domain>
+     */
+    public function domainsAtListPrice(): Collection
+    {
+        $this->loadMissing('domainPrices');
+
+        if ($this->domainPrices->isEmpty()) {
+            return new Collection;
+        }
+
+        return $this->registeredDomains()
+            ->whereNotNull('cost_amount')
+            ->where('cost_period', CostPeriod::Year)
+            ->orderBy('name')
+            ->get()
+            ->each(fn (Domain $domain): Domain => $domain->setRelation('registrar', $this))
+            ->filter(fn (Domain $domain): bool => $domain->isAtListPrice())
+            ->values();
     }
 
     /** @return HasMany<Domain, $this> */

@@ -199,6 +199,7 @@ final class ActivityPresenter
             'ssh_port' => __('SSH port'),
             'backup_policy' => __('Backups'),
             'cost_amount' => __('Amount'),
+            'extension' => __('Extension'),
             'cost_period' => __('Billing period'),
             'expires_on' => __('Expiry date'),
             'auto_renews' => __('Renews automatically'),
@@ -252,6 +253,7 @@ final class ActivityPresenter
             'environment_server' => __('Server link'),
             'server_dependency' => __('Dependency'),
             'network_address' => __('Address'),
+            'domain_price' => __('Price'),
             'hostname' => __('Hostname'),
             'check' => __('Check'),
         ];

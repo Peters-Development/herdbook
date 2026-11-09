@@ -38,11 +38,63 @@ trait HasCost
     }
 
     /**
+     * The amount that counts: its own. A domain without one takes the price
+     * list of its registrar (Domain::costAmount()). Read this, not the
+     * column.
+     */
+    public function costAmount(): ?string
+    {
+        return $this->cost_amount;
+    }
+
+    /**
+     * The period of costAmount().
+     */
+    public function costPeriod(): ?CostPeriod
+    {
+        return $this->cost_period;
+    }
+
+    /**
+     * Where costAmount() comes from when it is not its own ("From the price
+     * list of Gandi"); null when it is.
+     */
+    public function costSource(): ?string
+    {
+        return null;
+    }
+
+    /**
+     * What costAmount() reads besides the item itself, to eager-load it.
+     *
+     * @return list<string>
+     */
+    public static function costAmountRelations(): array
+    {
+        return [];
+    }
+
+    /**
+     * What it costs per year in SQL, to sort on: a monthly amount twelve
+     * times.
+     *
+     * @param  Builder<static>  $query
+     * @return array{string, list<mixed>} the expression and its bindings
+     */
+    public static function yearlyCostSql(Builder $query): array
+    {
+        return [
+            "{$query->qualifyColumn('cost_amount')} * (case when {$query->qualifyColumn('cost_period')} = ? then 12 else 1 end)",
+            [CostPeriod::Month->value],
+        ];
+    }
+
+    /**
      * An amount without a period says nothing about a year or a month.
      */
     public function hasCost(): bool
     {
-        return $this->cost_amount !== null && $this->cost_period !== null;
+        return $this->costAmount() !== null && $this->costPeriod() !== null;
     }
 
     /**
@@ -50,7 +102,7 @@ trait HasCost
      */
     public function yearlyCost(): ?Number
     {
-        return $this->hasCost() ? $this->cost_period->perYear(new Number($this->cost_amount)) : null;
+        return $this->hasCost() ? $this->costPeriod()->perYear(new Number($this->costAmount())) : null;
     }
 
     /**
@@ -82,15 +134,15 @@ trait HasCost
      */
     public function renewalCost(): ?Number
     {
-        return $this->hasCost() && $this->cost_period === CostPeriod::Year
+        return $this->hasCost() && $this->costPeriod() === CostPeriod::Year
             ? ($this->yearlyCost() * max(1, $this->renewal_period_months) / 12)->round(2)
             : null;
     }
 
     /**
      * Running (not stopped), with a contract, and no amount or no period:
-     * what the cost overview cannot count yet. Uses HasRenewal's
-     * withContract() (every model with a cost renews).
+     * what the cost overview cannot count yet (! hasCost()). Uses
+     * HasRenewal's withContract() (every model with a cost renews).
      *
      * @param  Builder<static>  $query
      */
@@ -99,6 +151,16 @@ trait HasCost
         $query
             ->withContract()
             ->whereNull('renewal_stopped_at')
-            ->where(fn (Builder $query) => $query->whereNull('cost_amount')->orWhereNull('cost_period'));
+            ->where(fn (Builder $query) => $this->whereNoAmount($query));
+    }
+
+    /**
+     * The SQL of ! hasCost() for one that may cost something.
+     *
+     * @param  Builder<static>  $query
+     */
+    protected function whereNoAmount(Builder $query): void
+    {
+        $query->whereNull('cost_amount')->orWhereNull('cost_period');
     }
 }

@@ -205,11 +205,11 @@ On the map, networks share the first column with the providers, and a server in 
 
 A domain is a registered name such as `example.com`. It has an optional client (empty: it is yours), a registrar, a **DNS host** (the provider where its DNS records are), optionally the servers its [mail](#mail-server) and [DNS](#dns-server) run on, what it [costs](costs.md), its [renewal](renewals.md) details and notes. Herdbook stores domain names in lower case.
 
-You enter the expiry date yourself. The list of domains shows the renewal status and the DNS host of each, can be filtered by status, registrar or DNS host, and has the **Renew** action per row and in bulk, plus a bulk action to set the same amount on many domains at once (one registrar often charges the same for all of them).
+You enter the expiry date yourself. The list of domains shows the renewal status and the DNS host of each, can be filtered by status, registrar or DNS host, and has the **Renew** action per row and in bulk, plus bulk actions to give many domains one amount of their own, or to put them on their registrar's [price list](costs.md#price-lists-for-domains) (one registrar often charges the same for all of them).
 
 A domain's hostnames are listed, and can be added, on the domain's page.
 
-A domain that exists only in your local DNS, such as `home.arpa` or `internal`, is registered nowhere: turn on **Only on the local network**. Such a domain may be a single label, without a dot. It then has no registrar, costs or renewal: whatever was filled in is cleared when you save (the activity log keeps it). Every hostname under it becomes [local](monitoring.md#names-on-the-local-network) too. Turning the setting off makes all its hostnames public again, so their HTTP checks verify the certificate and a mistaken click never leaves a public name unverified. The registrar, amount and expiry date were cleared, so fill them in again; with split DNS, mark the names that stay local again by hand.
+A domain that exists only in your local DNS, such as `home.arpa` or `internal`, is registered nowhere: turn on **Only on the local network**. Such a domain may be a single label, without a dot. It then has no registrar, costs or renewal: whatever was filled in is cleared when you save (the activity log keeps it). Every hostname under it becomes [local](monitoring.md#names-on-the-local-network) too. Turning the setting off makes all its hostnames public again, so their HTTP checks verify the certificate and a mistaken click never leaves a public name unverified. The registrar, amount and expiry date were cleared, so fill them in again (the amount only when the registrar has no price for its extension, or the domain costs something else); with split DNS, mark the names that stay local again by hand.
 
 <a name="mail-server"></a>
 ### Mail Server
@@ -258,6 +258,8 @@ When you rename a hostname, its checks follow: a check whose target is exactly t
 A provider is any company you get something from. **Supplies** says what you get from it: *Hosting*, *Registrar*, *DNS*, *Mail*, *Internet* or *Other*, and the forms only offer providers of the right kind (a registrar for a domain, a hosting provider for a server, an internet provider for a network). Unticking a kind later does not break records that already use the provider.
 
 The provider page counts its servers, the domains it registers, the domains whose DNS it hosts and its subscriptions; each number opens the list behind it.
+
+A registrar can have a **price list**: per extension, what a domain costs per year. Its domains without an amount of their own cost that price, so a price change is made once (see [Price Lists for Domains](costs.md#price-lists-for-domains)).
 
 A provider also has a website, a link to its control panel, support email and phone, notes, and a **Renewal lead time (days)**: how many days before the expiry date it renews automatically. That applies to all its domains, servers, subscriptions and internet lines unless an item says otherwise (see [Renewals](renewals.md#lead-time-and-grace)).
 

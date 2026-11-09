@@ -51,6 +51,8 @@ class DemoSeederTest extends TestCase
         $this->assertSame(1, CostOverview::decide($overview->months)->compare(0), 'Something to decide on.');
         $this->assertSame(1, $overview->missing()[Domain::class], 'A domain without an amount.');
         $this->assertNotEmpty($overview->unused);
+        $this->assertTrue(Domain::query()->where('name', 'studbook.test')->sole()->usesPriceList(), 'A domain on a price list.');
+        $this->assertSame(['pastureplanner.test'], Provider::query()->where('name', 'Gandi')->sole()->domainsAtListPrice()->pluck('name')->all(), 'A domain whose own amount is the list price.');
     }
 
     public function test_it_has_a_domain_with_its_mail_and_dns_on_a_hosting_package(): void

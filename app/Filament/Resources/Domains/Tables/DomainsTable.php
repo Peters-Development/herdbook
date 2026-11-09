@@ -7,6 +7,7 @@ use App\Filament\Resources\Domains\Schemas\DomainForm;
 use App\Filament\Support\CostSchema;
 use App\Filament\Support\RenewalSchema;
 use App\Models\Domain;
+use App\Services\Costs\Money;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
@@ -26,7 +27,7 @@ class DomainsTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['client', 'registrar', 'dnsProvider', 'dnsServer', 'mailServer']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['client', 'registrar', 'dnsProvider', 'dnsServer', 'mailServer', ...Domain::costAmountRelations()]))
             ->defaultSort('name')
             ->columns([
                 TextColumn::make('name')
@@ -60,6 +61,18 @@ class DomainsTable
                 RenewalSchema::attentionFilter(Domain::class),
                 RenewalSchema::statusFilter(Domain::class),
                 CostSchema::missingFilter(),
+                SelectFilter::make('amount')
+                    ->label(__('Amount'))
+                    // None: the filter "Without an amount".
+                    ->options([
+                        'list' => __('From the price list'),
+                        'own' => __('Own'),
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
+                        'list' => $query->usingPriceList(),
+                        'own' => $query->whereNotNull('cost_amount'),
+                        default => $query,
+                    }),
                 SelectFilter::make('registrar_id')->label(__('Registrar'))->relationship('registrar', 'name')->preload(),
                 SelectFilter::make('dns_provider_id')->label(__('DNS host'))->relationship('dnsProvider', 'name', fn (Builder $query) => $query->has('dnsDomains'))->preload(),
                 SelectFilter::make('dns_server_id')->label(__('DNS server'))->relationship('dnsServer', 'name', fn (Builder $query) => $query->has('dnsDomains'))->preload(),
@@ -82,7 +95,8 @@ class DomainsTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     RenewalSchema::renewBulkAction(),
-                    CostSchema::bulkAction(CostPeriod::Year),
+                    CostSchema::bulkAction(CostPeriod::Year, __('For every domain you selected: an amount of their own, instead of the price list of their registrar.')),
+                    self::usePriceListAction(),
                     BulkAction::make('setDnsServer')
                         ->label(__('Set DNS server'))
                         ->icon(Heroicon::OutlinedGlobeAlt)
@@ -114,5 +128,49 @@ class DomainsTable
                         ->deselectRecordsAfterCompletion(),
                 ]),
             ]);
+    }
+
+    /**
+     * Back on the price list: their own amount goes. Only where the list has
+     * a price for them, or they would cost nothing; the modal names those
+     * whose cost changes.
+     */
+    private static function usePriceListAction(): BulkAction
+    {
+        return BulkAction::make('usePriceList')
+            ->label(__('Use the price list'))
+            ->icon(Heroicon::OutlinedListBullet)
+            ->modalHeading(__('Use the price list'))
+            ->modalDescription(function (Collection $records): string {
+                $changes = $records
+                    ->filter(fn (Domain $domain): bool => $domain->cost_amount !== null && $domain->listPrice() !== null && ! $domain->isAtListPrice())
+                    ->map(fn (Domain $domain): string => __(':name: :from → :to', ['name' => $domain->name, 'from' => Money::describe($domain), 'to' => Money::format($domain->listPrice()->cost_amount).' '.CostPeriod::Year->getLabel()]));
+                $named = $changes->take(10)->implode('; ').($changes->count() > 10 ? ' '.__('and :count more', ['count' => $changes->count() - 10]) : '');
+
+                return $changes->isEmpty()
+                    ? __("Their own amount is removed; their registrar's price list counts instead. Domains without a price in the list keep theirs.")
+                    : __("Their own amount is removed; their registrar's price list counts instead. Domains without a price in the list keep theirs. That changes what these cost: :changes", ['changes' => $named]);
+            })
+            ->modalSubmitActionLabel(__('Use the price list'))
+            ->requiresConfirmation()
+            ->action(function (Collection $records): void {
+                $moved = $records->filter(fn (Domain $domain): bool => $domain->cost_amount !== null && $domain->listPrice() !== null);
+                $moved->each->usePriceList();
+                $skipped = $records->count() - $moved->count();
+                $skippedText = trans_choice(':count skipped: no price in the list, or no amount of its own.|:count skipped: no price in the list, or no amount of their own.', $skipped);
+
+                if ($moved->isEmpty()) {
+                    Notification::make()->warning()->title($skippedText)->send();
+
+                    return;
+                }
+
+                Notification::make()
+                    ->success()
+                    ->title(trans_choice(':count domain now uses the price list.|:count domains now use the price list.', $moved->count()))
+                    ->body($skipped > 0 ? $skippedText : null)
+                    ->send();
+            })
+            ->deselectRecordsAfterCompletion();
     }
 }
