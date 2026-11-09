@@ -3,14 +3,18 @@
 namespace Tests\Feature\Mcp;
 
 use App\Enums\AgentAccess;
+use App\Enums\CheckState;
 use App\Enums\IncidentSeverity;
 use App\Enums\IncidentStatus;
 use App\Filament\Resources\Incidents\Pages\EditIncident;
 use App\Mcp\Serializer;
+use App\Models\Check;
 use App\Models\Domain;
 use App\Models\Incident;
+use App\Models\Project;
 use App\Models\Server;
 use App\Models\User;
+use App\Services\Checks\CheckIncidents;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
 use Livewire\Livewire;
@@ -105,13 +109,49 @@ class IncidentChangeToolsTest extends TestCase
         $this->assertStringStartsWith('root_cause: Deze tekst is langer', $this->callToolError($this->token, 'update_incident', ['id' => $incident->id, 'version' => $incident->version(), 'root_cause' => 'Short.']));
     }
 
-    public function test_an_update_reopens_a_resolved_incident(): void
+    public function test_the_resolution_time_follows_the_status_unless_given(): void
     {
         $incident = $this->incident(['status' => IncidentStatus::Resolved, 'resolved_at' => '2026-11-09 11:00:00']);
 
-        $this->update($incident, ['status' => 'open', 'resolved_at' => null]);
-
+        $this->update($incident, ['status' => 'open']);
         $this->assertSame([IncidentStatus::Open, null], [$incident->refresh()->status, $incident->resolved_at]);
+
+        $this->update($incident, ['status' => 'resolved']);
+        $this->assertSame([IncidentStatus::Resolved, '2026-11-09 12:00:00'], [$incident->refresh()->status, $incident->resolved_at->toDateTimeString()]);
+    }
+
+    public function test_an_update_keeps_one_server_or_project_at_least(): void
+    {
+        $incident = $this->incident();
+        $project = Project::factory()->create();
+
+        $this->assertStringStartsWith('Koppel het aan minstens één server of project', $this->callToolError($this->token, 'update_incident', ['id' => $incident->id, 'version' => $incident->version(), 'server_ids' => []]));
+
+        $this->update($incident, ['server_ids' => [], 'project_ids' => [$project->id]]);
+        $this->assertSame([[], [$project->id]], [$incident->servers()->pluck('servers.id')->all(), $incident->projects()->pluck('projects.id')->all()]);
+    }
+
+    public function test_an_incident_monitoring_opened_again_is_not_resolved_on_what_the_agent_read_before(): void
+    {
+        $incident = $this->incident(['status' => IncidentStatus::Monitoring]);
+        $read = $incident->version();
+        $check = Check::factory()->create();
+        $check->events()->create(['from_state' => CheckState::Up, 'to_state' => CheckState::Down, 'occurred_at' => '2026-11-09 11:50:00', 'incident_id' => $incident->id]);
+        $check->forceFill(['state' => CheckState::Up])->save();
+
+        // Monitoring writes its recovery: the agent's version is gone.
+        app(CheckIncidents::class)->recovered($check->events()->create(['from_state' => CheckState::Down, 'to_state' => CheckState::Up, 'occurred_at' => '2026-11-09 11:55:00']));
+        $incident->update(['status' => IncidentStatus::Open]);
+
+        $this->assertStringStartsWith('Dit incident is gewijzigd sinds je het las', $this->callToolError($this->token, 'resolve_incident', ['id' => $incident->id, 'version' => $read]));
+        $this->assertSame(IncidentStatus::Open, $incident->refresh()->status);
+    }
+
+    public function test_an_impact_longer_than_an_agent_reads_is_not_overwritten(): void
+    {
+        $incident = $this->incident(['impact' => str_repeat('a', Serializer::MAX_TEXT + 1)]);
+
+        $this->assertStringStartsWith('impact: Deze tekst is langer', $this->callToolError($this->token, 'update_incident', ['id' => $incident->id, 'version' => $incident->version(), 'impact' => null]));
     }
 
     public function test_an_edit_form_left_open_does_not_undo_what_an_agent_did(): void
@@ -130,13 +170,15 @@ class IncidentChangeToolsTest extends TestCase
     {
         $incident = $this->incident(['started_at' => '2026-11-09 10:00:00']);
 
-        $this->assertStringContainsString('version', $this->callToolError($this->token, 'resolve_incident', ['id' => $incident->id, 'root_cause' => 'NFS stalled.']));
+        $this->assertStringContainsString('version', $this->callToolError($this->token, 'resolve_incident', ['id' => $incident->id]));
 
-        $answer = $this->callToolSuccessfully($this->token, 'resolve_incident', ['id' => $incident->id, 'version' => $incident->version(), 'root_cause' => 'NFS stalled.']);
+        $read = $incident->version();
+        $answer = $this->callToolSuccessfully($this->token, 'resolve_incident', ['id' => $incident->id, 'version' => $read, 'root_cause' => 'NFS stalled.']);
         $incident->refresh();
         $this->assertSame([IncidentStatus::Resolved, '2026-11-09 12:00:00', 'NFS stalled.', 'resolved'], [$incident->status, $incident->resolved_at->toDateTimeString(), $incident->root_cause, $answer['incident']['status']]);
 
-        $again = $this->callToolSuccessfully($this->token, 'resolve_incident', ['id' => $incident->id]);
+        // Called again with what it read before (its answer lost): the same answer.
+        $again = $this->callToolSuccessfully($this->token, 'resolve_incident', ['id' => $incident->id, 'version' => $read, 'root_cause' => 'NFS stalled.']);
         $this->assertTrue($again['unchanged']);
         $this->assertSame('Dit incident is al opgelost. Wijzig of heropen het met update_incident.', $this->callToolError($this->token, 'resolve_incident', ['id' => $incident->id, 'version' => $incident->version(), 'root_cause' => 'Something else.']));
     }
@@ -145,10 +187,11 @@ class IncidentChangeToolsTest extends TestCase
     {
         $incident = $this->incident(['started_at' => '2026-11-09 10:00:00']);
 
-        $this->assertSame('resolved_at: Het kan niet vóór het begin liggen.', $this->callToolError($this->token, 'resolve_incident', ['id' => $incident->id, 'resolved_at' => '2026-11-09T09:00']));
-        $this->assertSame('resolved_at: Het kan niet in de toekomst liggen.', $this->callToolError($this->token, 'resolve_incident', ['id' => $incident->id, 'resolved_at' => '2026-11-09T14:00']));
+        $version = $incident->version();
+        $this->assertSame('resolved_at: Het kan niet vóór het begin liggen.', $this->callToolError($this->token, 'resolve_incident', ['id' => $incident->id, 'version' => $version, 'resolved_at' => '2026-11-09T09:00']));
+        $this->assertSame('resolved_at: Het kan niet in de toekomst liggen.', $this->callToolError($this->token, 'resolve_incident', ['id' => $incident->id, 'version' => $version, 'resolved_at' => '2026-11-09T14:00']));
 
-        $this->callToolSuccessfully($this->token, 'resolve_incident', ['id' => $incident->id, 'resolved_at' => '2026-11-09T12:30']);
+        $this->callToolSuccessfully($this->token, 'resolve_incident', ['id' => $incident->id, 'version' => $version, 'resolved_at' => '2026-11-09T12:30']);
         $this->assertSame('2026-11-09 11:30:00', $incident->refresh()->resolved_at->toDateTimeString());
     }
 

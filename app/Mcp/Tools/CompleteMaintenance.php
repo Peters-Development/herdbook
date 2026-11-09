@@ -7,7 +7,6 @@ use App\Mcp\Tools\Concerns\ChangesMaintenance;
 use App\Models\Maintenance;
 use App\Rules\Moment;
 use Carbon\CarbonImmutable;
-use Carbon\CarbonInterface;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\Validator;
@@ -95,24 +94,5 @@ class CompleteMaintenance extends Tool
             $maintenance->status === MaintenanceStatus::Cancelled => Response::error(__('This maintenance was called off. Write the work down with log_maintenance, or ask a person to set it back to planned in Herdbook.')),
             default => $this->changedSince($maintenance),
         };
-    }
-
-    /**
-     * Whether what a call gives is what is stored: nothing, or a repeat.
-     *
-     * @param  array<string, mixed>  $given
-     */
-    private function asStored(Maintenance $maintenance, array $given): bool
-    {
-        foreach ($given as $field => $value) {
-            $stored = $maintenance->{$field};
-            $same = $value instanceof CarbonInterface ? $stored instanceof CarbonInterface && $value->eq($stored) : $value === $stored;
-
-            if (! $same) {
-                return false;
-            }
-        }
-
-        return true;
     }
 }

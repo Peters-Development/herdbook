@@ -24,7 +24,6 @@ class IncidentInfolist
                         TextEntry::make('status')->label(__('Status'))->badge(),
                         TextEntry::make('occurred_on')->label(__('Date'))->date(__('formats.date')),
                         TextEntry::make('source')->label(__('Source'))->badge()->color('gray'),
-                        RecordedBy::entry(),
                         TextEntry::make('started_at')->label(__('Started'))->dateTime(__('formats.datetime'))->placeholder('—'),
                         TextEntry::make('detected_at')->label(__('Detected'))->dateTime(__('formats.datetime'))->placeholder('—'),
                         TextEntry::make('resolved_at')->label(__('Resolved'))->dateTime(__('formats.datetime'))->placeholder('—'),
@@ -32,6 +31,8 @@ class IncidentInfolist
                             ->label(__('Duration'))
                             ->state(fn (Incident $record): ?string => self::describeDurations($record))
                             ->placeholder('—'),
+                        // Its own row: the two above are what and when.
+                        RecordedBy::entry(),
                     ]),
                 Section::make(__('Impact and root cause'))
                     ->schema([

@@ -37,7 +37,7 @@ class UpdateIncident extends Tool
     {
         return 'Change an incident: its title, severity, status (open, monitoring or resolved; to resolve it, resolve_incident also sets when), the day it is filed under, when it started, was detected and was resolved, its impact, root cause and report, or the servers and projects it concerns. '
             .'Read it first with get_incident and give its "version": as this overwrites what people, monitoring or other agents wrote, the change is refused when someone changed it since. '
-            .'Give only what changes; what you leave out stays, and an empty string counts as left out. Null clears a time, the impact, the root cause or the report; server_ids or project_ids replace the links of that kind (its domains, networks and clients stay). '
+            .'Give only what changes; what you leave out stays, and an empty string counts as left out. Null clears a time, the impact, the root cause or the report; server_ids or project_ids replace the links of that kind (its domains, networks and clients stay; one server or project at least). Reopened (status open or monitoring) it has no resolution time any more, unless you give one. '
             .'A text you read with masks such as [address of app-1] can\'t be written back with them: write one of your own. '
             .self::cutTextsSentence('An impact, root cause or report', 'get_incident')
             .self::textsSentence('A root cause or report').'The impact is plain text. '
@@ -56,8 +56,8 @@ class UpdateIncident extends Tool
             'status' => $schema->string()->enum(IncidentStatus::class),
             'occurred_on' => $schema->string()->format('date')->description('YYYY-MM-DD: the day it is filed under.'),
             'started_at' => $schema->string()->nullable()->description("Not in the future. {$moment}"),
-            'detected_at' => $schema->string()->nullable()->description('Not before the start, not in the future.'),
-            'resolved_at' => $schema->string()->nullable()->description('Not before the start, not in the future.'),
+            'detected_at' => $schema->string()->nullable()->description("Not before the start, not in the future. {$moment}"),
+            'resolved_at' => $schema->string()->nullable()->description("Not before the start, not in the future; follows the status unless given: none when reopened, now when resolved without one. {$moment}"),
             'impact' => $schema->string()->max(Serializer::MAX_TEXT)->nullable()->description('Plain text: who notices what. Null clears it.'),
             'root_cause' => $schema->string()->max(Serializer::MAX_TEXT)->nullable()->description('Markdown: why it happened. Null clears it.'),
             'report' => $schema->string()->max(Serializer::MAX_TEXT)->nullable()->description('Markdown: the full write-up. Null clears it.'),
@@ -94,6 +94,7 @@ class UpdateIncident extends Tool
 
         $updated = DB::transaction(function () use ($incident, $changes, $input): bool {
             $updated = $incident->saveWhile(fn (): bool => true, function () use ($incident, $changes): array {
+                $changes = self::withResolution($incident, $changes);
                 $this->checkChanges($incident, $changes);
 
                 return Arr::except($changes, ['server_ids', 'project_ids']);

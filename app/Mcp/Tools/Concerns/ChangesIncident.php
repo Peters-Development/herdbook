@@ -2,8 +2,10 @@
 
 namespace App\Mcp\Tools\Concerns;
 
+use App\Enums\IncidentStatus;
 use App\Models\Incident;
 use App\Rules\Moment;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Arr;
@@ -67,6 +69,26 @@ trait ChangesIncident
     }
 
     /**
+     * When it was resolved follows its status, unless given: reopened, it
+     * has none; resolved, now if it had none.
+     *
+     * @param  array<string, mixed>  $changes  parsed
+     * @return array<string, mixed>
+     */
+    protected static function withResolution(Incident $incident, array $changes): array
+    {
+        if (! array_key_exists('status', $changes) || array_key_exists('resolved_at', $changes)) {
+            return $changes;
+        }
+
+        return match (true) {
+            $changes['status'] !== IncidentStatus::Resolved->value => [...$changes, 'resolved_at' => null],
+            $incident->resolved_at === null => [...$changes, 'resolved_at' => CarbonImmutable::now()->startOfMinute()],
+            default => $changes,
+        };
+    }
+
+    /**
      * On the locked row: its texts (not over one the agent couldn't read
      * whole, no new links), and its moments as they will be, the changes
      * over what is stored.
@@ -94,6 +116,16 @@ trait ChangesIncident
 
                     break;
                 }
+            }
+        }
+
+        // Its links as they will be, when they change: one server or project at least.
+        if (array_key_exists('server_ids', $changes) || array_key_exists('project_ids', $changes)) {
+            $servers = $changes['server_ids'] ?? $incident->servers->modelKeys();
+            $projects = $changes['project_ids'] ?? $incident->projects->modelKeys();
+
+            if ($servers === [] && $projects === []) {
+                $validator->errors()->add('server_ids', __('Link it to at least one server or project: server_ids or project_ids, from search_inventory.'));
             }
         }
 

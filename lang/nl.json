@@ -84,7 +84,6 @@
     "A port is between 1 and 65535.": "Een poort ligt tussen 1 en 65535.",
     "A redirect has a status code from 300 to 399.": "Een doorverwijzing heeft een code van 300 tot en met 399.",
     "A report replaces the one there is: give the \"version\" you read with get_maintenance.": "Een rapport vervangt het bestaande: geef de \"version\" die je las met get_maintenance.",
-    "A root cause or report replaces the one there is: give the \"version\" you read with get_incident.": "Een oorzaak of rapport vervangt het bestaande: geef de \"version\" die je las met get_incident.",
     "A server cannot depend on itself.": "Een server kan niet van zichzelf afhangen.",
     "A user key is 30 letters and digits.": "Een user key is 30 letters en cijfers.",
     "A wildcard is not a name that answers: monitor the hostnames under it.": "Een wildcard is geen naam die antwoordt: bewaak de hostnames eronder.",

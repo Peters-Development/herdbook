@@ -25,7 +25,7 @@
 
 An agent such as [Claude Code](https://code.claude.com) can look things up in Herdbook and keep its maintenance log, without clicking through the panel. It keeps incidents too: it sees what is going on and what happened last time, opens an incident when something breaks, and writes down what it tries and finds as it goes. It can find a server, see when it was last updated, plan work, and write down what it did. It talks to Herdbook's MCP server (the [Model Context Protocol](https://modelcontextprotocol.io)) at `/mcp`, with a token of its own.
 
-Herdbook remains the place where people work: an agent sees less than a person and may do less. What an agent creates (maintenance, incidents, timeline entries, action items) is signed with its account and its name, such as "Ada via deploy-agent", and the activity log names the agent for every change it makes to a maintenance (not to which servers and projects it is linked to, which isn't logged for people either).
+Herdbook remains the place where people work: an agent sees less than a person and may do less. What an agent creates (maintenance, incidents, timeline entries, action items) is signed with its account and its name, such as "Ada via deploy-agent", and the activity log names the agent for every change it makes to maintenance or an incident (not to which servers and projects they are linked to, which isn't logged for people either).
 
 <a name="what-an-agent-can-do"></a>
 ## What an Agent Can Do
@@ -68,16 +68,16 @@ The same rules as the forms apply, with the same messages: work that is done can
 - writes no images or HTML in plans and reports: an image would be loaded the moment a person opens or edits the page, and could carry data along in its address;
 - writes no masks such as `[address of app-1]`: written back, a mask would take the place of the address it stands for. An agent that wants to change a text it read with masks writes one of its own, or asks you to change it in Herdbook;
 - links to no other site: a link could lead somewhere else than it says. Links into Herdbook pass (a path such as `/servers/1`, or `APP_URL`), and so do the links of the text it replaces, so an agent can add a step to your plan without breaking your links. A web address between backticks is fine, and so is an email address, as in `ssh deploy@app-1.example.com`. An agent can still move one of your links under other words;
-- writes at most 10,000 characters per plan or report, and doesn't overwrite a plan or report that is longer (as it read it, masked), whoever wrote it: it would lose what it couldn't read;
+- writes at most 10,000 characters per plan, report, impact or root cause, and doesn't overwrite one that is longer (as it read it, masked), whoever wrote it: it would lose what it couldn't read;
 - writes an incident's impact, its timeline entries (at most 1,000 characters) and its action items (at most 255) as plain text: no passwords, tokens or masks, and moments that lie in the past;
-- changes the status only by completing or calling off, and doesn't change maintenance that was called off.
+- changes the status of maintenance only by completing or calling off, and doesn't change maintenance that was called off; an incident's status it may change (also to reopen it) and resolve.
 
 Times are ISO 8601, such as `2026-11-12T22:00`, in minutes as in the forms: seconds are dropped. Without an offset, they are in the display timezone (`HERDBOOK_DISPLAY_TIMEZONE`). Answers carry the offset, so a mistake shows at once.
 
 <a name="changes-made-meanwhile"></a>
 ### Changes Made Meanwhile
 
-Every maintenance an agent reads comes with a `version`, a fingerprint of everything that can be changed, its servers and projects included. To change a maintenance or an incident, or to complete or resolve one with a report or root cause (or clear one), the agent gives that version back. If someone changed the maintenance since, the agent is told to read it again, and nothing is saved. Completing without a report, and calling off, only need the maintenance to be still planned.
+Every maintenance an agent reads comes with a `version`, a fingerprint of everything that can be changed, its servers and projects included. To change maintenance or an incident, to resolve an incident, or to complete maintenance with a report (or clear it), the agent gives that version back. If someone changed the maintenance since, the agent is told to read it again, and nothing is saved. Completing maintenance without a report, and calling it off, only need it to be still planned.
 
 It works the other way too. An edit form or a **Complete** modal left open in the panel doesn't undo what an agent (or another tab) did meanwhile: saving refuses, keeps what the agent wrote, and says the maintenance was changed meanwhile, or that it is no longer planned.
 
@@ -265,7 +265,7 @@ The [Security](security.md#agents) page puts this in the context of the rest of 
 | Changed its servers or projects | Not logged, as for people. |
 | Opened an incident, added a timeline entry or an action item | Delete it in the panel. |
 | Completed an action item | **Reopen** it in the panel. |
-| Resolved an incident, or changed its status or severity | Set it back in the edit form; the activity log has what it was. |
+| Resolved an incident, or changed its status, severity, title, times or impact | Set it back in the edit form; the activity log has what it was. A resolved SEV1 turns the dashboard green: reopen it if the outage goes on. |
 | Replaced or cleared an incident's root cause or report | **Previous text** on that entry in the activity log, as for maintenance. |
 
 <a name="troubleshooting"></a>

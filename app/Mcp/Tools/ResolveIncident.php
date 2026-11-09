@@ -7,9 +7,7 @@ use App\Mcp\Serializer;
 use App\Mcp\Tools\Concerns\ChangesIncident;
 use App\Models\Incident;
 use Carbon\CarbonImmutable;
-use Carbon\CarbonInterface;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Illuminate\Validation\Validator;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
@@ -33,9 +31,9 @@ class ResolveIncident extends Tool
     public function description(): string
     {
         return 'Resolve an incident that is over: when it was resolved (default now; not before the start, not in the future), and if you know them its root cause and report. '
-            .'A root cause or report given (null clears it) replaces the one there is, so it needs the "version" you read: refused when someone changed it since. '
+            .'Give its "version" from get_incident: refused when someone changed it since, such as monitoring opening it again because a check went down. A root cause or report given (null clears it) replaces the one there is. '
             .self::cutTextsSentence('A root cause or report', 'get_incident')
-            .'Called again on an incident that is resolved (by anyone) with only its id, or with what is stored, it returns it with "unchanged": true; anything else is refused: change a resolved incident, or reopen it, with update_incident. '
+            .'Called again on an incident that is resolved (by anyone) with only its id and version, or with what is stored, it returns it with "unchanged": true; anything else is refused: change a resolved incident, or reopen it, with update_incident. '
             .self::textsSentence('A root cause or report').self::answerSentence();
     }
 
@@ -43,7 +41,7 @@ class ResolveIncident extends Tool
     {
         return [
             'id' => $this->idSchema($schema),
-            'version' => $this->versionSchema($schema, 'needed with a root cause or report.'),
+            'version' => $this->versionSchema($schema, 'always needed.')->required(),
             'resolved_at' => $schema->string()->description('When it was resolved; default now. '.self::momentFormat()),
             'root_cause' => $schema->string()->max(Serializer::MAX_TEXT)->nullable()->description('Markdown: why it happened.'),
             'report' => $schema->string()->max(Serializer::MAX_TEXT)->nullable()->description('Markdown: the full write-up.'),
@@ -54,18 +52,11 @@ class ResolveIncident extends Tool
     {
         $input = $this->validated($request, [
             'id' => $this->idRules(),
-            'version' => $this->versionRules(),
+            'version' => $this->versionRules(required: true),
             'resolved_at' => ['sometimes', 'required', ...self::momentRules()],
             'root_cause' => $this->textRules(linksCheckedOnLockedRow: true),
             'report' => $this->textRules(linksCheckedOnLockedRow: true),
-        ], after: function (Validator $validator): void {
-            // A text given or cleared replaces the one there is: only over the one the agent read.
-            $arguments = $validator->getData();
-
-            if ((array_key_exists('root_cause', $arguments) || array_key_exists('report', $arguments)) && ! filled($arguments['version'] ?? null)) {
-                $validator->errors()->add('version', __('A root cause or report replaces the one there is: give the "version" you read with get_incident.'));
-            }
-        });
+        ]);
 
         $incident = $this->findIncident((int) $input['id']);
 
@@ -80,7 +71,7 @@ class ResolveIncident extends Tool
             $this->checkChanges($incident, $changes);
 
             return ['status' => IncidentStatus::Resolved, ...$changes];
-        }, $input['version'] ?? null);
+        }, $input['version']);
 
         return match (true) {
             $resolved => $this->answer($incident),
@@ -90,24 +81,5 @@ class ResolveIncident extends Tool
             $incident->status === IncidentStatus::Resolved => Response::error(__('This incident is resolved already. Change it, or reopen it, with update_incident.')),
             default => $this->changedSince($incident),
         };
-    }
-
-    /**
-     * Whether what a call gives is what is stored: nothing, or a repeat.
-     *
-     * @param  array<string, mixed>  $given  parsed
-     */
-    private function asStored(Incident $incident, array $given): bool
-    {
-        foreach ($given as $field => $value) {
-            $stored = $incident->{$field};
-            $same = $value instanceof CarbonInterface ? $stored instanceof CarbonInterface && $value->eq($stored) : $value === $stored;
-
-            if (! $same) {
-                return false;
-            }
-        }
-
-        return true;
     }
 }

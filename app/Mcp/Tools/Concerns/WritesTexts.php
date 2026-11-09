@@ -9,6 +9,7 @@ use App\Rules\NoCredentials;
 use App\Rules\NoImagesOrHtml;
 use App\Rules\NoNewLinks;
 use App\Rules\NoSecretMaterial;
+use Carbon\CarbonInterface;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\JsonSchema\Types\Type;
@@ -113,6 +114,26 @@ trait WritesTexts
         if ($validator->fails()) {
             throw self::named(new ValidationException($validator));
         }
+    }
+
+    /**
+     * Whether what a call gives is what is stored: nothing, or a repeat of
+     * a call whose answer was lost.
+     *
+     * @param  array<string, mixed>  $given  as it would be stored
+     */
+    protected function asStored(Model $record, array $given): bool
+    {
+        foreach ($given as $field => $value) {
+            $stored = $record->{$field};
+            $same = $value instanceof CarbonInterface ? $stored instanceof CarbonInterface && $value->eq($stored) : $value === $stored;
+
+            if (! $same) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

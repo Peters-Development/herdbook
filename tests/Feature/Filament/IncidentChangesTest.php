@@ -5,12 +5,17 @@ namespace Tests\Feature\Filament;
 use App\Enums\IncidentSeverity;
 use App\Enums\IncidentStatus;
 use App\Filament\Resources\Incidents\Pages\EditIncident;
+use App\Filament\Resources\Incidents\Pages\ListIncidents;
+use App\Filament\Resources\Incidents\Pages\ViewIncident;
+use App\Filament\Resources\Incidents\RelationManagers\ActionsRelationManager;
+use App\Filament\Resources\Incidents\RelationManagers\TimelineEntriesRelationManager;
 use App\Models\Client;
 use App\Models\Domain;
 use App\Models\Incident;
 use App\Models\Network;
 use App\Models\Project;
 use App\Models\Server;
+use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
@@ -129,6 +134,25 @@ class IncidentChangesTest extends TestCase
 
         auth()->logout();
         $this->assertNull(Incident::factory()->create()->recordedBy());
+    }
+
+    public function test_the_panel_shows_who_wrote_an_incident_an_entry_and_an_action_down_and_through_which_agent(): void
+    {
+        $this->signIn();
+        $ada = User::factory()->create(['name' => 'Ada']);
+        // Two of each: a lazy load would fail in strict mode.
+        foreach (range(1, 2) as $index) {
+            $incident = Incident::factory()->create(['user_id' => $ada->id]);
+            $incident->forceFill(['recorded_via' => 'deploy-agent'])->save();
+            $incident->timelineEntries()->create(['occurred_at' => now(), 'note' => "Entry {$index}", 'user_id' => $ada->id, 'recorded_via' => 'deploy-agent']);
+            $action = $incident->actions()->create(['description' => "Action {$index}"]);
+            $action->forceFill(['user_id' => $ada->id, 'recorded_via' => 'deploy-agent'])->save();
+        }
+
+        Livewire::test(ViewIncident::class, ['record' => $incident->getRouteKey()])->assertSee('Ada via deploy-agent');
+        Livewire::test(ListIncidents::class)->toggleAllTableColumns()->assertSee('Ada via deploy-agent');
+        Livewire::test(TimelineEntriesRelationManager::class, ['ownerRecord' => $incident, 'pageClass' => ViewIncident::class])->assertSee('Ada via deploy-agent');
+        Livewire::test(ActionsRelationManager::class, ['ownerRecord' => $incident, 'pageClass' => ViewIncident::class])->toggleAllTableColumns()->assertSee('Ada via deploy-agent');
     }
 
     private function incident(): Incident

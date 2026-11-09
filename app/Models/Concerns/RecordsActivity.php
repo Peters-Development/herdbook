@@ -121,7 +121,7 @@ trait RecordsActivity
     /**
      * Whether the log keeps the long texts an agent replaced: only for a
      * model whose agent tools refuse to write over a text longer than they
-     * read (ChangesMaintenance::checkTexts()).
+     * read (WritesTexts::checkTexts()).
      */
     protected function keepsReplacedTexts(): bool
     {
