@@ -102,6 +102,22 @@ class IncidentChangeToolsTest extends TestCase
         $this->assertSame('deploy-agent', $activity->properties['via']);
     }
 
+    public function test_a_link_that_reads_masked_cant_be_kept_so_no_guess_of_it_passes(): void
+    {
+        $incident = $this->incident(['root_cause' => 'See [the graph](http://203.0.113.7:3000/d/1) and [the docs](https://docs.example/nfs).']);
+        $read = $this->callToolSuccessfully($this->token, 'get_incident', ['id' => $incident->id]);
+        $this->assertSame('See [the graph](http://[adres]:3000/d/1) and [the docs](https://docs.example/nfs).', $read['root_cause']);
+
+        // Right or wrong, a guess of what the mask hides is refused alike.
+        foreach (['203.0.113.7', '203.0.113.8'] as $guess) {
+            $this->assertStringStartsWith('root_cause: Geen links naar andere sites', $this->callToolError($this->token, 'update_incident', ['id' => $incident->id, 'version' => $read['version'], 'root_cause' => "See [the graph](http://{$guess}:3000/d/1) and [the docs](https://docs.example/nfs)."]));
+        }
+
+        // A link that reads as stored may stay.
+        $this->update($incident, ['root_cause' => 'The NFS mount hung. See [the docs](https://docs.example/nfs).']);
+        $this->assertSame('The NFS mount hung. See [the docs](https://docs.example/nfs).', $incident->refresh()->root_cause);
+    }
+
     public function test_a_text_longer_than_an_agent_reads_is_not_overwritten(): void
     {
         $incident = $this->incident(['root_cause' => str_repeat('a', Serializer::MAX_TEXT + 1)]);

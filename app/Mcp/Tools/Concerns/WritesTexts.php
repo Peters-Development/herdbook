@@ -109,8 +109,10 @@ trait WritesTexts
                 $cut[$argument] = __('This text is longer than an agent reads whole: change it in Herdbook itself.');
             }
 
+            // A link that read masked stays only as the agent read it: kept
+            // as stored, a guess of what the mask hides would pass when right.
             if (isset($markdown[$argument])) {
-                $links[$argument] = [new NoNewLinks($record->{$attribute})];
+                $links[$argument] = [new NoNewLinks($record->{$attribute}, fn (string $url): bool => $hidden->mask($url) === $url)];
             }
         }
 
@@ -150,7 +152,7 @@ trait WritesTexts
     protected static function textsSentence(string $what, bool $replacing = true): string
     {
         return $what.' is markdown of at most '.number_format(Serializer::MAX_TEXT).' characters, and refuses passwords, tokens, private keys, masks such as [address of app-1], images, HTML and links to other sites (put tags, placeholders and web addresses between backticks; link into Herdbook with a path, such as [app-1](/servers/1); '
-            .($replacing ? 'links already in the text you replace, and ' : '')
+            .($replacing ? 'links already in the text you replace, unless they read masked, and ' : '')
             .'email addresses such as deploy@app-1.example.com in an ssh command, may stay). ';
     }
 
