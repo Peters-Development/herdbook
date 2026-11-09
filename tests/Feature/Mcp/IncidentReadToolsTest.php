@@ -280,6 +280,8 @@ class IncidentReadToolsTest extends TestCase
             'a MAC as a DHCP client id' => ['client 01:00:11:22:33:44:55', 'client [adres van nas]'],
             'a MAC written the Cisco way' => ['nas 0011.2233.4455', 'nas [adres van nas]'],
             'a provider hostname glued to what comes before it' => ['%2Fvps-123.provider.example', '%2F[adres van app-1]'],
+            'a provider hostname glued to what comes after it' => ['in /var/log/nginx/vps-123.provider.example-access.log', 'in /var/log/nginx/[adres van app-1]-access.log'],
+            'not code with two colons' => ['Cache::add() failed in std::cafe and Foo::bar::baz', 'Cache::add() failed in std::cafe and Foo::bar::baz'],
             'not a provider hostname that is a name, or numbers that are no address' => ['hz-1 ran out of disk on 6.8.0-45-generic, call 06-12-34-56-78 on 2026-11-09', 'hz-1 ran out of disk on 6.8.0-45-generic, call 06-12-34-56-78 on 2026-11-09'],
         ];
     }
@@ -315,6 +317,8 @@ class IncidentReadToolsTest extends TestCase
             '[adres van trail], [adres van panel] and [adres van idn]; [adres van port], [adres van path], [adres van user]',
             app(HiddenValues::class)->mask('trail.host.example, panel.host.example and xn--bcher-kva.example; vps-1.host.example, vps-2.host.example, vps-3.host.example'),
         );
+        // An internationalised one also as written, in any case.
+        $this->assertSame('[adres van idn] and https://[adres van idn]/ are down', app(HiddenValues::class)->mask('bücher.example and https://BÜCHER.example/ are down'));
     }
 
     public function test_no_mask_is_masked_again(): void

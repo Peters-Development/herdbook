@@ -16,9 +16,10 @@ use App\Models\Server;
  * Token by token, not with one pattern of every value: a pattern that size
  * stops compiling at a few hundred servers. In turn: MAC addresses, IPv6
  * addresses, runs of dotted numbers (IPv4, also with leading zeros or glued
- * to what comes before it, "%2F192.0.2.10"), and runs of labels (names, a
- * known one also inside a longer name or glued to what comes before it, and
- * IPv4 addresses spelled with dashes in cloud hostnames). Each looked up in
+ * to what comes before it, "%2F192.0.2.10"), and runs of labels (names, an
+ * internationalised one also as written, a known one also inside a longer
+ * name or glued to what comes before or after it, and IPv4 addresses
+ * spelled with dashes in cloud hostnames). Each looked up in
  * a table, so ports, URLs and user@host fall away. Each pass writes
  * placeholders, so no mask is masked again. A time such as 12:30:45 is no
  * address. Best effort: an address in a form nothing here expects (octal,
@@ -33,7 +34,7 @@ class HiddenValues
 
     private const string IPV4 = '/(?<![0-9])\d+(?:\.\d{1,3}){3,}(?![0-9])/';
 
-    private const string LABELS = '/[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*+/';
+    private const string LABELS = '/[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?(?:\.[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?)*+/u';
 
     /**
      * The most labels a value has (an FQDN): no part of a longer run is
@@ -58,7 +59,7 @@ class HiddenValues
 
         $this->masks = [];
         $masked = $this->replace(self::MAC, $text, fn (array $m): string => $this->mac($m[0]));
-        $masked = $this->replace(self::IPV6, $masked, fn (array $m): string => $m[1].$this->ipv6($m[2]));
+        $masked = $this->replace(self::IPV6, $masked, fn (array $m): string => $m[1].$this->ipv6($m[2], glued: $m[1] !== ''));
         $masked = $this->replace(self::IPV4, $masked, fn (array $m): string => $this->ipv4($m[0]));
         $masked = $this->replace(self::LABELS, $masked, fn (array $m): string => $this->labels($m[0]));
 
@@ -142,11 +143,16 @@ class HiddenValues
 
     /**
      * What looks like an IPv6 address: masked when it is one, with or
-     * without a leading colon ("addr:2001:db8::10").
+     * without a leading colon ("addr:2001:db8::10"). Glued to letters before
+     * it, two groups are code, not an address ("Cache::add", "std::cafe").
      */
-    private function ipv6(string $token): string
+    private function ipv6(string $token, bool $glued): string
     {
         foreach ([$token, ltrim($token, ':')] as $candidate) {
+            if ($glued && count(array_filter(explode(':', $candidate), fn (string $group): bool => $group !== '')) < 3) {
+                continue;
+            }
+
             if (filter_var($candidate, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false) {
                 $mask = $this->known()[$this->normalized($candidate)] ?? '['.__('address').']';
 
@@ -187,7 +193,8 @@ class HiddenValues
     /**
      * A run of labels: the longest part that is a known value is masked,
      * from the left, again after it; a known name glued to what comes before
-     * it ("2Fvps-123.provider.example") too.
+     * it ("2Fvps-123.provider.example") or after it with a dash
+     * ("vps-123.provider.example-access.log") too.
      */
     private function labels(string $token): string
     {
@@ -197,14 +204,16 @@ class HiddenValues
 
         for ($start = 0; $start < $count; $start++) {
             for ($end = min($count, $start + self::MAX_LABELS); $end > $start; $end--) {
-                if (($mask = $this->known()[strtolower(implode('.', array_slice($labels, $start, $end - $start)))] ?? null) !== null) {
+                $slice = array_slice($labels, $start, $end - $start);
+
+                if (($mask = $this->known()[mb_strtolower(implode('.', $slice))] ?? null) !== null) {
                     $out[] = $this->hold($mask);
                     $start = $end - 1;
 
                     continue 2;
                 }
 
-                $glued = $end - $start > 1 ? $this->glued($labels[$start], implode('.', array_slice($labels, $start + 1, $end - $start - 1))) : null;
+                $glued = $end - $start > 1 ? $this->glued($labels[$start], implode('.', array_slice($slice, 1))) ?? $this->suffixed($slice) : null;
 
                 if ($glued !== null) {
                     $out[] = $glued;
@@ -227,9 +236,31 @@ class HiddenValues
     {
         $this->known();
 
-        foreach ($this->tails[strtolower($tail)] ?? [] as $label => $mask) {
-            if (strlen($first) > strlen($label) && str_ends_with(strtolower($first), $label)) {
-                return substr($first, 0, strlen($first) - strlen($label)).$this->hold($mask);
+        foreach ($this->tails[mb_strtolower($tail)] ?? [] as $label => $mask) {
+            $label = (string) $label;
+
+            if (mb_strlen($first) > mb_strlen($label) && str_ends_with(mb_strtolower($first), $label)) {
+                return mb_substr($first, 0, mb_strlen($first) - mb_strlen($label)).$this->hold($mask);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * $labels are a known name, but for what follows a dash in the last.
+     *
+     * @param  list<string>  $labels
+     */
+    private function suffixed(array $labels): ?string
+    {
+        $parts = explode('-', (string) array_pop($labels));
+
+        for ($kept = count($parts) - 1; $kept > 0; $kept--) {
+            $name = implode('.', [...$labels, implode('-', array_slice($parts, 0, $kept))]);
+
+            if (($mask = $this->known()[mb_strtolower($name)] ?? null) !== null) {
+                return $this->hold($mask).'-'.implode('-', array_slice($parts, $kept));
             }
         }
 
@@ -272,7 +303,7 @@ class HiddenValues
         /** @var array<string, array<string, true>> $owners value => names */
         $owners = [];
         $add = function (?string $value, string $name) use (&$owners): void {
-            $value = strtolower(trim((string) $value));
+            $value = mb_strtolower(trim((string) $value));
 
             if (mb_strlen($value) < 3) {
                 return;
@@ -290,7 +321,9 @@ class HiddenValues
                 $add($server->{$column}, $server->name);
             }
 
-            $add(self::hostname($server->provider_hostname), $server->name);
+            foreach (self::hostnames($server->provider_hostname) as $hostname) {
+                $add($hostname, $server->name);
+            }
         }
 
         foreach (Network::query()->get(['name', 'subnet', 'gateway', 'public_ip']) as $network) {
@@ -323,11 +356,14 @@ class HiddenValues
     }
 
     /**
-     * A provider hostname as a name in text: the host of a URL, without a
-     * trailing dot, an internationalised one in punycode. One without a dot
-     * is a name, often the server's own ("hz-1"), not an address.
+     * A provider hostname as names in text: the host of a URL, without a
+     * trailing dot; an internationalised one in punycode and as written. One
+     * without a dot is a name, often the server's own ("hz-1"), not an
+     * address.
+     *
+     * @return list<string>
      */
-    private static function hostname(?string $value): ?string
+    private static function hostnames(?string $value): array
     {
         $value = trim((string) $value);
         // The host of what may be a URL, or a host with a user, port or path.
@@ -338,6 +374,10 @@ class HiddenValues
             $value = (string) idn_to_ascii($value, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46);
         }
 
-        return str_contains($value, '.') && preg_match('/^[A-Za-z0-9.-]+$/', $value) === 1 ? $value : null;
+        if (! str_contains($value, '.') || preg_match('/^[A-Za-z0-9.-]+$/', $value) !== 1) {
+            return [];
+        }
+
+        return array_values(array_unique([$value, (string) idn_to_utf8($value, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46)]));
     }
 }
