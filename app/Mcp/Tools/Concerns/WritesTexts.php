@@ -96,7 +96,9 @@ trait WritesTexts
 
             $masked = (string) $hidden->mask($record->{$attribute});
 
-            if (mb_strlen($masked) > Serializer::MAX_TEXT || ($masked === $hidden->hiddenText() && filled($record->{$attribute}))) {
+            if ($masked === $hidden->hiddenText() && filled($record->{$attribute})) {
+                $cut[$argument] = __('Herdbook could not mask this text for agents, so it read as [text hidden]: change it in Herdbook itself.');
+            } elseif (mb_strlen($masked) > Serializer::MAX_TEXT) {
                 $cut[$argument] = __('This text is longer than an agent reads whole: change it in Herdbook itself.');
             }
 

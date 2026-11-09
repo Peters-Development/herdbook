@@ -352,6 +352,7 @@
     "Give one of them another extension and save, then change it again.": "Geef er één een andere extensie en sla op, en wijzig hem daarna opnieuw.",
     "Go to :name": "Naar :name",
     "Healthy": "In orde",
+    "Herdbook could not mask this text for agents, so it read as [text hidden]: change it in Herdbook itself.": "Herdbook kon deze tekst niet maskeren voor agents, dus hij las als [tekst verborgen]: wijzig hem in Herdbook zelf.",
     "Herdbook got no answer from Pushover. Does the server Herdbook runs on have internet access?": "Herdbook kreeg geen antwoord van Pushover. Heeft de server internet?",
     "Herdbook's own connection seemed to be down; try again in a moment.": "De eigen verbinding leek weg; probeer het zo opnieuw.",
     "Herdbook: emergency alert test": "Herdbook: test van een noodmelding",

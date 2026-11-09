@@ -411,7 +411,7 @@ class MaintenanceChangeToolsTest extends TestCase
         $read = $this->callToolSuccessfully($this->token, 'get_maintenance', ['id' => $maintenance->id]);
 
         $this->assertSame(['[tekst verborgen]', ['plan']], [$read['plan'], $read['truncated']]);
-        $this->assertStringStartsWith('plan: Deze tekst is langer', $this->callToolError($this->token, 'update_maintenance', ['id' => $maintenance->id, 'version' => $maintenance->version(), 'plan' => 'Short']));
+        $this->assertSame('plan: Herdbook kon deze tekst niet maskeren voor agents, dus hij las als [tekst verborgen]: wijzig hem in Herdbook zelf.', $this->callToolError($this->token, 'update_maintenance', ['id' => $maintenance->id, 'version' => $maintenance->version(), 'plan' => 'Short']));
         $this->assertSame('Reboot 192.0.2.10.', $maintenance->refresh()->plan);
     }
 
