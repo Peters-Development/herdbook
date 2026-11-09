@@ -143,7 +143,7 @@ class DomainsTable
             ->modalHeading(__('Use the price list'))
             ->modalDescription(function (Collection $records): string {
                 $changes = $records
-                    ->filter(fn (Domain $domain): bool => $domain->cost_amount !== null && $domain->listPrice() !== null && ! $domain->isAtListPrice())
+                    ->filter(fn (Domain $domain): bool => $domain->canUsePriceList() && ! $domain->isAtListPrice())
                     ->map(fn (Domain $domain): string => __(':name: :from → :to', ['name' => $domain->name, 'from' => Money::describe($domain), 'to' => Money::format($domain->listPrice()->cost_amount).' '.CostPeriod::Year->getLabel()]));
                 $named = $changes->take(10)->implode('; ').($changes->count() > 10 ? ' '.__('and :count more', ['count' => $changes->count() - 10]) : '');
 
@@ -154,7 +154,7 @@ class DomainsTable
             ->modalSubmitActionLabel(__('Use the price list'))
             ->requiresConfirmation()
             ->action(function (Collection $records): void {
-                $moved = $records->filter(fn (Domain $domain): bool => $domain->cost_amount !== null && $domain->listPrice() !== null);
+                $moved = $records->filter(fn (Domain $domain): bool => $domain->canUsePriceList());
                 $moved->each->usePriceList();
                 $skipped = $records->count() - $moved->count();
                 $skippedText = trans_choice(':count skipped: no price in the list, or no amount of its own.|:count skipped: no price in the list, or no amount of their own.', $skipped);

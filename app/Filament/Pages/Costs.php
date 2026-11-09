@@ -299,7 +299,7 @@ class Costs extends Page
 
         // A missing price is fixed once in the price list, not per domain.
         $priceless = collect($overview->unpriced)
-            ->filter(fn (Model $item): bool => $item instanceof Domain && $item->cost_amount === null && $item->registrar !== null)
+            ->filter(fn (Model $item): bool => $item instanceof Domain && $item->lacksListPrice())
             ->groupBy(fn (Domain $domain): string => $domain->registrar_id.' '.Domain::extensionOf($domain->name));
 
         foreach ($priceless as $domains) {

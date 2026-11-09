@@ -60,11 +60,14 @@ class Domain extends Model implements Renewable
 
             // With a DNS server, the DNS host is that server's provider (none
             // for a box of your own), so the lists, counts and filters on the
-            // DNS host need only the one column. A query, not the relation: a
-            // loaded one keeps the old server. Without a DNS server the DNS
-            // host is chosen by hand, also when one was just cleared.
+            // DNS host need only the one column. A query, unless the loaded
+            // server is this one (Server::booted() hands itself over): a
+            // loaded relation may be of the old server. Without a DNS server
+            // the DNS host is chosen by hand, also when one was just cleared.
             if ($domain->dns_server_id !== null && $domain->isDirty(['dns_server_id', 'dns_provider_id'])) {
-                $domain->dns_provider_id = Server::query()->whereKey($domain->dns_server_id)->value('provider_id');
+                $domain->dns_provider_id = $domain->relationLoaded('dnsServer') && (int) $domain->dnsServer?->getKey() === (int) $domain->dns_server_id
+                    ? $domain->dnsServer->provider_id
+                    : Server::query()->whereKey($domain->dns_server_id)->value('provider_id');
             }
         });
 
@@ -275,6 +278,24 @@ class Domain extends Model implements Renewable
         return $this->cost_amount !== null
             && $this->cost_period === CostPeriod::Year
             && $this->cost_amount === $this->listPrice()?->cost_amount;
+    }
+
+    /**
+     * Whether "Use the price list" can move it there: an amount of its own,
+     * and a price in the list to take instead.
+     */
+    public function canUsePriceList(): bool
+    {
+        return $this->cost_amount !== null && $this->listPrice() !== null;
+    }
+
+    /**
+     * Without an amount of its own because its registrar has no price for
+     * its extension: one price in the list fixes it (the costs page).
+     */
+    public function lacksListPrice(): bool
+    {
+        return $this->cost_amount === null && $this->canHaveCost() && $this->registrar_id !== null && $this->listPrice() === null;
     }
 
     /**
