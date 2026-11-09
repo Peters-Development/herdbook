@@ -19,8 +19,10 @@ use App\Models\Incident;
 use App\Models\Server;
 use App\Models\ServerDependency;
 use App\Services\Checks\CheckIncidents;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class CheckIncidentsTest extends TestCase
@@ -165,6 +167,30 @@ class CheckIncidentsTest extends TestCase
 
         $incident = Incident::query()->sole();
         $this->assertSame(2, $incident->timelineEntries()->count());
+    }
+
+    public function test_an_incident_resolved_while_a_check_was_about_to_join_it_is_not_joined(): void
+    {
+        $environment = Environment::factory()->create();
+        $this->downCheck($environment);
+        $this->downCheck($environment);
+
+        // Someone resolves the incident right after the second check found it
+        // (the query for an open check incident), before it locked it.
+        $resolved = false;
+        DB::listen(function (QueryExecuted $query) use (&$resolved): void {
+            if (! $resolved && str_contains($query->sql, '"source" = ?') && Incident::query()->exists()) {
+                $resolved = true;
+                DB::table('incidents')->update(['status' => IncidentStatus::Resolved->value]);
+            }
+        });
+
+        Date::setTestNow('2026-10-22 13:20:00');
+        $this->artisan('checks:incidents')->assertSuccessful();
+
+        $incidents = Incident::query()->orderBy('id')->get();
+        $this->assertSame([IncidentStatus::Resolved, IncidentStatus::Open], $incidents->pluck('status')->all());
+        $this->assertSame([1, 1], $incidents->map(fn (Incident $incident): int => $incident->timelineEntries()->count())->all());
     }
 
     public function test_staging_and_normal_checks_open_no_incident(): void

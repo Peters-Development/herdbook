@@ -72,8 +72,10 @@ final class CheckIncidents
                 $event->setRelation('check', $check);
                 $existing = $this->openIncidentFor($check);
                 // Locked before its timeline gets a row: two checks of one
-                // incident handled at once must not deadlock on it.
-                $incident = $existing ? Incident::query()->lockForUpdate()->find($existing->id) : $this->createIncident($event);
+                // incident handled at once must not deadlock on it. Read
+                // again under the lock: resolved meanwhile, it is not joined.
+                $existing = $existing ? Incident::query()->lockForUpdate()->find($existing->id) : null;
+                $incident = $existing !== null && $existing->status !== IncidentStatus::Resolved ? $existing : $this->createIncident($event);
                 $opened += $incident->wasRecentlyCreated ? 1 : 0;
 
                 $event->update(['incident_id' => $incident->id]);
@@ -96,7 +98,7 @@ final class CheckIncidents
                         $incident->update(['status' => IncidentStatus::Open]);
                     }
                 }
-            });
+            }, attempts: 3);
         }
 
         return $opened;
@@ -138,7 +140,7 @@ final class CheckIncidents
             if ($incident->status === IncidentStatus::Open && ! $stillDown) {
                 $incident->update(['status' => IncidentStatus::Monitoring]);
             }
-        });
+        }, attempts: 3);
     }
 
     /**
