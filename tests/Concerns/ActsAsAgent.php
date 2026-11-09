@@ -27,6 +27,43 @@ trait ActsAsAgent
     }
 
     /**
+     * A call of one tool, over HTTP like an agent makes it.
+     *
+     * @param  array<string, mixed>  $arguments
+     */
+    protected function callTool(string $token, string $tool, array $arguments = []): TestResponse
+    {
+        return $this->mcp($token, 'tools/call', ['name' => $tool, 'arguments' => (object) $arguments]);
+    }
+
+    /**
+     * A call that must succeed; its structured content.
+     *
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    protected function callToolSuccessfully(string $token, string $tool, array $arguments = []): array
+    {
+        $response = $this->callTool($token, $tool, $arguments)->assertOk();
+        $this->assertFalse($response->json('result.isError'), (string) $response->json('result.content.0.text'));
+
+        return $response->json('result.structuredContent');
+    }
+
+    /**
+     * A call that the tool must refuse; what it says.
+     *
+     * @param  array<string, mixed>  $arguments
+     */
+    protected function callToolError(string $token, string $tool, array $arguments = []): string
+    {
+        $response = $this->callTool($token, $tool, $arguments)->assertOk();
+        $this->assertTrue($response->json('result.isError'), 'The call succeeded: '.json_encode($arguments));
+
+        return $response->json('result.content.0.text');
+    }
+
+    /**
      * A JSON-RPC request to /mcp as Claude Code sends it: the 2025-06-18
      * handshake, then that protocol version in a header.
      *
