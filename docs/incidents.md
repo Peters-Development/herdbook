@@ -26,7 +26,7 @@ Incidents live under **Knowledge → Incidents**. You write them yourself, Herdb
 
 Create an incident from **Knowledge → Incidents**, or from the incidents tab of a project, server, domain, network or client: then it is linked to that record from the start.
 
-Monitoring changes incidents too (see [Draft Incidents From Checks](#draft-incidents-from-checks)). If an incident changed since you opened its edit form, its links included, saving says so and changes nothing: reload the page to see the change.
+Who wrote an incident down is recorded with it (**By**), and the agent if it came through one; the same goes for timeline entries and action items. Monitoring changes incidents too (see [Draft Incidents From Checks](#draft-incidents-from-checks)). If an incident changed since you opened its edit form, its links included, saving says so and changes nothing: reload the page to see the change.
 
 <a name="severity-and-status"></a>
 ### Severity and Status
@@ -114,7 +114,7 @@ The title and timeline entries are written in the default language of the instal
 <a name="from-an-agent"></a>
 ## From an Agent
 
-An agent such as Claude Code can keep incidents through Herdbook's MCP server ([Agents](agents.md)). It reads the unresolved ones of a project or a server, the way the overviews count them, and one incident with its report, timeline and action items. During an outage it looks for an unresolved incident first (a draft from a check, for instance) and writes on its timeline what it tries and finds; it opens an incident only when there is none. It can add action items and mark them done. What it writes shows who it wrote it for, through which agent: "Ada via deploy-agent". Addresses in what it reads are masked.
+An agent such as Claude Code can keep incidents through Herdbook's MCP server ([Agents](agents.md)). It reads the unresolved ones of a project or a server, the way the overviews count them, and one incident with its report, timeline and action items. During an outage it looks for an unresolved incident first (a draft from a check, for instance) and writes on its timeline what it tries and finds; it opens an incident only when there is none. It can add action items and mark them done, change an incident, and resolve it once it is over, with its root cause. A change it makes over what monitoring or a person changed meanwhile is refused, as is an edit form of yours over its change; the activity log keeps a root cause or report it replaced. What it writes shows who it wrote it for, through which agent: "Ada via deploy-agent". Addresses in what it reads are masked.
 
 <a name="importing-existing-reports"></a>
 ## Importing Existing Reports

@@ -36,6 +36,14 @@ class Incident extends Model
     ];
 
     /**
+     * The agent tools write over its root cause and report only whole.
+     */
+    protected function keepsReplacedTexts(): bool
+    {
+        return true;
+    }
+
+    /**
      * What the edit form and the agent tools can change; not where it came
      * from (source, imported_from) or who wrote it down.
      */

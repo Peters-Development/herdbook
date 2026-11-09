@@ -9,8 +9,9 @@ use App\Filament\Resources\Maintenances\Pages\EditMaintenance;
 use App\Filament\Resources\Maintenances\Pages\ViewMaintenance;
 use App\Filament\Support\ActivityPresenter;
 use App\Mcp\Serializer;
+use App\Mcp\Servers\HerdbookServer;
 use App\Models\AgentToken;
-use App\Models\Incident;
+use App\Models\Document;
 use App\Models\Maintenance;
 use App\Models\Project;
 use App\Models\Server;
@@ -441,13 +442,21 @@ class MaintenanceChangeToolsTest extends TestCase
     public function test_only_a_model_that_opts_in_keeps_the_texts_an_agent_replaced(): void
     {
         $this->actingAs($this->user->withAgentToken($this->agent));
-        $incident = Incident::factory()->create(['body' => 'The report Bob wrote.']);
+        $document = Document::factory()->create(['body' => 'The runbook Bob wrote.']);
 
-        $incident->update(['body' => 'Rewritten.']);
+        $document->update(['body' => 'Rewritten.']);
 
-        $activity = Activity::query()->where('subject_type', 'incident')->where('subject_id', $incident->id)->where('event', 'updated')->sole();
+        $activity = Activity::query()->where('subject_type', 'document')->where('subject_id', $document->id)->where('event', 'updated')->sole();
         $this->assertSame(['body'], $activity->properties['texts']);
         $this->assertArrayNotHasKey('previous_texts', $activity->properties->all());
+    }
+
+    public function test_every_tool_comes_in_one_page_of_the_list(): void
+    {
+        $listed = $this->mcp($this->token, 'tools/list');
+
+        $this->assertCount(count((new \ReflectionProperty(HerdbookServer::class, 'tools'))->getDefaultValue()), $listed->json('result.tools'));
+        $this->assertNull($listed->json('result.nextCursor'));
     }
 
     public function test_a_change_by_hand_names_no_agent(): void
@@ -555,7 +564,7 @@ class MaintenanceChangeToolsTest extends TestCase
         $names = $tools->pluck('name')->all();
         $texts = $tools->pluck('description')->push($initialize->json('result.instructions'))->implode(' ');
 
-        preg_match_all('/\b[a-z]+_(?:maintenance|inventory)\b/', $texts, $mentioned);
+        preg_match_all('/\b(?:[a-z]+_)+(?:maintenance|inventory|incidents?|action|entry)\b/', $texts, $mentioned);
 
         $this->assertNotEmpty($mentioned[0]);
         $this->assertSame([], array_values(array_diff(array_unique($mentioned[0]), $names)));

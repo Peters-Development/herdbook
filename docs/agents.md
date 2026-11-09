@@ -41,6 +41,8 @@ Herdbook remains the place where people work: an agent sees less than a person a
 | `add_timeline_entry` | Adds an entry to an incident's timeline: what was tried, found or done, and when. Only added, also to a resolved incident. | write |
 | `add_incident_action` | Adds an action item to an incident, with a due date if there is one. | write |
 | `complete_incident_action` | Marks an action item as done. | write |
+| `update_incident` | Changes an incident: its title, severity, status (also to reopen it), times, impact, root cause, report, or servers and projects. | write |
+| `resolve_incident` | Resolves an incident: when (default now), and its root cause and report if it knows them. | write |
 | `schedule_maintenance` | Plans maintenance. | write |
 | `log_maintenance` | Writes down maintenance that was done. | write |
 | `update_maintenance` | Changes the work, title, times, plan, report or servers and projects of planned or done maintenance. Not its status, and nothing that was called off. | write |
@@ -75,7 +77,7 @@ Times are ISO 8601, such as `2026-11-12T22:00`, in minutes as in the forms: seco
 <a name="changes-made-meanwhile"></a>
 ### Changes Made Meanwhile
 
-Every maintenance an agent reads comes with a `version`, a fingerprint of everything that can be changed, its servers and projects included. To change a maintenance, or to complete it with a report (or clear its report), the agent gives that version back. If someone changed the maintenance since, the agent is told to read it again, and nothing is saved. Completing without a report, and calling off, only need the maintenance to be still planned.
+Every maintenance an agent reads comes with a `version`, a fingerprint of everything that can be changed, its servers and projects included. To change a maintenance or an incident, or to complete or resolve one with a report or root cause (or clear one), the agent gives that version back. If someone changed the maintenance since, the agent is told to read it again, and nothing is saved. Completing without a report, and calling off, only need the maintenance to be still planned.
 
 It works the other way too. An edit form or a **Complete** modal left open in the panel doesn't undo what an agent (or another tab) did meanwhile: saving refuses, keeps what the agent wrote, and says the maintenance was changed meanwhile, or that it is no longer planned.
 
@@ -204,7 +206,9 @@ Let the agent read without asking, and have it ask before it writes. In `~/.clau
       "mcp__herdbook__open_incident",
       "mcp__herdbook__add_timeline_entry",
       "mcp__herdbook__add_incident_action",
-      "mcp__herdbook__complete_incident_action"
+      "mcp__herdbook__complete_incident_action",
+      "mcp__herdbook__update_incident",
+      "mcp__herdbook__resolve_incident"
     ]
   }
 }
@@ -261,6 +265,8 @@ The [Security](security.md#agents) page puts this in the context of the rest of 
 | Changed its servers or projects | Not logged, as for people. |
 | Opened an incident, added a timeline entry or an action item | Delete it in the panel. |
 | Completed an action item | **Reopen** it in the panel. |
+| Resolved an incident, or changed its status or severity | Set it back in the edit form; the activity log has what it was. |
+| Replaced or cleared an incident's root cause or report | **Previous text** on that entry in the activity log, as for maintenance. |
 
 <a name="troubleshooting"></a>
 ## Troubleshooting

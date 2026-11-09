@@ -79,15 +79,16 @@ trait WritesTexts
      * other sites but those of the text each replaces.
      *
      * @param  array<string, mixed>  $changes
-     * @param  array<string, string>  $fields  argument => attribute, for its texts
+     * @param  array<string, string>  $markdown  argument => attribute, for its markdown texts
+     * @param  array<string, string>  $plain  argument => attribute, for texts the panel shows as text (no links to check)
      */
-    protected function checkTexts(Model $record, array $changes, array $fields): void
+    protected function checkTexts(Model $record, array $changes, array $markdown, array $plain = []): void
     {
         $hidden = app(HiddenValues::class);
         $cut = [];
         $links = [];
 
-        foreach ($fields as $argument => $attribute) {
+        foreach ([...$markdown, ...$plain] as $argument => $attribute) {
             if (! array_key_exists($argument, $changes)) {
                 continue;
             }
@@ -96,7 +97,9 @@ trait WritesTexts
                 $cut[$argument] = __('This text is longer than an agent reads whole: change it in Herdbook itself.');
             }
 
-            $links[$argument] = [new NoNewLinks($record->{$attribute})];
+            if (isset($markdown[$argument])) {
+                $links[$argument] = [new NoNewLinks($record->{$attribute})];
+            }
         }
 
         if ($cut !== []) {
