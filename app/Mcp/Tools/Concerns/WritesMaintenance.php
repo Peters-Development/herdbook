@@ -146,7 +146,7 @@ trait WritesMaintenance
         }
 
         $outOfRange = fn (?CarbonImmutable $moment): bool => $moment !== null
-            && ($moment->lt(Maintenance::earliestMoment()) || $moment->gt(Maintenance::latestMoment()));
+            && ($moment->lt(Moment::earliest()) || $moment->gt(Moment::latest()));
 
         foreach (['starts_at', 'ends_at'] as $field) {
             if ($outOfRange($work[$field] ?? null)) {

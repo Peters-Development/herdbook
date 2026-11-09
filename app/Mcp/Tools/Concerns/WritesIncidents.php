@@ -4,7 +4,6 @@ namespace App\Mcp\Tools\Concerns;
 
 use App\Mcp\Serializer;
 use App\Models\Incident;
-use App\Models\Maintenance;
 use App\Models\User;
 use App\Rules\Moment;
 use Carbon\CarbonImmutable;
@@ -101,7 +100,7 @@ trait WritesIncidents
                 continue;
             }
 
-            if ($moment->lt(Maintenance::earliestMoment()) || $moment->gt(Maintenance::latestMoment())) {
+            if ($moment->lt(Moment::earliest()) || $moment->gt(Moment::latest())) {
                 $validator->errors()->add($field, __('Pick a moment between 1970 and 2038.'));
             } elseif ($moment->isFuture()) {
                 $validator->errors()->add($field, __('It cannot lie in the future.'));
@@ -109,6 +108,17 @@ trait WritesIncidents
                 $validator->errors()->add($field, __('It cannot be before the start.'));
             }
         }
+    }
+
+    /**
+     * The day an incident is filed under: one that has come, in the display
+     * timezone.
+     *
+     * @return list<string>
+     */
+    protected static function dayRules(): array
+    {
+        return ['date_format:Y-m-d', 'after_or_equal:1970-01-01', 'before_or_equal:'.now(config('herdbook.display_timezone'))->toDateString()];
     }
 
     /**

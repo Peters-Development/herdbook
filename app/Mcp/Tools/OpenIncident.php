@@ -74,7 +74,7 @@ class OpenIncident extends Tool
             'severity' => ['nullable', Rule::enum(IncidentSeverity::class)],
             'started_at' => ['nullable', new Moment],
             'detected_at' => ['nullable', new Moment],
-            'occurred_on' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:1970-01-01', 'before_or_equal:'.now(config('herdbook.display_timezone'))->toDateString()],
+            'occurred_on' => ['nullable', ...self::dayRules()],
             'impact' => $this->plainTextRules(Serializer::MAX_TEXT),
             'report' => $this->textRules(),
             ...$this->linkRules(),

@@ -57,22 +57,6 @@ class Maintenance extends Model
     }
 
     /**
-     * The first moment its timestamp columns hold (MySQL).
-     */
-    public static function earliestMoment(): CarbonImmutable
-    {
-        return CarbonImmutable::parse('1970-01-01 00:00:01', 'UTC');
-    }
-
-    /**
-     * The last moment its timestamp columns hold (MySQL).
-     */
-    public static function latestMoment(): CarbonImmutable
-    {
-        return CarbonImmutable::parse('2038-01-19 03:14:07', 'UTC');
-    }
-
-    /**
      * What completing it starts from: done before its planned time, it
      * started now; a planned end that hasn't come is no end; its report so far.
      *
