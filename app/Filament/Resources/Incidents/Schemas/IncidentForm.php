@@ -30,8 +30,6 @@ class IncidentForm
                         Select::make('status')->label(__('Status'))->options(IncidentStatus::class)->default(IncidentStatus::Open)->required(),
                         DatePicker::make('occurred_on')
                             ->label(__('Date'))
-                            ->native(false)
-                            ->displayFormat(__('formats.date'))
                             ->default(fn () => now(config('herdbook.display_timezone'))->toDateString())
                             ->required(),
                         self::moment('started_at', __('Started')),
@@ -64,8 +62,6 @@ class IncidentForm
     {
         return DateTimePicker::make($name)
             ->label($label)
-            ->native(false)
-            ->displayFormat(__('formats.datetime'))
             ->seconds(false);
     }
 }
