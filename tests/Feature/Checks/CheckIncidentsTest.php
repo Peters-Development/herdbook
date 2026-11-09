@@ -292,6 +292,43 @@ class CheckIncidentsTest extends TestCase
         $this->assertSame($incident->id, $check->events()->sole()->incident_id);
     }
 
+    public function test_an_outage_joins_the_incident_a_person_or_an_agent_opened_first(): void
+    {
+        [$check, $environment] = $this->criticalProductionOutage();
+        $server = Server::factory()->create();
+        EnvironmentServer::create(['environment_id' => $environment->id, 'server_id' => $server->id, 'role' => ServerRole::App]);
+        $opened = Incident::factory()->create(['user_id' => User::factory()->create()->id, 'recorded_via' => 'deploy-agent', 'detected_at' => now()->subMinutes(30)]);
+        // Linked to the server only, as an agent may: the outage is the same.
+        $opened->servers()->attach($server->id);
+
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+
+        $incident = Incident::query()->sole();
+        $this->assertSame(IncidentSource::Manual, $incident->source);
+        $this->assertSame($incident->id, $check->events()->sole()->incident_id);
+        $this->assertTrue($incident->projects()->sole()->is($environment->project));
+        $this->assertStringStartsWith('Ook down:', $incident->timelineEntries()->sole()->note);
+    }
+
+    public function test_an_incident_without_a_detection_time_is_joined_while_it_was_written_down_recently(): void
+    {
+        [, $environment] = $this->criticalProductionOutage();
+        $recent = Incident::factory()->create(['detected_at' => null]);
+        $recent->projects()->attach($environment->project_id);
+
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+
+        $this->assertSame(1, Incident::count());
+
+        [, $other] = $this->criticalProductionOutage();
+        $old = Incident::factory()->create(['detected_at' => null, 'created_at' => now()->subDays(3)]);
+        $old->projects()->attach($other->project_id);
+
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+
+        $this->assertSame(3, Incident::count());
+    }
+
     public function test_an_old_unresolved_incident_is_not_joined(): void
     {
         [, $environment] = $this->criticalProductionOutage();

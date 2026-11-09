@@ -12,23 +12,24 @@ use App\Models\CheckEvent;
 use App\Models\CheckResult;
 use App\Models\Concerns\Authorship;
 use App\Models\Incident;
-use App\Models\Project;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
  * Draft incidents from long outages: a critical production check that is
- * down for a while opens one (or joins a recent open one of its project),
- * with the start taken from the first failed result, so the detection time
- * and the time to detect are right. A recovery is added to its timeline; the
+ * down for a while opens one (or joins a recent unresolved one of its
+ * projects or servers, also one a person or an agent opened), with the
+ * start taken from the first failed result, so the detection time and the
+ * time to detect are right. A recovery is added to its timeline; the
  * incident moves to "monitoring" once none of its checks is down any more.
  */
 final class CheckIncidents
 {
     /**
-     * An open check incident older than this is not joined: an incident
-     * nobody closed must not swallow next week's outage.
+     * An unresolved incident detected longer ago than this is not joined:
+     * an incident nobody closed must not swallow next week's outage.
      */
     private const int JOIN_WITHIN_HOURS = 12;
 
@@ -168,21 +169,29 @@ final class CheckIncidents
     }
 
     /**
-     * The open incident from checks of the same project, if there is one.
+     * The unresolved incident of the same projects or servers, detected in
+     * the last hours (without a detection time: written down in them),
+     * whoever opened it: a person or an agent that was there first wrote down
+     * the same outage.
      */
     private function openIncidentFor(Check $check): ?Incident
     {
         $projectIds = $check->affectedProjects()->pluck('id')->all();
+        $serverIds = $check->affectedServers()->pluck('id')->all();
+        $since = now()->subHours(self::JOIN_WITHIN_HOURS);
 
-        if ($projectIds === []) {
+        if ($projectIds === [] && $serverIds === []) {
             return null;
         }
 
         return Incident::query()
-            ->where('source', IncidentSource::Check)
-            ->where('status', '!=', IncidentStatus::Resolved)
-            ->where('detected_at', '>=', now()->subHours(self::JOIN_WITHIN_HOURS))
-            ->whereHas('projects', fn ($query) => $query->whereKey($projectIds))
+            ->unresolved()
+            ->where(fn (Builder $query) => $query
+                ->where('detected_at', '>=', $since)
+                ->orWhere(fn (Builder $query) => $query->whereNull('detected_at')->where('created_at', '>=', $since)))
+            ->where(fn (Builder $query) => $query
+                ->whereHas('projects', fn (Builder $projects) => $projects->whereKey($projectIds))
+                ->orWhereHas('servers', fn (Builder $servers) => $servers->whereKey($serverIds)))
             ->latest('id')
             ->first();
     }
