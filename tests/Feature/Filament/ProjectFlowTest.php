@@ -128,6 +128,23 @@ class ProjectFlowTest extends TestCase
         );
     }
 
+    public function test_dns_is_not_a_role_to_assign(): void
+    {
+        $this->signIn();
+        $project = Project::factory()->create();
+        $server = Server::factory()->create();
+
+        Livewire::test(EnvironmentsRelationManager::class, ['ownerRecord' => $project, 'pageClass' => ViewProject::class])
+            ->callAction(TestAction::make('create')->table(), [
+                'name' => 'Productie',
+                'kind' => 'production',
+                'serverAssignments' => [['server_id' => $server->id, 'role' => 'dns', 'notes' => null]],
+            ])
+            ->assertHasFormErrors(['serverAssignments.0.role']);
+
+        $this->assertArrayNotHasKey('dns', ServerRole::assignableOptions());
+    }
+
     public function test_the_same_server_in_the_same_role_twice_is_refused(): void
     {
         $this->signIn();

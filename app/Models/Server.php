@@ -58,6 +58,12 @@ class Server extends Model implements Renewable
                     $server->checks()->get()->each->retarget($old, $server->{$address});
                 }
             }
+
+            // Its provider is the DNS host of the domains whose DNS runs here
+            // (Domain::booted()). Through Eloquent, so each is logged.
+            if ($server->wasChanged('provider_id')) {
+                $server->dnsDomains()->get()->each->update(['dns_provider_id' => $server->provider_id]);
+            }
         });
     }
 
@@ -75,6 +81,16 @@ class Server extends Model implements Renewable
     public function mailDomains(): HasMany
     {
         return $this->hasMany(Domain::class, 'mail_server_id');
+    }
+
+    /**
+     * The domains whose DNS runs here (Domain::dnsServer()).
+     *
+     * @return HasMany<Domain, $this>
+     */
+    public function dnsDomains(): HasMany
+    {
+        return $this->hasMany(Domain::class, 'dns_server_id');
     }
 
     /** @return BelongsTo<Provider, $this> */

@@ -248,6 +248,17 @@ class ProjectHealthTest extends TestCase
         $this->assertEquals(75.0, $health->uptime);
     }
 
+    public function test_a_check_on_the_dns_server_of_a_domain_counts_for_the_environments_of_its_hostnames(): void
+    {
+        $dns = Server::factory()->create();
+        Hostname::factory()->for(Domain::factory()->create(['dns_server_id' => $dns->id]))->create(['environment_id' => $this->production->id]);
+        $this->hostnameCheck(CheckType::Http, CheckState::Up);
+        $this->state(Check::factory()->forServer($dns, CheckType::Tcp)->create(), CheckState::Down);
+
+        $this->assertSame(HealthState::Down, $this->health()->state);
+        $this->assertSame([$dns->id], app(ProjectHealth::class)->productionServerIds($this->project));
+    }
+
     public function test_a_check_on_the_mail_server_of_a_domain_counts_for_the_environments_of_its_hostnames(): void
     {
         $mail = Server::factory()->create();

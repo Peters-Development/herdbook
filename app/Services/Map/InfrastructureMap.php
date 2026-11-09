@@ -75,7 +75,7 @@ final class InfrastructureMap
 
         /** @var Collection<int, Environment> $environments */
         $environments = $projects->flatMap(fn (Project $project) => $project->environments)->keyBy('id');
-        // Also a server with the mail of a domain of theirs.
+        // Also a server with the mail or DNS of a domain of theirs.
         $uses = $this->health->uses();
         $dependencies = ServerDependency::query()->get(['id', 'server_id', 'depends_on_id', 'kind']);
         $allServers = Server::query()->with(['provider', 'network'])->orderBy('name')->get()->keyBy('id');
@@ -92,7 +92,7 @@ final class InfrastructureMap
             ->keyBy('id');
 
         $domains = Domain::query()
-            ->with('registrar')
+            ->with(['registrar', 'dnsProvider', 'dnsServer'])
             ->orderBy('name')
             ->get()
             ->when($filtered, fn (Collection $domains) => $domains->whereIn('id', $hostnames->pluck('domain_id')))
@@ -288,6 +288,8 @@ final class InfrastructureMap
                 : __('Local'),
             DomainResource::getUrl('view', ['record' => $domain]),
             mono: true,
+            // The subtitle has no room for more: the DNS host on hovering.
+            detail: $domain->dnsHostName() === null ? null : __('DNS host: :name', ['name' => $domain->dnsHostName()]),
         );
 
         // A local domain renews nowhere: no status to show.
@@ -310,9 +312,9 @@ final class InfrastructureMap
     }
 
     /** @return array<string, mixed> */
-    private function node(string $id, string $label, ?string $sub, string $url, bool $mono = false): array
+    private function node(string $id, string $label, ?string $sub, string $url, bool $mono = false, ?string $detail = null): array
     {
-        return ['id' => $id, 'label' => $label, 'sub' => $sub, 'url' => $url, 'mono' => $mono, 'subMono' => false, 'color' => null, 'status' => null, 'down' => false, 'selectable' => false];
+        return ['id' => $id, 'label' => $label, 'sub' => $sub, 'detail' => $detail, 'url' => $url, 'mono' => $mono, 'subMono' => false, 'color' => null, 'status' => null, 'down' => false, 'selectable' => false];
     }
 
     /**
@@ -342,11 +344,11 @@ final class InfrastructureMap
         }
 
         // One line per server and environment, also for a server with two
-        // roles there; a mail line only where the environment is not assigned
-        // to that server.
-        foreach ($uses->sortBy(fn (ServerUse $use): bool => $use->domainId !== null)->unique(fn (ServerUse $use): string => "{$use->serverId}-{$use->environmentId}") as $use) {
+        // roles there; a DNS or mail line only where the environment is not
+        // assigned to that server (ServerUse::rank()).
+        foreach ($uses->sortBy(fn (ServerUse $use): int => $use->rank())->unique(fn (ServerUse $use): string => "{$use->serverId}-{$use->environmentId}") as $use) {
             if ($servers->has($use->serverId) && $environments->has($use->environmentId)) {
-                $edges[] = ['from' => "server-{$use->serverId}", 'to' => "environment-{$use->environmentId}", 'label' => null, 'kind' => $use->domainId === null ? 'runs' : 'mail'];
+                $edges[] = ['from' => "server-{$use->serverId}", 'to' => "environment-{$use->environmentId}", 'label' => null, 'kind' => $use->kind()];
             }
         }
 

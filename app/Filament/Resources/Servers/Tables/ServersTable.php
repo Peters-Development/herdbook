@@ -26,7 +26,7 @@ class ServersTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['provider', 'network'])->withCount(['checks', 'mailDomains'])->withLastDone(MaintenanceTask::Updates))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['provider', 'network'])->withCount(['checks', 'mailDomains', 'dnsDomains'])->withLastDone(MaintenanceTask::Updates))
             ->defaultSort('name')
             ->columns([
                 TextColumn::make('name')
@@ -51,20 +51,22 @@ class ServersTable
                     ->label(__('Roles'))
                     ->badge()
                     ->color('gray')
-                    // Mail also for domains whose hostnames are in no environment.
+                    // Mail and DNS also for domains whose hostnames are in no environment.
                     ->state(fn (Server $record): array => app(ProjectHealth::class)->usesOf($record->id)
                         ->map(fn (ServerUse $use): string => $use->role->getLabel())
                         ->when($record->mail_domains_count > 0, fn ($roles) => $roles->push(ServerRole::Mail->getLabel()))
+                        ->when($record->dns_domains_count > 0, fn ($roles) => $roles->push(ServerRole::Dns->getLabel()))
                         ->unique()->sort()->values()->all())
                     ->placeholder('—')
                     ->toggleable(),
                 TextColumn::make('environments_count')
                     ->label(__('Environments'))
-                    // Also those with their mail here, through their domain.
+                    // Also those with their mail or DNS here, through their domain.
                     ->state(fn (Server $record): int => app(ProjectHealth::class)->usesOf($record->id)->unique('environmentId')->count())
-                    ->description(fn (Server $record): ?string => $record->mail_domains_count > 0
-                        ? trans_choice('mail of :count domain|mail of :count domains', $record->mail_domains_count)
-                        : null),
+                    ->description(fn (Server $record): ?string => collect([
+                        $record->mail_domains_count > 0 ? trans_choice('mail of :count domain|mail of :count domains', $record->mail_domains_count) : null,
+                        $record->dns_domains_count > 0 ? trans_choice('DNS of :count domain|DNS of :count domains', $record->dns_domains_count) : null,
+                    ])->filter()->implode(' · ') ?: null),
                 TextColumn::make('checks_count')->label(__('Checks'))->sortable()->toggleable(isToggledHiddenByDefault: true),
                 CostSchema::column()->toggleable(),
                 TextColumn::make('expires_on')->label(__('Contract until'))->date(__('formats.date'))->sortable()->placeholder('—')->toggleable(isToggledHiddenByDefault: true),

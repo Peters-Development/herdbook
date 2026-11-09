@@ -27,6 +27,25 @@ class CheckIncidentsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_the_dns_server_of_a_domain_going_down_opens_an_incident_for_its_projects(): void
+    {
+        $environment = Environment::factory()->create();
+        $dns = Server::factory()->create();
+        Hostname::factory()->for(Domain::factory()->create(['dns_server_id' => $dns->id]))->create(['environment_id' => $environment->id]);
+        $port = Check::factory()->forServer($dns, CheckType::Tcp)->critical()->create();
+        $port->forceFill(['state' => CheckState::Down])->save();
+        $port->events()->create(['from_state' => CheckState::Pending, 'to_state' => CheckState::Down, 'occurred_at' => '2026-10-22 13:07:00', 'error' => 'Geen antwoord']);
+
+        $this->assertTrue($port->watchesProduction());
+
+        Date::setTestNow('2026-10-22 13:13:00');
+        $this->artisan('checks:incidents')->assertSuccessful();
+
+        $incident = Incident::query()->sole();
+        $this->assertTrue($incident->projects()->sole()->is($environment->project));
+        $this->assertTrue($incident->servers()->sole()->is($dns));
+    }
+
     public function test_the_mail_server_of_a_domain_going_down_opens_an_incident_for_its_projects(): void
     {
         $environment = Environment::factory()->create();

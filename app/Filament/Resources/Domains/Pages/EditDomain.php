@@ -11,6 +11,16 @@ class EditDomain extends EditRecord
 {
     protected static string $resource = DomainResource::class;
 
+    /**
+     * With a DNS server, the model set the DNS host (Domain::booted()), not
+     * the hidden field: refresh it, or clearing the server next shows the old
+     * one and saves it back.
+     */
+    protected function afterSave(): void
+    {
+        $this->refreshFormData(['dns_provider_id']);
+    }
+
     protected function getHeaderActions(): array
     {
         return [

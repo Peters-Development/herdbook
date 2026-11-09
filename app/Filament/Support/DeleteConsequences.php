@@ -37,20 +37,21 @@ final class DeleteConsequences
 
     /**
      * A server that is still in use cannot go: set it to "Decommissioned", or
-     * take it out of its environments, dependencies and mail domains first.
+     * take it out of its environments, dependencies, mail domains and DNS
+     * domains first.
      */
     public static function server(): DeleteAction
     {
         return DeleteAction::make()
             ->modalDescription(fn (Server $record): string => self::inUse($record)
-                ? __('This server is still in use and cannot be deleted. Set it to "Decommissioned", or first take it out of its environments, dependencies and mail domains.')
+                ? __('This server is still in use and cannot be deleted. Set it to "Decommissioned", or first take it out of its environments, dependencies, mail domains and DNS domains.')
                 : self::sentence([':count check with its history|:count checks with their history' => $record->checks()->count()], __('Linked incidents, maintenance, documents and credentials are kept.')))
             ->before(function (DeleteAction $action, Server $record): void {
                 if (self::inUse($record)) {
                     Notification::make()
                         ->danger()
                         ->title(__('This server is still in use'))
-                        ->body(__('Set it to "Decommissioned", or first take it out of its environments, dependencies and mail domains.'))
+                        ->body(__('Set it to "Decommissioned", or first take it out of its environments, dependencies, mail domains and DNS domains.'))
                         ->send();
 
                     $action->cancel();
@@ -91,7 +92,7 @@ final class DeleteConsequences
 
     private static function inUse(Server $server): bool
     {
-        return $server->assignments()->exists() || $server->dependents()->exists() || $server->mailDomains()->exists();
+        return $server->assignments()->exists() || $server->dependents()->exists() || $server->mailDomains()->exists() || $server->dnsDomains()->exists();
     }
 
     private static function pausedChecks(int $count): string

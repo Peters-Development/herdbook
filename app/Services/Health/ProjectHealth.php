@@ -20,7 +20,7 @@ use Illuminate\Support\Collection;
 /**
  * How projects and environments are doing, from their checks: those of the
  * environment's hostnames, those of the servers it uses (it runs on them, or
- * the mail of its domain does: ImpactAnalyzer::usage()), and those of
+ * the mail or DNS of its domain does: ImpactAnalyzer::usage()), and those of
  * the servers these depend on (the same reach as ImpactAnalyzer: a failing
  * storage server takes down what mounts it). A project is its production:
  * the environments of kind production.
@@ -169,7 +169,7 @@ final class ProjectHealth
 
     /**
      * Who uses the server directly: the environments that run on it, and
-     * those with the mail of their domain there (ImpactAnalyzer::usage()).
+     * those with the mail or DNS of their domain there (ImpactAnalyzer::usage()).
      *
      * @return Collection<int, ServerUse>
      */
@@ -333,7 +333,7 @@ final class ProjectHealth
 
         $hostnameEnvironments = Hostname::query()->whereNotNull('environment_id')->pluck('environment_id', 'id');
 
-        // Also the environments whose domain has its mail on the server.
+        // Also the environments whose domain has its mail or DNS on the server.
         $this->usesByServer = ImpactAnalyzer::usage()->groupBy('serverId');
         $serverEnvironments = $this->usesByServer->map(fn (Collection $uses): array => $uses->pluck('environmentId')->unique()->values()->all());
 

@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\Costs\CostOverview;
 use App\Services\Costs\RecurringCosts;
 use App\Services\Health\ProjectHealth;
+use App\Services\Map\InfrastructureMap;
 use Database\Seeders\DemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
@@ -50,6 +51,21 @@ class DemoSeederTest extends TestCase
         $this->assertSame(1, CostOverview::decide($overview->months)->compare(0), 'Something to decide on.');
         $this->assertSame(1, $overview->missing()[Domain::class], 'A domain without an amount.');
         $this->assertNotEmpty($overview->unused);
+    }
+
+    public function test_it_has_a_domain_with_its_mail_and_dns_on_a_hosting_package(): void
+    {
+        $this->seed(DemoSeeder::class);
+
+        $domain = Domain::query()->where('name', 'meadowbakery.test')->sole();
+
+        $this->assertTrue($domain->dnsServer->is($domain->mailServer));
+        $this->assertNull(Domain::query()->where('name', 'cartercycles.test')->sole()->dns_server_id, 'One with only its mail there.');
+
+        // So the map shows both kinds of line.
+        $kinds = collect(app(InfrastructureMap::class)->build()['edges'])->pluck('kind');
+        $this->assertContains('dns', $kinds);
+        $this->assertContains('mail', $kinds);
     }
 
     public function test_it_refuses_an_inventory_with_data_in_it(): void

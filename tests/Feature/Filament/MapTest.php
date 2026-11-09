@@ -280,7 +280,7 @@ class MapTest extends TestCase
     public function test_a_server_the_environment_runs_on_draws_one_line_also_with_the_mail_of_its_domain_there(): void
     {
         ['production' => $production, 'app' => $app, 'hostname' => $hostname] = $this->inventory();
-        $hostname->domain->update(['mail_server_id' => $app->id]);
+        $hostname->domain->update(['mail_server_id' => $app->id, 'dns_server_id' => $app->id]);
 
         $edges = collect(app(InfrastructureMap::class)->build()['edges'])->where('from', "server-{$app->id}")->where('to', "environment-{$production->id}");
 
@@ -289,6 +289,72 @@ class MapTest extends TestCase
         // its domain still lights up with the server
         $this->signIn();
         $this->assertContains("domain-{$hostname->domain_id}", Livewire::test(Map::class)->instance()->impact($app->id)['nodes']);
+    }
+
+    public function test_the_dns_server_of_a_domain_hangs_from_its_environments_and_goes_down_with_the_domain(): void
+    {
+        $this->signIn();
+        ['project' => $project, 'production' => $production, 'hostname' => $hostname] = $this->inventory();
+        $package = Server::factory()->create(['name' => 'package-01']);
+        $hostname->domain->update(['mail_server_id' => $package->id, 'dns_server_id' => $package->id]);
+
+        $map = app(InfrastructureMap::class)->build(projectId: $project->id);
+
+        // One line, named after the stronger use.
+        $this->assertSame(['dns'], collect($map['edges'])->where('from', "server-{$package->id}")->pluck('kind')->all());
+
+        $impact = Livewire::test(Map::class)->instance()->impact($package->id);
+
+        $this->assertEqualsCanonicalizing(["environment-{$production->id}", "domain-{$hostname->domain_id}", "server-{$package->id}"], $impact['nodes']);
+        $this->assertSame('alpha.test → package-01', $impact['items'][0]['path']);
+    }
+
+    public function test_a_domain_with_only_its_dns_on_the_clicked_server_lights_up(): void
+    {
+        $this->signIn();
+        ['hostname' => $hostname] = $this->inventory();
+        $dns = Server::factory()->create(['name' => 'ns-01']);
+        $hostname->domain->update(['dns_server_id' => $dns->id]);
+        $other = Domain::factory()->create(['dns_server_id' => $dns->id]);
+
+        $nodes = Livewire::test(Map::class)->instance()->impact($dns->id)['nodes'];
+
+        $this->assertContains("domain-{$hostname->domain_id}", $nodes);
+        $this->assertContains("domain-{$other->id}", $nodes);
+    }
+
+    public function test_a_domain_names_its_dns_host_on_hovering(): void
+    {
+        ['project' => $project, 'hostname' => $hostname] = $this->inventory();
+        $hostname->domain->update([
+            'registrar_id' => Provider::factory()->registrar()->create(['name' => 'Regi'])->id,
+            'dns_provider_id' => Provider::factory()->registrar()->create(['name' => 'Cloudy'])->id,
+        ]);
+
+        $node = collect(app(InfrastructureMap::class)->build(projectId: $project->id)['columns']['domains'])->firstWhere('id', "domain-{$hostname->domain_id}");
+
+        $this->assertSame('DNS bij: Cloudy', $node['detail']);
+        $this->assertStringStartsWith('Regi', $node['sub']);
+
+        $this->signIn();
+        Livewire::test(Map::class)->assertSee('alpha.test · DNS bij: Cloudy');
+
+        // A nameserver of your own: the server itself.
+        $hostname->domain->update(['dns_server_id' => Server::factory()->create(['name' => 'ns-own', 'provider_id' => null])->id]);
+        $node = collect(app(InfrastructureMap::class)->build(projectId: $project->id)['columns']['domains'])->firstWhere('id', "domain-{$hostname->domain_id}");
+
+        $this->assertSame('DNS bij: ns-own', $node['detail']);
+    }
+
+    public function test_a_domain_with_its_dns_on_a_server_that_needs_the_clicked_one_lights_up(): void
+    {
+        $this->signIn();
+        ['storage' => $storage, 'hostname' => $hostname] = $this->inventory();
+        $dns = Server::factory()->create(['name' => 'ns-01']);
+        ServerDependency::create(['server_id' => $dns->id, 'depends_on_id' => $storage->id, 'kind' => 'NFS']);
+        $hostname->domain->update(['dns_server_id' => $dns->id]);
+
+        $this->assertContains("domain-{$hostname->domain_id}", Livewire::test(Map::class)->instance()->impact($storage->id)['nodes']);
     }
 
     /**
