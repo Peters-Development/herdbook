@@ -108,6 +108,8 @@
     "Add to the price list": "Toevoegen aan de prijslijst",
     "Added .:extension to the price list.": ".:extension toegevoegd aan de prijslijst.",
     "Address": "Adres",
+    "address": "adres",
+    "address of :name": "adres van :name",
     "Addresses": "Adressen",
     "Addressing": "Adressering",
     "Affected by an outage": "Geraakt bij uitval",

@@ -39,7 +39,7 @@ class ListIncidents extends Tool
         return 'List incidents in Herdbook (outages and problems), without their texts and timeline (get_incident has those). '
             .'Status "unresolved", the default, is open and monitoring (it recovered and is being watched); "any" is everything. '
             .'Unresolved ones come open first, then by severity (sev1 is critical); otherwise the latest first. '
-            .'project_ids (from search_inventory) find the incidents of those projects as Herdbook counts them: linked to the project, to a server its production needs, or to such a server\'s network. server_ids find incidents linked to any of those servers. '
+            .'project_ids (from search_inventory) find the incidents of those projects as Herdbook counts them: linked to the project, to a server its production needs, or to such a server\'s network. server_ids find incidents linked to any of those servers directly. '
             .'since (YYYY-MM-DD) leaves out incidents that occurred before that day. '
             .'At most '.self::MAX_LIMIT.' items (default '.self::DEFAULT_LIMIT.'); "more" says there is more, so narrow it down with the filters.';
     }
@@ -47,9 +47,9 @@ class ListIncidents extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'status' => $schema->string()->enum(self::statuses())->default('unresolved'),
+            'status' => $schema->string()->enum(self::statuses())->default('unresolved')->description('Default unresolved: open and monitoring. "any" for everything.'),
             'severity' => $schema->string()->enum(IncidentSeverity::class)->description('Only incidents of this severity.'),
-            'server_ids' => $schema->array()->items($schema->integer())->max(self::MAX_LINKS)->description('Server ids from search_inventory: incidents linked to any of them.'),
+            'server_ids' => $schema->array()->items($schema->integer())->max(self::MAX_LINKS)->description('Server ids from search_inventory: incidents linked to any of them directly.'),
             'project_ids' => $schema->array()->items($schema->integer())->max(self::MAX_LINKS)->description('Project ids from search_inventory: the incidents of any of them, through the servers their production needs too.'),
             'since' => $schema->string()->format('date')->description('YYYY-MM-DD: incidents that occurred on or after that day.'),
             'limit' => $schema->integer()->min(1)->max(self::MAX_LIMIT)->default(self::DEFAULT_LIMIT),

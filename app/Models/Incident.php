@@ -12,6 +12,7 @@ use App\Models\Concerns\RecordsAuthor;
 use Carbon\CarbonInterval;
 use Database\Factories\IncidentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -50,6 +51,16 @@ class Incident extends Model
     public function timelineEntries(): HasMany
     {
         return $this->hasMany(IncidentTimelineEntry::class)->orderBy('occurred_at')->orderBy('id');
+    }
+
+    /**
+     * The latest $limit timeline entries, newest first, with who wrote them.
+     *
+     * @return Collection<int, IncidentTimelineEntry>
+     */
+    public function latestTimelineEntries(int $limit): Collection
+    {
+        return $this->timelineEntries()->reorder()->latest('occurred_at')->latest('id')->with('user')->limit($limit)->get();
     }
 
     /** @return HasMany<IncidentAction, $this> */

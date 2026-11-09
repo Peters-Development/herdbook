@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Mcp\HiddenValues;
 use App\Models\AgentToken;
 use App\Models\Check;
 use App\Models\Client;
@@ -50,6 +51,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(RenewalAttention::class);
         $this->app->scoped(ProjectHealth::class);
         $this->app->scoped(ProjectIncidents::class);
+        $this->app->scoped(HiddenValues::class);
         $this->app->scoped(RecurringCosts::class);
 
         // The checks' network calls; tests bind a fake.

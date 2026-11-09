@@ -11,7 +11,6 @@ use App\Models\Environment;
 use App\Models\Hostname;
 use App\Models\Incident;
 use App\Models\IncidentAction;
-use App\Models\IncidentTimelineEntry;
 use App\Models\Maintenance;
 use App\Models\Project;
 use App\Models\Server;
@@ -50,12 +49,16 @@ final class Serializer
     public const array INCIDENT_RELATIONS = ['user', 'projects', 'servers', 'domains', 'networks', 'clients', 'actions'];
 
     /**
-     * How many timeline entries incidentWithTexts() shows (the latest), and
-     * where it cuts a note: monitoring writes one line, people a few.
+     * How much of a timeline incidentWithTexts() shows: its latest entries,
+     * at most TIMELINE_ENTRIES of them and TIMELINE_CHARACTERS of notes, so
+     * the answer stays one an agent reads whole; a note is cut at MAX_NOTE
+     * (monitoring writes one line, people a few).
      */
     public const int TIMELINE_ENTRIES = 100;
 
-    public const int MAX_NOTE = 2000;
+    public const int TIMELINE_CHARACTERS = 12000;
+
+    public const int MAX_NOTE = 1000;
 
     /**
      * What project() reads, to eager-load.
@@ -144,7 +147,8 @@ final class Serializer
     {
         return [
             'id' => $incident->id,
-            'title' => $incident->title,
+            // Masked (HiddenValues): monitoring names a check after its target.
+            'title' => app(HiddenValues::class)->mask($incident->title),
             'severity' => $incident->severity->value,
             'status' => $incident->status->value,
             // manual, import, or check: a draft monitoring opened.
@@ -167,34 +171,51 @@ final class Serializer
     }
 
     /**
-     * incident() with its impact, root cause and report, each cut at
-     * MAX_TEXT ("truncated" names the ones that were longer), who last
-     * changed the root cause and report ("texts_changed"), its latest
-     * TIMELINE_ENTRIES timeline entries in order ("more_timeline": there are
-     * earlier ones), and its action items.
+     * incident() with its impact, root cause and report, masked
+     * (HiddenValues) and each cut at MAX_TEXT ("truncated" names the ones
+     * that were longer), who last changed the root cause and report
+     * ("texts_changed"), as much of its timeline as fits, in order
+     * ("more_timeline": there are earlier entries), and its action items.
      *
-     * @param  Collection<int, IncidentTimelineEntry>  $latest  the latest TIMELINE_ENTRIES + 1 entries, newest first, with their user
      * @return array<string, mixed>
      */
-    public static function incidentWithTexts(Incident $incident, Collection $latest): array
+    public static function incidentWithTexts(Incident $incident): array
     {
-        $texts = ['impact' => $incident->impact, 'root_cause' => $incident->root_cause, 'body' => $incident->body];
+        $hidden = app(HiddenValues::class);
+        $texts = array_map($hidden->mask(...), ['impact' => $incident->impact, 'root_cause' => $incident->root_cause, 'report' => $incident->body]);
+        $changes = $incident->lastTextChanges();
+
+        $latest = $incident->latestTimelineEntries(self::TIMELINE_ENTRIES + 1);
+        $shown = collect();
+        $characters = 0;
+
+        foreach ($latest->take(self::TIMELINE_ENTRIES) as $entry) {
+            $note = (string) $hidden->mask($entry->note);
+            $characters += min(mb_strlen($note), self::MAX_NOTE);
+
+            if ($characters > self::TIMELINE_CHARACTERS && $shown->isNotEmpty()) {
+                break;
+            }
+
+            $shown->push([
+                'occurred_at' => self::time($entry->occurred_at),
+                'note' => mb_substr($note, 0, self::MAX_NOTE),
+                'truncated' => mb_strlen($note) > self::MAX_NOTE,
+                'by' => $entry->user?->name,
+                'via' => $entry->recorded_via,
+            ]);
+        }
 
         return [
             ...self::incident($incident),
             ...array_map(fn (?string $text): ?string => $text === null ? null : mb_substr($text, 0, self::MAX_TEXT), $texts),
             'truncated' => array_keys(array_filter($texts, fn (?string $text): bool => mb_strlen((string) $text) > self::MAX_TEXT)),
-            'texts_changed' => array_map(self::textChange(...), $incident->lastTextChanges()),
-            'timeline' => $latest->take(self::TIMELINE_ENTRIES)->reverse()->map(fn (IncidentTimelineEntry $entry): array => [
-                'occurred_at' => self::time($entry->occurred_at),
-                'note' => mb_substr($entry->note, 0, self::MAX_NOTE),
-                'by' => $entry->user?->name,
-                'via' => $entry->recorded_via,
-            ])->values()->all(),
-            'more_timeline' => $latest->count() > self::TIMELINE_ENTRIES,
+            'texts_changed' => ['root_cause' => self::textChange($changes['root_cause']), 'report' => self::textChange($changes['body'])],
+            'timeline' => $shown->reverse()->values()->all(),
+            'more_timeline' => $latest->count() > $shown->count(),
             'actions' => $incident->actions->sortBy('id')->map(fn (IncidentAction $action): array => [
                 'id' => $action->id,
-                'description' => $action->description,
+                'description' => $hidden->mask($action->description),
                 'due_on' => $action->due_on?->toDateString(),
                 'done_at' => self::time($action->done_at),
                 'overdue' => $action->isOverdue(),

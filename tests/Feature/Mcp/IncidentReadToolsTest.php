@@ -20,6 +20,7 @@ use App\Models\Server;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\DB;
 use Tests\Concerns\ActsAsAgent;
 use Tests\TestCase;
 
@@ -94,11 +95,14 @@ class IncidentReadToolsTest extends TestCase
     public function test_unresolved_by_default_open_first_then_by_severity(): void
     {
         $watched = Incident::factory()->create(['status' => IncidentStatus::Monitoring, 'severity' => IncidentSeverity::Sev1]);
-        $minor = Incident::factory()->create(['status' => IncidentStatus::Open, 'severity' => IncidentSeverity::Sev3]);
-        $critical = Incident::factory()->create(['status' => IncidentStatus::Open, 'severity' => IncidentSeverity::Sev1]);
+        // Made first, and later: neither the id nor the date puts it after the critical one.
+        $critical = Incident::factory()->create(['status' => IncidentStatus::Open, 'severity' => IncidentSeverity::Sev1, 'occurred_on' => '2026-11-01']);
+        $minor = Incident::factory()->create(['status' => IncidentStatus::Open, 'severity' => IncidentSeverity::Sev3, 'occurred_on' => '2026-11-09']);
         $resolved = Incident::factory()->resolved()->create();
 
         $this->assertSame([$critical->id, $minor->id, $watched->id], $this->ids());
+        $this->assertSame([$critical->id, $minor->id], $this->ids(['status' => 'open']));
+        $this->assertSame([$watched->id], $this->ids(['status' => 'monitoring']));
         $this->assertSame([$resolved->id], $this->ids(['status' => 'resolved']));
         $this->assertSame([$minor->id], $this->ids(['severity' => 'sev3']));
         $this->assertCount(4, $this->ids(['status' => 'any']));
@@ -129,6 +133,20 @@ class IncidentReadToolsTest extends TestCase
 
         $this->assertEqualsCanonicalizing([$onProject->id, $onServer->id, $onNetwork->id], $this->ids(['status' => 'any', 'project_ids' => [$production->project_id]]));
         $this->assertSame([$onServer->id], $this->ids(['server_ids' => [$app->id]]));
+
+        // Either: a server and a project together find what either finds.
+        $elsewhere = Incident::factory()->create();
+        $elsewhere->servers()->attach($other = Server::factory()->create());
+        $this->assertEqualsCanonicalizing([$onServer->id, $onNetwork->id, $elsewhere->id], $this->ids(['project_ids' => [$production->project_id], 'server_ids' => [$other->id]]));
+    }
+
+    public function test_more_says_there_are_more_than_it_shows(): void
+    {
+        Incident::factory()->count(3)->create();
+
+        $found = $this->callToolSuccessfully($this->token, 'list_incidents', ['limit' => 2]);
+
+        $this->assertSame([2, true], [count($found['incidents']), $found['more']]);
     }
 
     public function test_get_incident_adds_its_texts_timeline_and_actions(): void
@@ -140,11 +158,11 @@ class IncidentReadToolsTest extends TestCase
 
         $found = $this->callToolSuccessfully($this->token, 'get_incident', ['id' => $incident->id]);
 
-        $this->assertSame([...array_keys(Serializer::incident($incident->load(Serializer::INCIDENT_RELATIONS))), 'impact', 'root_cause', 'body', 'truncated', 'texts_changed', 'timeline', 'more_timeline', 'actions'], array_keys($found));
-        $this->assertSame(['Uploads failed for an hour.', 'NFS stalled.', 'The report.', [], ['body' => null, 'root_cause' => null]], [$found['impact'], $found['root_cause'], $found['body'], $found['truncated'], $found['texts_changed']]);
+        $this->assertSame([...array_keys(Serializer::incident($incident->load(Serializer::INCIDENT_RELATIONS))), 'impact', 'root_cause', 'report', 'truncated', 'texts_changed', 'timeline', 'more_timeline', 'actions'], array_keys($found));
+        $this->assertSame(['Uploads failed for an hour.', 'NFS stalled.', 'The report.', [], ['root_cause' => null, 'report' => null]], [$found['impact'], $found['root_cause'], $found['report'], $found['truncated'], $found['texts_changed']]);
         $this->assertSame([
-            ['occurred_at' => '2026-11-08T22:05:00+01:00', 'note' => 'Check HTTP shop.example.com went down: HTTP 503', 'by' => null, 'via' => null],
-            ['occurred_at' => '2026-11-08T22:20:00+01:00', 'note' => 'Restarted php-fpm, no effect.', 'by' => 'Ada', 'via' => 'deploy-agent'],
+            ['occurred_at' => '2026-11-08T22:05:00+01:00', 'note' => 'Check HTTP shop.example.com went down: HTTP 503', 'truncated' => false, 'by' => null, 'via' => null],
+            ['occurred_at' => '2026-11-08T22:20:00+01:00', 'note' => 'Restarted php-fpm, no effect.', 'truncated' => false, 'by' => 'Ada', 'via' => 'deploy-agent'],
         ], $found['timeline']);
         $this->assertFalse($found['more_timeline']);
         $this->assertSame([['id' => $action->id, 'description' => 'Alert on NFS latency', 'due_on' => '2026-11-01', 'done_at' => null, 'overdue' => true]], $found['actions']);
@@ -154,19 +172,83 @@ class IncidentReadToolsTest extends TestCase
     {
         $incident = Incident::factory()->create(['body' => str_repeat('a', Serializer::MAX_TEXT + 1)]);
         foreach (range(1, Serializer::TIMELINE_ENTRIES + 1) as $minute) {
-            $incident->timelineEntries()->create(['occurred_at' => now()->subMinutes(200 - $minute), 'note' => "Entry {$minute} ".str_repeat('x', Serializer::MAX_NOTE)]);
+            $incident->timelineEntries()->create(['occurred_at' => now()->subMinutes(200 - $minute), 'note' => "Entry {$minute}"]);
         }
 
         $found = $this->callToolSuccessfully($this->token, 'get_incident', ['id' => $incident->id]);
 
-        $this->assertSame(['body'], $found['truncated']);
-        $this->assertSame(Serializer::MAX_TEXT, mb_strlen($found['body']));
+        $this->assertSame(['report'], $found['truncated']);
+        $this->assertSame(Serializer::MAX_TEXT, mb_strlen($found['report']));
         $this->assertCount(Serializer::TIMELINE_ENTRIES, $found['timeline']);
         $this->assertTrue($found['more_timeline']);
         // The latest, in order: the first entry is the one left out.
-        $this->assertStringStartsWith('Entry 2 ', $found['timeline'][0]['note']);
-        $this->assertStringStartsWith('Entry '.(Serializer::TIMELINE_ENTRIES + 1).' ', $found['timeline'][Serializer::TIMELINE_ENTRIES - 1]['note']);
-        $this->assertSame(Serializer::MAX_NOTE, mb_strlen($found['timeline'][0]['note']));
+        $this->assertSame(['Entry 2', 'Entry '.(Serializer::TIMELINE_ENTRIES + 1)], [$found['timeline'][0]['note'], $found['timeline'][Serializer::TIMELINE_ENTRIES - 1]['note']]);
+    }
+
+    public function test_long_notes_are_cut_and_the_timeline_stops_where_the_answer_would_grow_too_long(): void
+    {
+        $incident = Incident::factory()->create();
+        foreach (range(1, 20) as $minute) {
+            $incident->timelineEntries()->create(['occurred_at' => now()->subMinutes(100 - $minute), 'note' => "Entry {$minute} ".str_repeat('x', Serializer::MAX_NOTE)]);
+        }
+
+        $found = $this->callToolSuccessfully($this->token, 'get_incident', ['id' => $incident->id]);
+
+        $shown = intdiv(Serializer::TIMELINE_CHARACTERS, Serializer::MAX_NOTE);
+        $this->assertCount($shown, $found['timeline']);
+        $this->assertTrue($found['more_timeline']);
+        $this->assertSame([Serializer::MAX_NOTE, true], [mb_strlen($found['timeline'][0]['note']), $found['timeline'][0]['truncated']]);
+        $this->assertStringStartsWith('Entry 20 ', $found['timeline'][$shown - 1]['note']);
+    }
+
+    public function test_entries_at_the_same_moment_come_in_the_order_they_were_written(): void
+    {
+        $incident = Incident::factory()->create();
+        foreach (['First', 'Second', 'Third'] as $note) {
+            $incident->timelineEntries()->create(['occurred_at' => '2026-11-08 21:00:00', 'note' => $note]);
+        }
+
+        $this->assertSame(['First', 'Second', 'Third'], array_column($this->callToolSuccessfully($this->token, 'get_incident', ['id' => $incident->id])['timeline'], 'note'));
+    }
+
+    public function test_addresses_monitoring_wrote_into_an_incident_are_masked(): void
+    {
+        Server::factory()->create(['name' => 'app-1', 'public_ipv4' => '192.0.2.10', 'provider_hostname' => 'vps-123.provider.example']);
+        Network::factory()->create(['name' => 'Office', 'public_ip' => '198.51.100.7']);
+        $incident = Incident::factory()->create([
+            'source' => IncidentSource::Check,
+            'title' => 'Shop: Ping 192.0.2.10 unreachable',
+            'impact' => '192.0.2.10 does not answer ping; 192.0.2.1 and 2001:db8::1 neither. Since 12:30:45, version 8.5.',
+            'root_cause' => 'The line at 198.51.100.7 went down.',
+            'body' => 'vps-123.provider.example rebooted.',
+        ]);
+        $incident->timelineEntries()->create(['occurred_at' => '2026-11-08 21:05:00', 'note' => 'Check Ping 192.0.2.10 went down: 192.0.2.10 does not answer ping.']);
+
+        $found = $this->callToolSuccessfully($this->token, 'get_incident', ['id' => $incident->id]);
+
+        $this->assertSame('Shop: Ping [adres van app-1] unreachable', $found['title']);
+        $this->assertSame('[adres van app-1] does not answer ping; [adres] and [adres] neither. Since 12:30:45, version 8.5.', $found['impact']);
+        $this->assertSame('The line at [adres van Office] went down.', $found['root_cause']);
+        $this->assertSame('[adres van app-1] rebooted.', $found['report']);
+        $this->assertSame('Check Ping [adres van app-1] went down: [adres van app-1] does not answer ping.', $found['timeline'][0]['note']);
+        $this->assertSame('Shop: Ping [adres van app-1] unreachable', $this->callToolSuccessfully($this->token, 'list_incidents')['incidents'][0]['title']);
+
+        $answer = json_encode($found, JSON_THROW_ON_ERROR);
+        foreach (['192.0.2.1', '2001:db8', '198.51.100.7', 'vps-123'] as $hidden) {
+            $this->assertStringNotContainsString($hidden, $answer);
+        }
+    }
+
+    public function test_texts_changed_names_who_last_changed_the_root_cause_and_the_report(): void
+    {
+        $incident = Incident::factory()->create(['root_cause' => 'Unknown.']);
+        $this->actingAs(User::factory()->create(['name' => 'Bob']));
+        $incident->update(['root_cause' => 'NFS stalled.']);
+
+        $found = $this->callToolSuccessfully($this->token, 'get_incident', ['id' => $incident->id]);
+
+        $this->assertSame(['Bob', null], [$found['texts_changed']['root_cause']['by'], $found['texts_changed']['root_cause']['via']]);
+        $this->assertNull($found['texts_changed']['report']);
     }
 
     public function test_get_incident_says_so_when_there_is_none(): void
@@ -174,16 +256,29 @@ class IncidentReadToolsTest extends TestCase
         $this->assertSame('Er is geen incident met id 999. list_incidents vindt ze.', $this->callToolError($this->token, 'get_incident', ['id' => 999]));
     }
 
-    public function test_listing_many_loads_what_it_shows_up_front(): void
+    public function test_listing_many_takes_as_many_queries_as_listing_a_few(): void
     {
-        // Strict mode turns a lazy load into an error once a query returns more than one model.
-        foreach (range(1, 3) as $index) {
-            $incident = Incident::factory()->for(User::factory())->create();
-            $incident->servers()->attach(Server::factory()->create());
-            $incident->actions()->create(['description' => 'Follow up']);
-        }
+        $make = function (int $count): void {
+            foreach (range(1, $count) as $index) {
+                $incident = Incident::factory()->for(User::factory())->create();
+                $incident->servers()->attach(Server::factory()->create());
+                $incident->actions()->create(['description' => 'Follow up']);
+            }
+        };
+        $queries = function (): int {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $this->ids(['status' => 'any', 'limit' => 50]);
 
-        $this->assertCount(3, $this->ids());
+            return count(DB::getQueryLog());
+        };
+
+        $make(2);
+        $this->ids();
+        $few = $queries();
+        $make(10);
+
+        $this->assertSame($few, $queries());
     }
 
     public function test_every_token_may_read_incidents_and_the_tools_say_they_only_read(): void
