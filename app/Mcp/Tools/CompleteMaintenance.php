@@ -38,7 +38,7 @@ class CompleteMaintenance extends Tool
             .'Left out, starts_at is the planned start, or now if that is still to come; ends_at is the planned end if that has passed, else none; the report stays. '
             .'A report given replaces the one there is (null clears it), so it needs the "version" you read: refused when someone changed it since. '
             .self::cutTextsSentence('A report', 'get_maintenance')
-            .'Called again on maintenance that is done (by anyone) with only its id, or with what is stored, it returns it with "unchanged": true (it may have been done by someone else); anything else is refused: change done work with update_maintenance. Cancelled maintenance can\'t be completed: write the work down with log_maintenance instead. '
+            .'Called again on maintenance that is done (by anyone) with only its id, or with the same arguments within '.self::REPEAT_MINUTES.' minutes (its answer lost), it returns it with "unchanged": true (it may have been done by someone else); anything else is refused: change done work with update_maintenance. Cancelled maintenance can\'t be completed: write the work down with log_maintenance instead. '
             .self::textsSentence('The report').self::answerSentence();
     }
 

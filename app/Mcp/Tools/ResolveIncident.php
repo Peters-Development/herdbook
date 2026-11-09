@@ -35,7 +35,7 @@ class ResolveIncident extends Tool
         return 'Resolve an incident that is over: when it was resolved (default now; not before the start, not in the future), and if you know them its root cause and report. '
             .'Give its "version" from get_incident: refused when someone changed it since, such as monitoring opening it again because a check went down. A root cause or report given (null clears it) replaces the one there is. '
             .self::cutTextsSentence('A root cause or report', 'get_incident')
-            .'Called again on an incident that is resolved (by anyone) with only its id and version, or with what is stored, it returns it with "unchanged": true; anything else is refused: change a resolved incident, or reopen it, with update_incident. '
+            .'Called again on an incident that is resolved (by anyone) with only its id and version, or with the same arguments within '.self::REPEAT_MINUTES.' minutes (its answer lost), it returns it with "unchanged": true; anything else is refused: change a resolved incident, or reopen it, with update_incident. '
             .self::textsSentence('A root cause or report').self::answerSentence();
     }
 
