@@ -8,6 +8,7 @@ use App\Enums\IncidentSource;
 use App\Enums\IncidentStatus;
 use App\Mcp\Serializer;
 use App\Models\Incident;
+use App\Models\IncidentAction;
 use App\Models\Project;
 use App\Models\Server;
 use App\Models\User;
@@ -146,6 +147,15 @@ class IncidentWriteToolsTest extends TestCase
         // Completed, the same action item is a new one.
         $this->assertArrayNotHasKey('unchanged', $action(['due_on' => '2026-11-20']));
         $this->assertSame(3, Incident::query()->find($id)->actions()->count());
+    }
+
+    public function test_an_action_item_deleted_while_it_is_completed_is_not_found(): void
+    {
+        $action = Incident::factory()->create()->actions()->create(['description' => 'Alert on NFS latency']);
+        // A person deletes it right after the tool read it.
+        IncidentAction::retrieved(fn (IncidentAction $read) => IncidentAction::query()->whereKey($read->id)->delete());
+
+        $this->assertSame("Er is geen actiepunt met id {$action->id}. get_incident noemt ze.", $this->callToolError($this->token, 'complete_incident_action', ['id' => $action->id]));
     }
 
     public function test_the_day_it_is_filed_under_is_the_start_in_the_display_timezone(): void

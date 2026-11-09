@@ -51,6 +51,11 @@ class CompleteIncidentAction extends Tool
 
         $done = $action->complete();
 
+        // Deleted meanwhile, with its incident or alone.
+        if (! $done && ! IncidentAction::query()->whereKey($id)->exists()) {
+            return Response::error(__('There is no action item with id :id. get_incident lists them.', ['id' => $id]));
+        }
+
         return $this->answer($action->incident, ['action' => Serializer::incidentAction($action->load(['user', 'completedBy']))], unchanged: ! $done);
     }
 }
