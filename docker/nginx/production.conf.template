@@ -13,7 +13,9 @@ server {
     index index.php;
     root /var/www/public;
 
-    client_max_body_size 32M;
+    # No file uploads: the largest request is a form with markdown. The same
+    # limit as post_max_size in PHP (docker/php/production.ini).
+    client_max_body_size 8M;
 
     # No nginx version in headers and error pages.
     server_tokens off;
