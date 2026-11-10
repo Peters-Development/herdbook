@@ -349,6 +349,22 @@ class CheckIncidentsTest extends TestCase
         $this->assertNotContains($third->events()->sole()->incident_id, [$outage->id, $billing->id, $typo->id]);
     }
 
+    public function test_the_outage_of_another_project_on_a_shared_server_gets_its_own_incident(): void
+    {
+        [, $shop] = $this->criticalProductionOutage();
+        $database = Server::factory()->create(['name' => 'db-shared']);
+        EnvironmentServer::create(['environment_id' => $shop->id, 'server_id' => $database->id, 'role' => ServerRole::Database]);
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+
+        $blog = Environment::factory()->create();
+        EnvironmentServer::create(['environment_id' => $blog->id, 'server_id' => $database->id, 'role' => ServerRole::Database]);
+        [$down] = $this->criticalProductionOutage($blog);
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+
+        $this->assertSame(2, Incident::count());
+        $this->assertTrue(Incident::query()->findOrFail($down->events()->sole()->incident_id)->projects()->sole()->is($blog->project));
+    }
+
     public function test_an_imported_incident_is_not_joined(): void
     {
         [, $environment] = $this->criticalProductionOutage();

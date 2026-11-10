@@ -12,6 +12,7 @@ use App\Models\CheckEvent;
 use App\Models\CheckResult;
 use App\Models\Concerns\Authorship;
 use App\Models\Incident;
+use App\Models\Server;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -210,9 +211,16 @@ final class CheckIncidents
             ->where(fn (Builder $query) => $query
                 ->where('source', IncidentSource::Check)
                 ->orWhereIn('severity', [IncidentSeverity::Sev1, IncidentSeverity::Sev2]))
+            // Its projects, or the server it checks. The servers a hostname
+            // check reaches (its environment's, a shared database too) only
+            // for an incident linked to no project, as an agent may write one
+            // down: another project's outage on a shared server is its own.
             ->where(fn (Builder $query) => $query
                 ->whereHas('projects', fn (Builder $projects) => $projects->whereKey($projectIds))
-                ->orWhereHas('servers', fn (Builder $servers) => $servers->whereKey($serverIds)))
+                ->when($check->server, fn (Builder $query, Server $server) => $query->orWhereHas('servers', fn (Builder $servers) => $servers->whereKey($server->id)))
+                ->orWhere(fn (Builder $query) => $query
+                    ->doesntHave('projects')
+                    ->whereHas('servers', fn (Builder $servers) => $servers->whereKey($serverIds))))
             ->orderByDesc(CheckEvent::query()->selectRaw('count(*)')->whereColumn('check_events.incident_id', 'incidents.id'))
             ->orderBy('severity')
             ->latest('id')
