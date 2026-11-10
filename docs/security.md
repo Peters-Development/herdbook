@@ -54,7 +54,7 @@ To keep secrets from slipping in anyway, every free-text field (notes, documents
 <a name="what-users-write"></a>
 ## What Users Write
 
-Documents, incidents and notes are markdown. Herdbook never renders that markdown as raw HTML: inside the panel, Filament sanitizes the HTML; elsewhere, raw HTML is stripped and unsafe links (such as `javascript:`) are removed. Error messages shown to users are friendly text, never SQL, table names or stack traces, and `APP_DEBUG` is off on the host.
+Documents, incidents and notes are markdown. Herdbook never renders that markdown as raw HTML: inside the panel, Filament sanitizes the HTML; elsewhere, raw HTML is stripped and unsafe links (such as `javascript:`) are removed. The sanitizer keeps safe elements and their safe attributes only: no `style`, `class` or data attributes, so a document or an imported incident can't restyle the page, for example to lay a fake sign-in form over it. Images may still come from other sites over HTTPS. Error messages shown to users are friendly text, never SQL, table names or stack traces, and `APP_DEBUG` is off on the host.
 
 <a name="browser-protection"></a>
 ## Browser Protection
