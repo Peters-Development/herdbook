@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\AgentToken;
 use App\Models\Check;
 use App\Models\Client;
 use App\Models\CredentialReference;
@@ -86,6 +87,7 @@ class AppServiceProvider extends ServiceProvider
         // renamed model does not orphan its polymorphic rows. Every model that
         // takes part in a morph relation (incl. the activity log) belongs here.
         Relation::enforceMorphMap([
+            'agent_token' => AgentToken::class,
             'check' => Check::class,
             'client' => Client::class,
             'credential_reference' => CredentialReference::class,

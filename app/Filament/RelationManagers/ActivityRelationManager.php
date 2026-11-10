@@ -3,11 +3,16 @@
 namespace App\Filament\RelationManagers;
 
 use App\Filament\Support\ActivityPresenter;
+use Filament\Actions\Action;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Support\Enums\FontFamily;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 use Spatie\Activitylog\Models\Activity;
 
 /**
@@ -73,7 +78,7 @@ class ActivityRelationManager extends RelationManager
             ->paginated([10, 25, 50])
             ->columns([
                 TextColumn::make('created_at')->label(__('When'))->dateTime(__('formats.datetime')),
-                TextColumn::make('causer.name')->label(__('By'))->placeholder(__('System')),
+                TextColumn::make('causer.name')->label(__('By'))->state(fn (Activity $record): ?string => ActivityPresenter::causer($record))->placeholder(__('System')),
                 TextColumn::make('description')
                     ->label(__('What'))
                     ->state(fn (Activity $record): string => ActivityPresenter::description($record, $ownerType))
@@ -85,6 +90,28 @@ class ActivityRelationManager extends RelationManager
                     ->separator("\n")
                     ->wrap()
                     ->placeholder('—'),
+            ])
+            ->recordActions([
+                // What an agent replaced (RecordsActivity keeps it): to copy back.
+                Action::make('previousTexts')
+                    ->label(__('Previous text'))
+                    ->icon(Heroicon::OutlinedArrowUturnLeft)
+                    ->visible(fn (Activity $record): bool => ActivityPresenter::previousTexts($record) !== [])
+                    ->modalHeading(__('Previous text'))
+                    ->modalDescription(__('What the agent replaced. To restore it, copy it into the edit form.'))
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel(__('Close'))
+                    ->schema(fn (Activity $record): array => collect(ActivityPresenter::previousTexts($record))
+                        ->map(fn (string $text, string $attribute): TextEntry => TextEntry::make("previous_{$attribute}")
+                            ->label(ActivityPresenter::textLabel($record, $attribute))
+                            ->state($text)
+                            // The class on the text alone: around it is the template's whitespace.
+                            ->formatStateUsing(fn (string $state): HtmlString => new HtmlString('<span class="hb-as-written">'.e($state).'</span>'))
+                            ->fontFamily(FontFamily::Mono)
+                            ->copyable()
+                            ->copyableState($text))
+                        ->values()
+                        ->all()),
             ]);
     }
 }

@@ -42,10 +42,7 @@ class ServersTable
                     ->placeholder('—')
                     ->tooltip(fn (Server $record): ?string => self::health($record)?->problems->pluck('name')->implode(', ') ?: null),
                 TextColumn::make('public_ipv4')->label('IPv4')->fontFamily(FontFamily::Mono)->searchable()->copyable()->placeholder('—'),
-                TextColumn::make('os')
-                    ->label('OS')
-                    ->state(fn (Server $record): ?string => trim("{$record->os_name} {$record->os_version}") ?: null)
-                    ->placeholder('—'),
+                TextColumn::make('operating_system')->label('OS')->placeholder('—'),
                 TextColumn::make('location')->label(__('Location'))->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('roles')
                     ->label(__('Roles'))

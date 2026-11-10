@@ -8,7 +8,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Browser-side protection on every response of the app (the panel, the map,
- * the status screen and its API). nginx adds nosniff to the static files.
+ * the status screen and its API, the MCP server). nginx adds nosniff to the
+ * static files.
  *
  * The Content-Security-Policy keeps everything on the app's own origin:
  * nothing from third parties (docs/development.md#nothing-from-third-parties),

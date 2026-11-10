@@ -52,7 +52,7 @@ class MaintenancesRelationManager extends RelationManager
                 TextColumn::make('title')->label(__('Maintenance'))->searchable()->wrap(),
                 MaintenanceSchema::tasksColumn(),
                 MaintenanceSchema::statusColumn(),
-                TextColumn::make('user.name')->label(__('By'))->placeholder('—')->toggleable(),
+                MaintenanceSchema::byColumn(),
             ])
             ->headerActions([
                 $this->tellsThePage(CreateAction::make('log'))

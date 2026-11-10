@@ -13,6 +13,7 @@ use Carbon\CarbonImmutable;
 use Database\Factories\ServerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -41,6 +42,11 @@ class Server extends Model implements Renewable
         'ssh_port' => 22,
     ];
 
+    /**
+     * The columns that hold an address of the server.
+     */
+    public const array ADDRESSES = ['public_ipv4', 'public_ipv6', 'private_ip', 'tailscale_ip'];
+
     protected static function booted(): void
     {
         // A server out of use pages nobody: its own checks are paused.
@@ -51,7 +57,7 @@ class Server extends Model implements Renewable
 
             // A changed address moves the checks that probe it: the old one may
             // soon belong to someone else and answer for the wrong machine.
-            foreach (['public_ipv4', 'public_ipv6', 'private_ip', 'tailscale_ip'] as $address) {
+            foreach (self::ADDRESSES as $address) {
                 $old = $server->getOriginal($address);
 
                 if ($server->wasChanged($address) && filled($old) && filled($server->{$address})) {
@@ -193,20 +199,18 @@ class Server extends Model implements Renewable
 
     /**
      * When each tracked task (Updates, Reboot, ...) was last done on this
-     * server: one query, once per instance.
+     * server: from withLastDoneOfEachTask() when the server was loaded with it,
+     * else one query, once per instance.
      *
      * @return array<string, ?CarbonImmutable> task value => moment
      */
     public function lastDone(): array
     {
         return once(function (): array {
-            $query = self::query()->whereKey($this->getKey())->select('servers.id');
+            $loaded = collect(MaintenanceTask::tracked())
+                ->every(fn (MaintenanceTask $task): bool => array_key_exists("last_{$task->value}_at", $this->getAttributes()));
 
-            foreach (MaintenanceTask::tracked() as $task) {
-                $query->withLastDone($task);
-            }
-
-            $row = $query->first();
+            $row = $loaded ? $this : self::query()->whereKey($this->getKey())->select('servers.id')->withLastDoneOfEachTask()->first();
 
             return collect(MaintenanceTask::tracked())
                 ->mapWithKeys(fn (MaintenanceTask $task): array => [$task->value => $row?->{"last_{$task->value}_at"}])
@@ -222,6 +226,18 @@ class Server extends Model implements Renewable
     public function nextMaintenance(): ?Maintenance
     {
         return once(fn (): ?Maintenance => $this->maintenances()->planned()->orderByDue()->first());
+    }
+
+    /**
+     * withLastDone() for every tracked task.
+     *
+     * @param  Builder<Server>  $query
+     */
+    public function scopeWithLastDoneOfEachTask(Builder $query): void
+    {
+        foreach (MaintenanceTask::tracked() as $task) {
+            $query->withLastDone($task);
+        }
     }
 
     /**
@@ -241,11 +257,19 @@ class Server extends Model implements Renewable
                 ->join('maintainables', 'maintainables.maintenance_id', '=', 'maintenances.id')
                 ->where('maintainables.maintainable_type', $this->getMorphClass())
                 ->whereColumn('maintainables.maintainable_id', 'servers.id')
-                ->whereJsonContains('maintenances.tasks', $task->value)
+                ->includesTask($task)
                 ->orderByDesc('maintenances.starts_at')
                 ->limit(1),
             ])
             ->withCasts([$column => 'datetime']);
+    }
+
+    /**
+     * "Ubuntu 24.04": the name and version together, or null.
+     */
+    protected function operatingSystem(): Attribute
+    {
+        return Attribute::get(fn (): ?string => trim("{$this->os_name} {$this->os_version}") ?: null);
     }
 
     protected function casts(): array

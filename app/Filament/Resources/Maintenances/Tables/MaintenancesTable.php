@@ -32,17 +32,19 @@ class MaintenancesTable
                     ->description(fn (Maintenance $record): ?string => MaintenanceSchema::linkedTo($record)),
                 MaintenanceSchema::tasksColumn(),
                 MaintenanceSchema::statusColumn(),
-                TextColumn::make('user.name')->label(__('By'))->placeholder('—')->toggleable(),
+                MaintenanceSchema::byColumn(),
             ])
             ->filters([
-                SelectFilter::make('status')->label(__('Status'))->options(MaintenanceStatus::class),
-                Filter::make('overdue')->label(__('Overdue'))->query(fn (Builder $query): Builder => $query->overdue()),
+                // Not when the record of an open modal is looked up: completed
+                // meanwhile, it is still found, and the action can say so.
+                SelectFilter::make('status')->label(__('Status'))->options(MaintenanceStatus::class)->excludeWhenResolvingRecord(),
+                Filter::make('overdue')->label(__('Overdue'))->query(fn (Builder $query): Builder => $query->overdue())->excludeWhenResolvingRecord(),
                 SelectFilter::make('tasks')
                     ->label(__('Work'))
                     ->options(MaintenanceTask::class)
                     ->query(fn (Builder $query, array $data): Builder => blank($data['value'] ?? null)
                         ? $query
-                        : $query->whereJsonContains('tasks', $data['value'])),
+                        : $query->includesTask($data['value'])),
                 SelectFilter::make('servers')->label(__('Server'))->relationship('servers', 'name')->searchable()->preload(),
                 SelectFilter::make('projects')->label(__('Project'))->relationship('projects', 'name')->searchable()->preload(),
             ])

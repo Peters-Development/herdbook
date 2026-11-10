@@ -1811,3 +1811,12 @@ button.hb-node {
         display: none;
     }
 }
+
+/*
+ * A text shown as it was written, with its line breaks: the previous text
+ * of an activity entry, to copy back into a form.
+ */
+.hb-as-written {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}

@@ -16,6 +16,7 @@ use App\Filament\Resources\Incidents\Pages\CreateIncident;
 use App\Filament\Resources\Incidents\Pages\ViewIncident;
 use App\Filament\Resources\Incidents\RelationManagers\ActionsRelationManager;
 use App\Filament\Resources\Incidents\RelationManagers\TimelineEntriesRelationManager;
+use App\Filament\Support\ActivityPresenter;
 use App\Filament\Support\LinkSchema;
 use App\Models\CredentialReference;
 use App\Models\Document;
@@ -26,6 +27,7 @@ use Filament\Actions\Testing\TestAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
+use Spatie\Activitylog\Models\Activity;
 use Tests\Concerns\SignsIn;
 use Tests\TestCase;
 
@@ -75,6 +77,25 @@ class KnowledgeFlowTest extends TestCase
             ->fillForm(['label' => 'SSH', 'kind' => CredentialKind::SshKey, 'notes' => '-----BEGIN RSA PRIVATE KEY-----'])
             ->call('create')
             ->assertHasFormErrors(['notes']);
+    }
+
+    public function test_an_edit_of_only_the_text_of_a_document_or_incident_is_logged_by_name(): void
+    {
+        $user = $this->signIn();
+        $document = Document::factory()->create(['body' => 'versie 1']);
+        $incident = Incident::factory()->create(['body' => 'oud rapport', 'root_cause' => 'oude oorzaak']);
+
+        $document->update(['body' => 'versie 2']);
+        $incident->update(['body' => 'nieuw rapport', 'root_cause' => 'nieuwe oorzaak']);
+
+        $documentLog = Activity::query()->where('subject_type', 'document')->where('event', 'updated')->sole();
+        $incidentLog = Activity::query()->where('subject_type', 'incident')->where('event', 'updated')->sole();
+        $this->assertTrue($documentLog->causer->is($user));
+        $this->assertSame('Inhoud: gewijzigd', ActivityPresenter::changes($documentLog));
+        $this->assertSame("Rapport: gewijzigd\nOorzaak: gewijzigd", ActivityPresenter::changes($incidentLog));
+        foreach (['versie', 'rapport', 'oorzaak'] as $text) {
+            $this->assertStringNotContainsString($text, $documentLog->toJson().$incidentLog->toJson());
+        }
     }
 
     public function test_editing_a_document_keeps_a_revision_that_can_be_restored(): void

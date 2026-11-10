@@ -4,6 +4,7 @@ namespace App\Filament\Support;
 
 use App\Enums\MaintenanceTask;
 use App\Enums\ProviderKind;
+use App\Models\AgentToken;
 use App\Models\Client;
 use App\Models\Contracts\Renewable;
 use App\Models\Domain;
@@ -86,24 +87,41 @@ final class ActivityPresenter
     }
 
     /**
-     * "Field: old → new", one change per line, for updates and renewals.
+     * Who made the change, and through which agent ("Ada via deploy-agent").
+     * Eager-load: causer.
+     */
+    public static function causer(Activity $activity): ?string
+    {
+        return AgentToken::byline($activity->causer?->name, $activity->properties?->get('via'));
+    }
+
+    /**
+     * "Field: old → new", one change per line, for updates and renewals; a
+     * long text that is kept out of the log only says that it changed.
      */
     public static function changes(Activity $activity): ?string
     {
-        $changes = $activity->attribute_changes;
-
-        if ($changes === null || ! in_array($activity->event, ['updated', 'renewed'], true)) {
+        if (! in_array($activity->event, ['updated', 'renewed'], true)) {
             return null;
         }
 
-        $casts = self::castsOf($activity);
-        $old = $changes->get('old', []);
+        $changes = $activity->attribute_changes;
+        $subject = self::subjectModel($activity);
+        $casts = $subject?->getCasts() ?? [];
+        $old = $changes?->get('old', []) ?? [];
 
-        $lines = collect($changes->get('attributes', []))->map(
-            fn (mixed $value, string $attribute): string => self::label($attribute).': '
+        // In the order of the form, not of the stored JSON: MySQL sorts its keys.
+        $order = array_flip($subject?->getFillable() ?? []);
+
+        $lines = collect($changes?->get('attributes', []) ?? [])
+            ->sortKeysUsing(fn (string $a, string $b): int => [$order[$a] ?? PHP_INT_MAX, $a] <=> [$order[$b] ?? PHP_INT_MAX, $b])
+            ->map(fn (mixed $value, string $attribute): string => self::label($attribute).': '
                 .self::value($attribute, $old[$attribute] ?? null, $casts[$attribute] ?? null)
-                .' → '.self::value($attribute, $value, $casts[$attribute] ?? null),
-        );
+                .' → '.self::value($attribute, $value, $casts[$attribute] ?? null))
+            ->values()
+            ->merge(collect($activity->properties?->get('texts', []))->map(
+                fn (string $attribute): string => self::textLabel($activity, $attribute).': '.__('changed'),
+            ));
 
         return $lines->isEmpty() ? null : $lines->implode("\n");
     }
@@ -130,6 +148,43 @@ final class ActivityPresenter
         }
 
         return (string) $activity->description;
+    }
+
+    /**
+     * The name of a long text kept out of the log, as its form calls it.
+     */
+    public static function textLabel(Activity $activity, string $attribute): string
+    {
+        return self::textLabels()["{$activity->subject_type}.{$attribute}"] ?? self::label($attribute);
+    }
+
+    /**
+     * The texts an agent replaced, kept by RecordsActivity ("previous_texts").
+     *
+     * @return array<string, string>
+     */
+    public static function previousTexts(Activity $activity): array
+    {
+        return array_filter((array) $activity->properties?->get('previous_texts'), is_string(...));
+    }
+
+    /**
+     * The long texts models keep out of the log (attributesNotLogged()), by
+     * the name their forms give them, per morph alias: a maintenance's plan
+     * is a work plan, not a server's hosting plan, and an incident's body is
+     * its report.
+     *
+     * @return array<string, string>
+     */
+    private static function textLabels(): array
+    {
+        return [
+            'maintenance.plan' => __('Work plan'),
+            'maintenance.report' => __('What was done'),
+            'document.body' => __('Content'),
+            'incident.body' => __('Report'),
+            'incident.root_cause' => __('Root cause'),
+        ];
     }
 
     /**
@@ -260,15 +315,14 @@ final class ActivityPresenter
     }
 
     /**
-     * The casts of the subject's model, so values are shown as the model sees them.
-     *
-     * @return array<string, string>
+     * An empty instance of the subject's model: its casts, so values are
+     * shown as the model sees them, and its fields in the order of the form.
      */
-    private static function castsOf(Activity $activity): array
+    private static function subjectModel(Activity $activity): ?Model
     {
         $class = Relation::getMorphedModel((string) $activity->subject_type);
 
-        return $class !== null && is_subclass_of($class, Model::class) ? (new $class)->getCasts() : [];
+        return $class !== null && is_subclass_of($class, Model::class) ? new $class : null;
     }
 
     private static function value(string $attribute, mixed $value, ?string $cast): string

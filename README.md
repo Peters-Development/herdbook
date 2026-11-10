@@ -49,6 +49,8 @@ The answers usually live in five places: a spreadsheet, the registrar's dashboar
 
 **Seeing it at a glance.** The dashboard puts the worst first. Every project has a status page with uptime and response time over 24 hours up to 90 days, with incidents and maintenance on the same timeline. The map draws providers, servers, environments, hostnames and domains with the lines between them. And a wall display for a TV or a Raspberry Pi shows how production is doing without ever showing a hostname or an address.
 
+**Agents.** An agent such as Claude Code can look up a server by its hostname, see when it was last updated, plan maintenance with a work plan, and write down what it did, through Herdbook's MCP server. Each agent has a token of its own, sees less than a person, deletes nothing, and is named in the activity log.
+
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/costs-dark.png"><img src="docs/images/costs-light.png" width="49%" alt="The costs page: totals per year and per month, a 12-month chart, and costs per provider, project and client"></picture>
   <img src="docs/images/status-screen.png" width="49%" alt="The status screen for a wall display">
@@ -56,7 +58,7 @@ The answers usually live in five places: a spreadsheet, the registrar's dashboar
 
 ## Design Choices
 
-- **Self-hosted, for one organization.** One database, one panel. Every account is an administrator, there is no sign-up, and two-factor authentication is required.
+- **Self-hosted, for one organization.** One database, one panel. Every account is an administrator, there is no sign-up, and two-factor authentication is required (agents use a token of their own, which only an account with two-factor authentication gets).
 - **For a private network.** Reach it over Tailscale (no port is published at all), on your local network (HTTPS through Caddy with its own certificate authority), or both. It is not meant to face the public internet.
 - **No secrets in the database.** Passwords and keys stay in your password manager; Herdbook refers to them.
 - **Nothing from third parties.** Fonts, icons and avatars are served by Herdbook itself, and a strict Content-Security-Policy keeps every script, style and request on its own origin.
@@ -97,7 +99,7 @@ Deploying, updating and rolling back is one script (`docker/deploy.sh`), and nig
 The full documentation lives in [`docs/`](docs/README.md):
 
 - **Getting started:** [Installation](docs/installation.md) · [Deployment](docs/deployment.md) · [Networking](docs/networking.md) · [Configuration](docs/configuration.md) · [Backups](docs/backups.md) · [Vaultwarden](docs/vaultwarden.md)
-- **Using Herdbook:** [Inventory](docs/inventory.md) · [Monitoring](docs/monitoring.md) · [Alerts](docs/alerts.md) · [Incidents](docs/incidents.md) · [Knowledge](docs/knowledge.md) · [Maintenance](docs/maintenance.md) · [Renewals](docs/renewals.md) · [Costs](docs/costs.md) · [Dashboard and Map](docs/dashboard.md) · [Status Screen](docs/status-screen.md)
+- **Using Herdbook:** [Inventory](docs/inventory.md) · [Monitoring](docs/monitoring.md) · [Alerts](docs/alerts.md) · [Incidents](docs/incidents.md) · [Knowledge](docs/knowledge.md) · [Maintenance](docs/maintenance.md) · [Renewals](docs/renewals.md) · [Costs](docs/costs.md) · [Dashboard and Map](docs/dashboard.md) · [Status Screen](docs/status-screen.md) · [Agents](docs/agents.md)
 - **Reference:** [Commands](docs/commands.md) · [Security](docs/security.md) · [Translations](docs/translations.md) · [Development](docs/development.md)
 
 ## Languages

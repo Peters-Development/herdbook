@@ -34,10 +34,7 @@ class ServerInfolist
                         TextEntry::make('provider_hostname')->label(__('Name at the provider'))->placeholder('—'),
                         TextEntry::make('plan')->label(__('Plan'))->placeholder('—'),
                         TextEntry::make('location')->label(__('Location'))->placeholder('—'),
-                        TextEntry::make('os')
-                            ->label(__('Operating system'))
-                            ->state(fn (Server $record): ?string => trim("{$record->os_name} {$record->os_version}") ?: null)
-                            ->placeholder('—'),
+                        TextEntry::make('operating_system')->label(__('Operating system'))->placeholder('—'),
                     ]),
                 Section::make(__('Network and access'))
                     ->columns(3)

@@ -207,6 +207,17 @@ class ServerFlowTest extends TestCase
             ->assertHasFormErrors(['dependencies']);
     }
 
+    public function test_the_list_shows_the_operating_system_as_one_text(): void
+    {
+        $this->signIn();
+        $server = Server::factory()->create(['os_name' => 'Debian', 'os_version' => '13']);
+        $unknown = Server::factory()->create(['os_name' => null, 'os_version' => null]);
+
+        Livewire::test(ListServers::class)
+            ->assertTableColumnStateSet('operating_system', 'Debian 13', $server)
+            ->assertTableColumnStateSet('operating_system', null, $unknown);
+    }
+
     public function test_a_server_with_two_roles_in_one_environment_counts_one_environment(): void
     {
         $this->signIn();

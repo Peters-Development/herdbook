@@ -8,6 +8,10 @@
     - [`screens:create`](#screens-create)
     - [`screens:list`](#screens-list)
     - [`screens:revoke`](#screens-revoke)
+- [Agents](#agents)
+    - [`agents:create`](#agents-create)
+    - [`agents:list`](#agents-list)
+    - [`agents:revoke`](#agents-revoke)
 - [Alerts](#alerts)
     - [`alerts:send`](#alerts-send)
 - [Incidents](#incidents)
@@ -28,7 +32,7 @@
 <a name="introduction"></a>
 ## Introduction
 
-Herdbook adds a handful of Artisan commands. Most of them run by themselves on a schedule; the ones you run by hand manage accounts, status screens and imports, or let you test your alert setup.
+Herdbook adds a handful of Artisan commands. Most of them run by themselves on a schedule; the ones you run by hand manage accounts, status screens, agents and imports, or let you test your alert setup.
 
 Every command runs inside the `app` container:
 
@@ -63,7 +67,7 @@ The new account sets up two-factor authentication at its first sign-in. Sign in 
 php artisan users:reset-two-factor {email}
 ```
 
-The way back for an account that lost both its authenticator app and its recovery codes. It removes the account's two-factor setup, and signs it out everywhere: every session and every "remember me" cookie. The setup page asks for no password, so a lost phone that is still signed in must not be the device that sets up the new authenticator. At the next sign-in, Herdbook asks for a new setup.
+The way back for an account that lost both its authenticator app and its recovery codes. It removes the account's two-factor setup, and signs it out everywhere: every session and every "remember me" cookie. The setup page asks for no password, so a lost phone that is still signed in must not be the device that sets up the new authenticator. It also revokes the account's agent tokens, which work without a second factor. At the next sign-in, Herdbook asks for a new setup.
 
 <a name="status-screens"></a>
 ## Status Screens
@@ -96,6 +100,40 @@ php artisan screens:revoke {name}
 ```
 
 Revokes the link of the screen with that name. The screen's next request is refused, and it says its access was revoked.
+
+<a name="agents"></a>
+## Agents
+
+See [Agents](agents.md) for what an agent can do through the MCP server, and how to connect one.
+
+<a name="agents-create"></a>
+### `agents:create`
+
+```bash
+php artisan agents:create {email?} {name?} [--write] [--days=90]
+```
+
+Creates a token for an agent that acts for the account with that email address, such as `agents:create ada@example.com deploy-agent`. Without arguments, it asks for them. Without `--write`, the agent can only read. Names are unique across all accounts, start with a letter or digit, and are made of letters, digits, `.`, `_` and `-`. Creating an agent under the name of an expired agent of the same account replaces it. The token expires after `--days` (1 to 365).
+
+The command prints the token once: Herdbook only stores a hash of it. A token works without the account's second factor, so only an account that has set up two-factor authentication gets one.
+
+<a name="agents-list"></a>
+### `agents:list`
+
+```bash
+php artisan agents:list
+```
+
+Lists every agent with its account, its access, when it was created, when it expires and when it was last used, in the display timezone. An agent nobody uses any more is one to revoke.
+
+<a name="agents-revoke"></a>
+### `agents:revoke`
+
+```bash
+php artisan agents:revoke {name?} [--user=] [--all]
+```
+
+Revokes the agent with that name, every agent of an account (`--user=ada@example.com`), or every agent (`--all`). The agent's next request is refused. Maintenance it created still shows "via" and its name, and the activity log still names it. A lost token, or one that should be able to write, is revoked and then created again under the same name.
 
 <a name="alerts"></a>
 ## Alerts
@@ -222,7 +260,7 @@ Rolls the raw check results of the last full hours up into hourly statistics, an
 <a name="model-prune"></a>
 ### `model:prune`
 
-Laravel's own pruning command. It removes raw check results after 14 days and hourly statistics after 90 days (`keep_results_days` and `keep_hour_stats_days`). Daily statistics are kept for good.
+Laravel's own pruning command. It removes raw check results after 14 days and hourly statistics after 90 days (`keep_results_days` and `keep_hour_stats_days`), and agent tokens a week after they expired. Daily statistics are kept for good.
 
 <a name="backups-check"></a>
 ### `backups:check`

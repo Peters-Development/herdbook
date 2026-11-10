@@ -7,6 +7,7 @@
 - [What Users Write](#what-users-write)
 - [Browser Protection](#browser-protection)
 - [The Status Screen](#the-status-screen)
+- [Agents](#agents)
 - [Alerts](#alerts)
 - [What Checks Can Reach](#what-checks-can-reach)
 - [Backups](#backups)
@@ -35,12 +36,12 @@ Herdbook doesn't use the identity headers that `tailscale serve` adds: being on 
 ## Accounts and Sign-In
 
 - **No sign-up.** Accounts are created on the command line with `users:create`, never through the web.
-- **Two-factor authentication is required** for every account (TOTP, with recovery codes). It is enforced on every request, Livewire's included, so a page opened before two-factor was turned off stops working too. The secrets and recovery codes are encrypted with `APP_KEY`.
+- **Two-factor authentication is required** for every account (TOTP, with recovery codes). It is enforced on every request, Livewire's included, so a page opened before two-factor was turned off stops working too. The secrets and recovery codes are encrypted with `APP_KEY`. The one exception is an [agent token](#agents), which only an account with two-factor authentication gets.
 - **Passwords** are at least 12 characters, and stored as a hash. Sign-in attempts are limited to five a minute. There is no password reset by email: a lost password or second factor is reset on the command line ([Accounts](deployment.md#accounts)).
-- **Resetting two-factor signs the account out everywhere**, every session and every "remember me" cookie, so a lost phone that is still signed in can't set up the new authenticator.
+- **Resetting two-factor signs the account out everywhere**, every session and every "remember me" cookie, so a lost phone that is still signed in can't set up the new authenticator. It also revokes the account's agent tokens.
 - **Every account is an administrator.** There are no roles or permissions: anyone with an account can see and change everything. Give accounts only to people you would give the keys to your infrastructure.
 - **Sessions** live in the database, encrypted, and the cookie is secure on the host (`SESSION_SECURE_COOKIE=true`).
-- **An activity log** records changes on every record, and who made them.
+- **An activity log** records changes on every record, who made them, and through which agent.
 
 <a name="no-secrets-in-the-database"></a>
 ## No Secrets in the Database
@@ -87,6 +88,20 @@ The [status screen](status-screen.md) is the one page that needs no sign-in, so 
 - **A payload built field by field.** Project names and states, hourly bars, uptime, response times, the severity of open incidents, whether the checks run and the backup's age. Never hostnames, IP addresses, check names, incident titles or links: visitors can read along. A test guards this.
 - **Text goes in as text.** The page never inserts HTML.
 
+<a name="agents"></a>
+## Agents
+
+An agent such as Claude Code can read inventory and maintenance, and plan, change, complete or call off maintenance, through the MCP server at `/mcp` ([Agents](agents.md)). It is off until `HERDBOOK_MCP_ENABLED=true`; while off, `/mcp` answers 404.
+
+- **A token per agent, for an account.** `hb_` and 48 random characters, shown once by `agents:create`; the database only keeps its SHA-256 hash. It reads only, unless it was created with `--write`, and it expires (after 90 days by default).
+- **A key without a second factor.** That is why only an account with two-factor authentication gets one, and why it stops working while the account has none. `users:reset-two-factor` revokes its tokens; turning two-factor off in the profile only pauses them. A new password neither revokes nor pauses them.
+- **No session, no browsers.** The route sits outside the panel's middleware and keeps no session. A request with an `Origin` header (what a browser sends) is refused, so a web page can't use a token or reach the server through your browser.
+- **Rate limits.** 120 requests a minute per agent, and a separate limit for wrong tokens.
+- **Less than a person.** Tools return a payload built field by field: no notes, IP addresses, provider hostnames, repository URLs, SSH details, costs, credential references or contact details. A test guards this. Answers do link to pages in Herdbook, so they carry its address. Addresses, provider hostnames and git remotes are only compared whole, but a guessed one can be confirmed: an agent can try a /24 in minutes.
+- **Less to write.** No tool deletes anything. An agent changes the status only by completing or calling off. Changing maintenance (`update_maintenance`), and completing it with a report (or clearing it), need the version the agent read, so it doesn't save over what someone changed meanwhile. In what an agent writes, Herdbook refuses anything that looks like a password, token or private key, images (which load the moment a person opens the page), HTML (which could pose as part of the page) and links to other sites in plans and reports (it may keep the links of the text it replaces, though under other words). The activity log keeps a plan or report an agent replaced.
+- **Named.** Maintenance an agent creates shows "Ada via deploy-agent" in the lists and on the page; an agent reading a plan also gets who last changed it, through which agent; and the activity log names the agent for every change it makes to a maintenance (not to which servers and projects it is linked to, as for people), also after its token is revoked.
+- **A kill switch.** `agents:revoke --all`, or turn the MCP server off.
+
 <a name="alerts"></a>
 ## Alerts
 
@@ -122,6 +137,9 @@ Knowing the limits is part of the model:
 - **The NAS that prunes.** It holds the restic password, so it can read the backups.
 - **Forged history on an append-only NAS.** A compromised host can't delete, but it could add snapshots dated in the past. The NAS's own filesystem snapshots are the safety net ([Filesystem Snapshots](backups.md#filesystem-snapshots)).
 - **What your alert channels see.** Pushover, ntfy and your mail provider see the alerts.
+- **What agents read.** What a tool returns goes to the agent's model provider, and stays in the agent's local history: names, plans and reports, as written.
+- **A misled agent.** Plans and reports can try to steer an agent that reads them. With a write token it can plan, change, complete or call off maintenance, and replace or clear a plan or report: the activity log keeps the text it replaced, but changes to its servers and projects aren't logged at all ([Undoing What an Agent Did](agents.md#undoing-what-an-agent-did)). Have agents ask before they write, and before they run commands on your servers.
+- **Code that runs as you.** Whatever runs as you on the agent's machine, the agent included, can read the token from your keychain.
 - **A tailnet with a broad policy.** If your Tailscale policy lets everything reach everything, the grants don't restrict anything.
 
 <a name="reporting-a-vulnerability"></a>

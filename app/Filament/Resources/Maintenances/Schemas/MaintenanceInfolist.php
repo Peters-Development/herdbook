@@ -24,7 +24,7 @@ class MaintenanceInfolist
                         MaintenanceSchema::tasksEntry(),
                         TextEntry::make('starts_at')->label(__('Start'))->dateTime(__('formats.datetime')),
                         TextEntry::make('ends_at')->label(__('End'))->dateTime(__('formats.datetime'))->placeholder('—'),
-                        TextEntry::make('user.name')->label(__('By'))->placeholder('—'),
+                        MaintenanceSchema::byEntry(),
                     ]),
                 // A quick entry has no plan; a planned one shows that it has none yet.
                 Section::make(__('Work plan'))

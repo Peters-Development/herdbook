@@ -303,7 +303,7 @@ The search bar at the top finds:
 
 Every change is logged: who changed what, and when, with the old and the new value. "Who changed the IP of this server last month?" has an answer. Each page has an **Activity** tab.
 
-Some pages show the changes of their parts too, even after those parts were deleted: a project shows its environments and server links, a server its links and dependencies, a domain its hostnames, a network its devices. Long texts (document bodies, incident reports, maintenance plans) are not logged in full; documents keep [revisions](knowledge.md#revisions) instead.
+Some pages show the changes of their parts too, even after those parts were deleted: a project shows its environments and server links, a server its links and dependencies, a domain its hostnames, a network its devices. Long texts (document bodies, incident reports and root causes, maintenance plans and reports) are not logged in full: the log only says that they changed, and who changed them. Documents keep [revisions](knowledge.md#revisions) instead.
 
 <a name="deleting-records"></a>
 ## Deleting Records

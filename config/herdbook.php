@@ -78,6 +78,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Agents (MCP)
+    |--------------------------------------------------------------------------
+    |
+    | An MCP server at /mcp for agents such as Claude Code, so they look up and
+    | record maintenance without clicking through the panel. Off by default;
+    | each agent gets a token of its own (agents:create, docs/agents.md).
+    |
+    */
+
+    'mcp' => [
+        'enabled' => (bool) env('HERDBOOK_MCP_ENABLED', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Checks
     |--------------------------------------------------------------------------
     |

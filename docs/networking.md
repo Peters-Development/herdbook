@@ -173,6 +173,7 @@ Then install it on every device that opens Herdbook:
 | iPhone, iPad | Send the file with AirDrop or by email and open it. Install the profile under **Settings → Profile Downloaded**, then turn on full trust for it under **Settings → General → About → Certificate Trust Settings**. |
 | Android | **Settings → Security → Encryption & credentials → Install a certificate → CA certificate**. The menu names differ per brand. Chrome then trusts it; Firefox only when you allow third-party certificates in its settings. |
 | Windows | Double-click the file, choose **Install Certificate → Local Machine**, and place it in **Trusted Root Certification Authorities**. |
+| Linux (Debian, Ubuntu) | `sudo cp herdbook-root.crt /usr/local/share/ca-certificates/ && sudo update-ca-certificates`. Browsers may keep a store of their own: in Firefox, import it under **Settings → Privacy & Security → Certificates**. |
 
 After that, `https://<LAN_IP>` and your `LAN_HOSTNAMES` load without a warning. The root certificate stays valid for about ten years; Caddy renews the certificates it issues by itself.
 
@@ -235,3 +236,5 @@ Herdbook doesn't only receive traffic. From the host, it reaches out to:
 - **Your heartbeat URL**, every five minutes, if you set one.
 
 The browser side stays on Herdbook's own origin: fonts, icons and scripts are served by Herdbook itself, and the vault doesn't fetch website icons either.
+
+Herdbook never calls an AI service itself. An [agent](agents.md) on your own machine calls Herdbook, at `/mcp` on the same address as the panel, and what Herdbook answers goes on from that machine to the agent's model provider.

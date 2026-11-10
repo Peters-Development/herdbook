@@ -323,6 +323,8 @@ When the host is gone, you can only restore from a backup that lived elsewhere, 
    ```
 
 7. Run `docker/deploy.sh`, remove the `TS_AUTHKEY_*` values from `docker/box.env` again, and run `docker/up.sh`.
+
+   The database is as it was at that backup, tokens included. An agent or screen revoked since works again; one created since is gone. Run `docker/compose.sh exec app php artisan agents:list` and `screens:list` straight away, and revoke again what should be gone ([Commands](commands.md)). An agent that gets a 401, or a screen that says its access was revoked, needs a new token.
 8. Only now turn on the backup timer (the `systemctl link` and `enable --now` from [Setting Up](#setting-up)).
 
 <a name="moving-to-another-host"></a>
