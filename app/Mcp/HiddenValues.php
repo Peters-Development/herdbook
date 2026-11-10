@@ -166,7 +166,8 @@ class HiddenValues
 
     /**
      * What looks like an IPv6 address: masked when it is one, with or
-     * without a leading colon ("addr:fd00::5"). With letters glued to its
+     * without a leading colon ("addr:fd00::5") or a trailing one, as ping6
+     * writes it ("from 2001:db8::7: icmp_seq=1"). With letters glued to its
      * first group, two groups are code, not an address ("Cache::add",
      * "std::cafe"), unless Herdbook knows it.
      */
@@ -178,10 +179,12 @@ class HiddenValues
         }
 
         foreach ([$token, ltrim($token, ':')] as $candidate) {
-            if (filter_var($candidate, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false) {
-                $mask = $this->known()[$this->normalized($candidate)] ?? '['.__('address').']';
+            foreach (array_unique([$candidate, str_ends_with($candidate, ':') ? substr($candidate, 0, -1) : $candidate]) as $address) {
+                if (filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false) {
+                    $mask = $this->known()[$this->normalized($address)] ?? '['.__('address').']';
 
-                return substr($token, 0, strlen($token) - strlen($candidate)).$this->hold($mask);
+                    return substr($token, 0, strlen($token) - strlen($candidate)).$this->hold($mask).substr($candidate, strlen($address));
+                }
             }
         }
 

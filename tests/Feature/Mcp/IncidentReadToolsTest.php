@@ -284,6 +284,7 @@ class IncidentReadToolsTest extends TestCase
             'a provider hostname and a dashed address glued after it' => ['vps-123.provider.example-192-0-2-10.log', '[adres van app-1]-[adres van app-1].log'],
             'a provider hostname between letters outside ASCII' => ['服务器vps-123.provider.example已重启, vps-123.provider.exampleé', '服务器[adres van app-1]已重启, [adres van app-1]é'],
             'not code with two colons' => ['Cache::add() failed in std::cafe and Foo::bar::baz', 'Cache::add() failed in std::cafe and Foo::bar::baz'],
+            'IPv6 followed by a colon, as ping6 and telnet write it' => ['64 bytes from 2001:db8::10: icmp_seq=1; connect to address 2001:db8::10: Connection refused; to 2001:db8::99:', '64 bytes from [adres van app-1]: icmp_seq=1; connect to address [adres van app-1]: Connection refused; to [adres]:'],
             'a short IPv6 after a word and a colon' => ['addr:fd00::5 ip:fd00::5', 'addr:[adres van db-1] ip:[adres van db-1]'],
             'a known short IPv6 URL-encoded or glued to letters' => ['next=https%3A%2F%2F%5Bfd00::5%5D%2F ip%3Dfd00::5 srcfd00::5', 'next=https%3A%2F%2F%5B[adres van db-1]%5D%2F ip%3D[adres van db-1] src[adres van db-1]'],
             'a provider hostname glued on both sides' => ['%2Fvar%2Flog%2Fvps-123.provider.example-access.log', '%2Fvar%2Flog%2F[adres van app-1]-access.log'],
