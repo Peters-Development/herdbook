@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Incidents\Tables;
 
 use App\Enums\IncidentSeverity;
 use App\Enums\IncidentStatus;
+use App\Filament\Support\RecordedBy;
 use App\Models\Incident;
 use App\Models\Project;
 use Filament\Actions\BulkActionGroup;
@@ -31,6 +32,7 @@ class IncidentsTable
                     ->description(fn (Incident $record): ?string => $record->projects->map(fn (Project $project): string => $project->name)->implode(', ') ?: null),
                 TextColumn::make('severity')->label(__('Severity'))->badge(),
                 TextColumn::make('status')->label(__('Status'))->badge(),
+                RecordedBy::column()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('status')->label(__('Status'))->options(IncidentStatus::class),

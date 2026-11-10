@@ -19,6 +19,22 @@ class Moment implements ValidationRule
     private const string FORMAT = '/^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])[T ]([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d{1,6})?)?(Z|[+-](0\d|1[0-4]):[0-5]\d)?\z/';
 
     /**
+     * The first moment a timestamp column holds (MySQL).
+     */
+    public static function earliest(): CarbonImmutable
+    {
+        return CarbonImmutable::parse('1970-01-01 00:00:01', 'UTC');
+    }
+
+    /**
+     * The last moment a timestamp column holds (MySQL).
+     */
+    public static function latest(): CarbonImmutable
+    {
+        return CarbonImmutable::parse('2038-01-19 03:14:07', 'UTC');
+    }
+
+    /**
      * In UTC. Null: it isn't a moment in this form, or not a date that exists.
      */
     public static function parse(mixed $value): ?CarbonImmutable

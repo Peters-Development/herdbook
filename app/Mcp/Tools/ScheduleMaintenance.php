@@ -26,7 +26,7 @@ class ScheduleMaintenance extends Tool
     public function description(): string
     {
         return 'Plan maintenance in Herdbook: the work, when it starts (and ends, for a window), a work plan in markdown, and the servers and projects it concerns (ids from search_inventory; at least one). '
-            .self::textsSentence('The plan')
+            .self::textsSentence('The plan', replacing: false)
             .self::checkFirst().self::answerSentence();
     }
 
@@ -42,6 +42,6 @@ class ScheduleMaintenance extends Tool
     {
         $work = $this->validatedNewWork($request, ['plan' => $this->textRules()], MaintenanceStatus::Planned);
 
-        return $this->answer($this->record($request, MaintenanceStatus::Planned, $work, ['plan' => $work['plan'] ?? null]));
+        return $this->answer($this->record(MaintenanceStatus::Planned, $work, ['plan' => $work['plan'] ?? null]));
     }
 }

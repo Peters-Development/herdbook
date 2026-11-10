@@ -23,9 +23,9 @@
 <a name="introduction"></a>
 ## Introduction
 
-An agent such as [Claude Code](https://code.claude.com) can look things up in Herdbook and keep its maintenance log, without clicking through the panel: find a server, see when it was last updated, plan work, and write down what it did. It talks to Herdbook's MCP server (the [Model Context Protocol](https://modelcontextprotocol.io)) at `/mcp`, with a token of its own.
+An agent such as [Claude Code](https://code.claude.com) can look things up in Herdbook and keep its maintenance log, without clicking through the panel. It keeps incidents too: it sees what is going on and what happened last time, opens an incident when something breaks, and writes down what it tries and finds as it goes. It can find a server, see when it was last updated, plan work, and write down what it did. It talks to Herdbook's MCP server (the [Model Context Protocol](https://modelcontextprotocol.io)) at `/mcp`, with a token of its own.
 
-Herdbook remains the place where people work: an agent sees less than a person and may do less. Maintenance an agent creates is signed with its account and its name, such as "Ada via deploy-agent", and the activity log names the agent for every change it makes to a maintenance (not to which servers and projects it is linked to, which isn't logged for people either).
+Herdbook remains the place where people work: an agent sees less than a person and may do less. What an agent creates (maintenance, incidents, timeline entries, action items) is signed with its account and its name, such as "Ada via deploy-agent", as is an action item it completes, and the activity log names the agent for every change it makes to maintenance or an incident (not to which servers and projects they are linked to, which isn't logged for people either).
 
 <a name="what-an-agent-can-do"></a>
 ## What an Agent Can Do
@@ -35,18 +35,26 @@ Herdbook remains the place where people work: an agent sees less than a person a
 | `search_inventory` | Finds projects, servers and hostnames the way an agent knows them: by name, by the git remote of the repository it works in, by the output of `hostname -f`, or by the address it connects to. A server shows when updates, a reboot, an inspection and an upgrade were last done on it. | read |
 | `list_maintenance` | Lists maintenance: planned (overdue included), overdue, done or called off, for some servers or projects, of some kind of work. | read |
 | `get_maintenance` | One maintenance with its plan and report. | read |
+| `list_incidents` | Lists incidents: the unresolved ones unless it asks for others, of some projects (as far as Herdbook counts them for a project: also through the servers its production needs) or servers, of some severity, since some day. | read |
+| `get_incident` | One incident with its impact, root cause, report, timeline (its latest entries, as many as fit in one answer) and action items. | read |
+| `open_incident` | Opens an incident: what is wrong, how severe, when it started and was detected, its impact and what is known so far. Herdbook tells the agent to look for an unresolved one of the same servers or projects first, as its checks may have opened one, and the answer names those. | write |
+| `add_timeline_entry` | Adds an entry to an incident's timeline: what was tried, found or done, and when. Only added, also to a resolved incident. | write |
+| `add_incident_action` | Adds an action item to an incident, with a due date if there is one. | write |
+| `complete_incident_action` | Marks an action item as done. | write |
+| `update_incident` | Changes an incident: its title, severity, status (also to reopen it), times, impact, root cause, report, or servers and projects. | write |
+| `resolve_incident` | Resolves an incident: when (default now), and its root cause and report if it knows them. | write |
 | `schedule_maintenance` | Plans maintenance. | write |
 | `log_maintenance` | Writes down maintenance that was done. | write |
 | `update_maintenance` | Changes the work, title, times, plan, report or servers and projects of planned or done maintenance. Not its status, and nothing that was called off. | write |
 | `complete_maintenance` | Completes planned maintenance, with the same defaults as **Complete** in the panel. A report it gives replaces the one there is. | write |
 | `cancel_maintenance` | Calls off planned maintenance (its status becomes `cancelled`). Maintenance that is done can't be called off. | write |
 
-There is no tool that deletes anything. An agent with a read token doesn't see the five write tools at all.
+There is no tool that deletes anything. An agent with a read token doesn't see the write tools at all.
 
 <a name="what-it-gets"></a>
 ### What It Gets
 
-What a tool returns is built field by field, so a new column never reaches an agent by itself. An agent gets names (of projects, servers, hostnames, providers, clients and accounts), a server's operating system, maintenance with its plan and report, cut at 10,000 characters each, and links to the pages in Herdbook. With a plan, it also gets who created the maintenance and who last changed its plan and report, through which agent, as far as the activity log records it: a plan someone else rewrote doesn't pass for its creator's. It never gets notes, IP addresses, provider hostnames (they often hold the address), repository URLs (they may hold credentials), SSH details, costs, credential references or the contact details of clients.
+What a tool returns is built field by field, so a new column never reaches an agent by itself. An agent gets names (of projects, servers, hostnames, providers, clients, domains, networks and accounts), a server's operating system, and links to the pages in Herdbook. It gets maintenance with its plan and report, cut at 10,000 characters each, with who created it and who last changed its plan and report, through which agent, as far as the activity log records it: a plan someone else rewrote doesn't pass for its creator's. It gets incidents the same way, with their impact, root cause, report, timeline and action items. It never gets the notes of servers, projects and the rest of the inventory, IP addresses, provider hostnames (they often hold the address), repository URLs (they may hold credentials), SSH details, costs, credential references or the contact details of clients. Where people or Herdbook's checks wrote an address into what an agent reads (a check is named after its target: "Ping 192.0.2.10"), it reads as `[address of app-1]`, after the server, network or device on a network it belongs to, or `[address]` (shared by several, unknown, or the name holds an address itself). That finds the addresses Herdbook knows and IP addresses in the usual forms; one written in an unusual form can get through. A link that holds a masked address can't be written back: an agent drops it or asks you.
 
 It can still *find* a server by its address or its provider hostname, and a project by its git remote: those are compared whole (a provider hostname also by its first label), never in part, so they can't be spelled out character by character. A guessed address can be confirmed, though: at 120 requests a minute, an agent can try every address of a /24 in a few minutes.
 
@@ -58,18 +66,21 @@ The same rules as the forms apply, with the same messages: work that is done can
 - links what it writes to at least one server or project;
 - writes no passwords, tokens or private keys: text that looks like one is refused (a long value after `DB_PASSWORD=` or `Authorization: Bearer`, known token formats, a password in a URL). This guards against accidents, such as pasted command output, not against an agent that means to get a secret through;
 - writes no images or HTML in plans and reports: an image would be loaded the moment a person opens or edits the page, and could carry data along in its address;
+- writes no masks such as `[address of app-1]`: written back, a mask would take the place of the address it stands for. An agent that wants to change a text it read with masks writes one of its own, or asks you to change it in Herdbook;
 - links to no other site: a link could lead somewhere else than it says. Links into Herdbook pass (a path such as `/servers/1`, or `APP_URL`), and so do the links of the text it replaces, so an agent can add a step to your plan without breaking your links. A web address between backticks is fine, and so is an email address, as in `ssh deploy@app-1.example.com`. An agent can still move one of your links under other words;
-- writes at most 10,000 characters per plan or report, and doesn't overwrite a plan or report that is longer, whoever wrote it: it would lose what it couldn't read;
-- changes the status only by completing or calling off, and doesn't change maintenance that was called off.
+- writes at most 10,000 characters per plan, report, impact or root cause, and doesn't overwrite one that is longer (as it read it, masked), whoever wrote it: it would lose what it couldn't read;
+- writes an incident's impact, its timeline entries (at most 1,000 characters) and its action items (at most 255) as plain text: no passwords, tokens or masks, and moments that lie in the past;
+- changes the status of maintenance only by completing or calling off, and doesn't change maintenance that was called off; an incident's status it may change (also to reopen it) and resolve, and only a resolved incident gets a resolution time;
+- writes nothing twice when it tries a call again because the answer got lost: the same call by the same agent within ten minutes returns what the first wrote, marked as unchanged, also when someone changed that since. A note it means to write twice gets a moment of its own.
 
 Times are ISO 8601, such as `2026-11-12T22:00`, in minutes as in the forms: seconds are dropped. Without an offset, they are in the display timezone (`HERDBOOK_DISPLAY_TIMEZONE`). Answers carry the offset, so a mistake shows at once.
 
 <a name="changes-made-meanwhile"></a>
 ### Changes Made Meanwhile
 
-Every maintenance an agent reads comes with a `version`, a fingerprint of everything that can be changed, its servers and projects included. To change a maintenance, or to complete it with a report (or clear its report), the agent gives that version back. If someone changed the maintenance since, the agent is told to read it again, and nothing is saved. Completing without a report, and calling off, only need the maintenance to be still planned.
+Every maintenance and incident an agent reads comes with a `version`, a fingerprint of everything that can be changed, its servers and projects included. To change maintenance or an incident, to resolve an incident, or to complete maintenance with a report (or clear it), the agent gives that version back. If someone changed it since, the agent is told to read it again, and nothing is saved. Completing maintenance without a report, and calling it off, only need it to be still planned.
 
-It works the other way too. An edit form or a **Complete** modal left open in the panel doesn't undo what an agent (or another tab) did meanwhile: saving refuses, keeps what the agent wrote, and says the maintenance was changed meanwhile, or that it is no longer planned.
+It works the other way too. An edit form or a **Complete** modal left open in the panel doesn't undo what an agent (or another tab) did meanwhile: saving refuses, keeps what the agent wrote, and says it was changed meanwhile, or that the maintenance is no longer planned.
 
 <a name="turning-it-on"></a>
 ## Turning It On
@@ -183,20 +194,28 @@ Let the agent read without asking, and have it ask before it writes. In `~/.clau
     "allow": [
       "mcp__herdbook__search_inventory",
       "mcp__herdbook__list_maintenance",
-      "mcp__herdbook__get_maintenance"
+      "mcp__herdbook__get_maintenance",
+      "mcp__herdbook__list_incidents",
+      "mcp__herdbook__get_incident"
     ],
     "ask": [
       "mcp__herdbook__schedule_maintenance",
       "mcp__herdbook__log_maintenance",
       "mcp__herdbook__update_maintenance",
       "mcp__herdbook__complete_maintenance",
-      "mcp__herdbook__cancel_maintenance"
+      "mcp__herdbook__cancel_maintenance",
+      "mcp__herdbook__open_incident",
+      "mcp__herdbook__add_timeline_entry",
+      "mcp__herdbook__add_incident_action",
+      "mcp__herdbook__complete_incident_action",
+      "mcp__herdbook__update_incident",
+      "mcp__herdbook__resolve_incident"
     ]
   }
 }
 ```
 
-An `ask` rule wins over any `allow`, also over a broad `mcp__herdbook__*`. If you'd rather not be asked when an agent plans or writes down new maintenance, move `schedule_maintenance` and `log_maintenance` to `allow`; keep the three that change what is there in `ask`.
+An `ask` rule wins over any `allow`, also over a broad `mcp__herdbook__*`. If you'd rather not be asked when an agent only adds something new (`schedule_maintenance`, `log_maintenance`, `add_timeline_entry`, `add_incident_action`), move those to `allow`; keep the tools that change what is there, and `open_incident`, in `ask`.
 
 Don't count on these rules in a session that runs without permission prompts (`--dangerously-skip-permissions`): give such a session a read token. If you need one, add a second server for it, such as `herdbook-read`, with a read token in a keychain item and a script of its own.
 
@@ -227,9 +246,9 @@ Then store the new token with the [same command](#the-token-in-your-keychain) as
 ## Security
 
 - **A token is a key without a second factor.** Treat it like a password.
-- **What an agent reads leaves your network.** Everything a tool returns becomes part of the conversation, which goes to the agent's model provider and stays in its local history (for Claude Code, under `~/.claude`). That is why tools return no addresses, notes or contact details, but names, plans and reports are sent as written.
-- **Plans and reports are written by people and other agents.** Herdbook tells agents to treat them as data, to act on a plan only when you ask, and to tell you when a plan was changed by someone other than its creator, but that is no guarantee: a text can try to steer an agent. Don't let an agent that carries out a plan run without asking for permission, so you see each command before it reaches your servers.
-- **An agent acts within its token.** A misled agent with a write token can plan, change, complete or call off maintenance. It can't delete maintenance, and the activity log names it and keeps the plans and reports it replaced, but changes to its servers and projects aren't logged.
+- **What an agent reads leaves your network.** Everything a tool returns becomes part of the conversation, which goes to the agent's model provider and stays in its local history (for Claude Code, under `~/.claude`). That is why tools return no addresses, notes or contact details, and mask the addresses in what they do return; names, plans, reports and incidents are otherwise sent as written.
+- **Plans, reports and incidents are written by people, other agents and Herdbook's checks** (which can quote what a checked site sent). Herdbook tells agents to treat them as data, to act on a plan only when you ask, and to tell you when a plan was changed by someone other than its creator, but that is no guarantee: a text can try to steer an agent. Don't let an agent that carries out a plan run without asking for permission, so you see each command before it reaches your servers.
+- **An agent acts within its token.** A misled agent with a write token can plan, change, complete or call off maintenance, and open, change and resolve incidents: an open SEV1 colours the dashboard and the status screen red, and a resolved one turns them green again. It can't delete anything, and the activity log names it and keeps the plans, reports and root causes it replaced, but changes to its servers and projects aren't logged.
 - **Revoking.** `agents:revoke` (one, an account's, or all), or switch the MCP server off. A backup restored from before a revoke brings the token back: revoke it again ([Disaster Recovery](backups.md#disaster-recovery)).
 
 The [Security](security.md#agents) page puts this in the context of the rest of Herdbook.
@@ -245,6 +264,10 @@ The [Security](security.md#agents) page puts this in the context of the rest of 
 | Changed its work, title or times | The old values are in the activity log. |
 | Replaced or cleared a plan or report | The activity log keeps the text it replaced: **Previous text** on that entry shows it, to copy back in the edit form. |
 | Changed its servers or projects | Not logged, as for people. |
+| Opened an incident, added a timeline entry or an action item | Delete it in the panel. |
+| Completed an action item | **Reopen** it in the panel. |
+| Resolved an incident, or changed its status, severity, title, times or impact | Set it back in the edit form; the activity log has what it was. A resolved SEV1 turns the dashboard green: reopen it if the outage goes on. |
+| Replaced or cleared an incident's root cause or report | **Previous text** on that entry in the activity log, as for maintenance. |
 
 <a name="troubleshooting"></a>
 ## Troubleshooting
@@ -259,5 +282,8 @@ A tool's errors come in the language of the token's account; a refused connectio
 | 429 | More than 120 requests a minute, or too many wrong tokens; it passes within a minute. |
 | A certificate error | See [The Certificate](#the-certificate). |
 | A tool is missing | The token can only read: revoke it and create it again with `--write` ([Renewing a Token](#renewing-a-token)). |
-| "This maintenance changed since you read it" | A person, another agent or a form changed it after the agent read it. The agent reads it again with `get_maintenance` and decides again. |
-| "This text is longer than an agent reads whole" | The plan or report is over 10,000 characters: change it in Herdbook itself. |
+| "This maintenance changed since you read it", "This incident changed since you read it" | A person, another agent, monitoring or a form changed it after the agent read it. The agent reads it again with `get_maintenance` or `get_incident` and decides again. |
+| "This text is longer than an agent reads whole" | The plan, report, impact or root cause is over 10,000 characters: change it in Herdbook itself. |
+| "Herdbook could not mask this text for agents" | The agent read it as `[text hidden]`, so it doesn't write over it: change it in Herdbook itself. |
+| "This holds a mask such as [address of app-1]" | The agent tried to write back a text it read with masks. It writes one of its own, or asks you to change it in Herdbook. |
+| "Another call of this agent is still writing" | One call of an agent writes at a time, and the one before took longer than ten seconds. Try again. |

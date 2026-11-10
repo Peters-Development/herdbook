@@ -10,28 +10,47 @@ use App\Enums\IncidentStatus;
 use App\Models\Check;
 use App\Models\CheckEvent;
 use App\Models\CheckResult;
+use App\Models\Concerns\Authorship;
 use App\Models\Incident;
-use App\Models\Project;
+use App\Models\Server;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
  * Draft incidents from long outages: a critical production check that is
- * down for a while opens one (or joins a recent open one of its project),
- * with the start taken from the first failed result, so the detection time
- * and the time to detect are right. A recovery is added to its timeline; the
- * incident moves to "monitoring" once none of its checks is down any more.
+ * down for a while opens one (or joins a recent unresolved one of its
+ * projects or servers, also one a person or an agent opened, raising it to
+ * SEV1), with the start taken from the first failed result, so the
+ * detection time and the time to detect are right. A recovery is added to
+ * its timeline; a draft of its own moves to "monitoring" once none of its
+ * checks is down any more (what a person or an agent wrote down may be
+ * about more than the checks: they decide).
  */
 final class CheckIncidents
 {
     /**
-     * An open check incident older than this is not joined: an incident
-     * nobody closed must not swallow next week's outage.
+     * An unresolved incident detected longer ago than this is not joined:
+     * an incident nobody closed must not swallow next week's outage.
      */
     private const int JOIN_WITHIN_HOURS = 12;
 
+    /**
+     * Without an author: monitoring writes it, also when a person's "Check
+     * now" set it off (Authorship).
+     */
     public function openForLongOutages(CarbonImmutable $now): int
+    {
+        return Authorship::without(fn (): int => $this->openOrJoin($now));
+    }
+
+    public function recovered(CheckEvent $upEvent): void
+    {
+        Authorship::without(fn () => $this->recover($upEvent));
+    }
+
+    private function openOrJoin(CarbonImmutable $now): int
     {
         $minutes = (int) config('herdbook.checks.incident_after_minutes');
         $opened = 0;
@@ -39,22 +58,26 @@ final class CheckIncidents
         // Each down event is decided on once (incident_evaluated_at): an
         // incident deleted by hand does not come back, and events that need
         // none are not looked at again every minute.
+        // Only their ids: each attempt reads the event and its check again.
         $events = CheckEvent::query()
-            ->with(['check.hostname.environment.project', 'check.server'])
             ->where('to_state', CheckState::Down)
             ->whereNull('incident_evaluated_at')
             ->where('occurred_at', '<=', $now->subMinutes($minutes))
             ->orderBy('id')
-            ->get();
+            ->get(['id', 'check_id']);
 
-        foreach ($events as $event) {
-            DB::transaction(function () use ($event, &$opened): void {
+        foreach ($events as $listed) {
+            $opened += DB::transaction(function () use ($listed): int {
                 // Under the same lock RunChecks records with: a check that just
                 // came back up gets no incident, and its recovery is not missed.
-                $check = Check::query()->lockForUpdate()->with(['hostname.environment.project', 'server'])->find($event->check_id);
+                $check = Check::query()->lockForUpdate()->with(['hostname.environment.project', 'server'])->find($listed->check_id);
 
-                if (CheckEvent::query()->whereKey($event->id)->value('incident_evaluated_at') !== null) {
-                    return;
+                // Read again in every attempt: one that was rolled back (a
+                // deadlock, tried again) leaves its changes on the models.
+                $event = CheckEvent::query()->find($listed->id);
+
+                if ($event === null || $event->incident_evaluated_at !== null) {
+                    return 0;
                 }
 
                 $event->update(['incident_evaluated_at' => now()]);
@@ -66,43 +89,62 @@ final class CheckIncidents
                     || ! $check->enabled
                     || $check->alert_level !== AlertLevel::Critical
                     || ! $check->watchesProduction()) {
-                    return;
+                    return 0;
                 }
 
                 $event->setRelation('check', $check);
-                $existing = $this->openIncidentFor($check);
-                // Locked before its timeline gets a row: two checks of one
-                // incident handled at once must not deadlock on it.
-                $incident = $existing ? Incident::query()->lockForUpdate()->find($existing->id) : $this->createIncident($event);
-                $opened += $incident->wasRecentlyCreated ? 1 : 0;
+                $found = $this->openIncidentFor($check);
+                // Locked, its links with it (as the edit form and the agent
+                // tools lock it), before its timeline gets a row: two checks
+                // of one incident handled at once must not deadlock on it.
+                // Read again under the lock: resolved meanwhile, it is not joined.
+                $existing = $found ? Incident::locked($found->id) : null;
+                $incident = $existing !== null && $existing->status !== IncidentStatus::Resolved ? $existing : $this->createIncident($event);
 
                 $event->update(['incident_id' => $incident->id]);
 
-                if (! $incident->wasRecentlyCreated) {
+                if ($incident->wasRecentlyCreated) {
+                    return 1;
+                }
+
+                $incident->timelineEntries()->create([
+                    'occurred_at' => $event->occurred_at,
+                    'note' => $event->error
+                        ? __('Also down: :check (:error)', ['check' => $check->name, 'error' => $event->error])
+                        : __('Also down: :check', ['check' => $check->name]),
+                ]);
+
+                // What this check reaches belongs to the incident too: a storage
+                // server joining an app's incident also takes the other projects
+                // that mount it. Its links as locked() read them: a plain read
+                // could miss one linked meanwhile, and add it twice.
+                $incident->projects()->attach(array_diff($check->affectedProjects()->pluck('id')->all(), $incident->projects->modelKeys()));
+                $incident->servers()->attach(array_diff($check->affectedServers()->pluck('id')->all(), $incident->servers->modelKeys()));
+
+                // Open again, and a critical production outage is SEV1, also in
+                // what a person or an agent wrote down as less: the overviews
+                // go by it. One change, so one entry in the activity log.
+                $raised = $incident->severity !== IncidentSeverity::Sev1;
+                $incident->update([
+                    'status' => $incident->status === IncidentStatus::Monitoring ? IncidentStatus::Open : $incident->status,
+                    'severity' => IncidentSeverity::Sev1,
+                ]);
+
+                if ($raised) {
                     $incident->timelineEntries()->create([
                         'occurred_at' => $event->occurred_at,
-                        'note' => $event->error
-                            ? __('Also down: :check (:error)', ['check' => $event->check->name, 'error' => $event->error])
-                            : __('Also down: :check', ['check' => $event->check->name]),
+                        'note' => __('Raised to SEV1: a critical production check is down.'),
                     ]);
-
-                    // What this check reaches belongs to the incident too: a storage
-                    // server joining an app's incident also takes the other projects
-                    // that mount it.
-                    $incident->projects()->syncWithoutDetaching($check->affectedProjects()->pluck('id')->all());
-                    $incident->servers()->syncWithoutDetaching($check->affectedServers()->pluck('id')->all());
-
-                    if ($incident->status === IncidentStatus::Monitoring) {
-                        $incident->update(['status' => IncidentStatus::Open]);
-                    }
                 }
-            });
+
+                return 0;
+            }, attempts: 3);
         }
 
         return $opened;
     }
 
-    public function recovered(CheckEvent $upEvent): void
+    private function recover(CheckEvent $upEvent): void
     {
         $downEvent = CheckEvent::query()
             ->where('check_id', $upEvent->check_id)
@@ -135,28 +177,52 @@ final class CheckIncidents
                 ->whereIn('id', CheckEvent::query()->where('incident_id', $incident->id)->select('check_id'))
                 ->exists();
 
-            if ($incident->status === IncidentStatus::Open && ! $stillDown) {
+            if ($incident->source === IncidentSource::Check && $incident->status === IncidentStatus::Open && ! $stillDown) {
                 $incident->update(['status' => IncidentStatus::Monitoring]);
             }
-        });
+        }, attempts: 3);
     }
 
     /**
-     * The open incident from checks of the same project, if there is one.
+     * The unresolved incident of the same projects or servers, detected in
+     * the last hours (without a detection time: written down in them): one
+     * of monitoring's, or one a person or an agent opened as SEV1 or SEV2,
+     * who may have written down the same outage first (a SEV3 is a smaller
+     * problem, not an outage). Not an imported one: that is a report of the
+     * past. One monitoring already added to comes first, then the most
+     * severe, then the latest.
      */
     private function openIncidentFor(Check $check): ?Incident
     {
         $projectIds = $check->affectedProjects()->pluck('id')->all();
+        $serverIds = $check->affectedServers()->pluck('id')->all();
+        $since = now()->subHours(self::JOIN_WITHIN_HOURS);
 
-        if ($projectIds === []) {
+        if ($projectIds === [] && $serverIds === []) {
             return null;
         }
 
         return Incident::query()
-            ->where('source', IncidentSource::Check)
-            ->where('status', '!=', IncidentStatus::Resolved)
-            ->where('detected_at', '>=', now()->subHours(self::JOIN_WITHIN_HOURS))
-            ->whereHas('projects', fn ($query) => $query->whereKey($projectIds))
+            ->unresolved()
+            ->where('source', '!=', IncidentSource::Import)
+            ->where(fn (Builder $query) => $query
+                ->where('detected_at', '>=', $since)
+                ->orWhere(fn (Builder $query) => $query->whereNull('detected_at')->where('created_at', '>=', $since)))
+            ->where(fn (Builder $query) => $query
+                ->where('source', IncidentSource::Check)
+                ->orWhereIn('severity', [IncidentSeverity::Sev1, IncidentSeverity::Sev2]))
+            // Its projects, or the server it checks. The servers a hostname
+            // check reaches (its environment's, a shared database too) only
+            // for an incident linked to no project, as an agent may write one
+            // down: another project's outage on a shared server is its own.
+            ->where(fn (Builder $query) => $query
+                ->whereHas('projects', fn (Builder $projects) => $projects->whereKey($projectIds))
+                ->when($check->server, fn (Builder $query, Server $server) => $query->orWhereHas('servers', fn (Builder $servers) => $servers->whereKey($server->id)))
+                ->orWhere(fn (Builder $query) => $query
+                    ->doesntHave('projects')
+                    ->whereHas('servers', fn (Builder $servers) => $servers->whereKey($serverIds))))
+            ->orderByDesc(CheckEvent::query()->selectRaw('count(*)')->whereColumn('check_events.incident_id', 'incidents.id'))
+            ->orderBy('severity')
             ->latest('id')
             ->first();
     }

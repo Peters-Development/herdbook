@@ -170,6 +170,17 @@ class MaintenanceReadToolsTest extends TestCase
         $this->assertSame(['1. Drain the queue', 'All went well.', []], [$found['plan'], $found['report'], $found['truncated']]);
     }
 
+    public function test_addresses_people_wrote_into_maintenance_are_masked(): void
+    {
+        Server::factory()->create(['name' => 'app-1', 'public_ipv4' => '192.0.2.10']);
+        $maintenance = Maintenance::factory()->create(['title' => 'Reboot 192.0.2.10', 'plan' => 'ssh deploy@192.0.2.10, then reboot.', 'report' => 'Done on 192.0.2.10.']);
+
+        $found = $this->callToolSuccessfully($this->token, 'get_maintenance', ['id' => $maintenance->id]);
+
+        $this->assertSame(['Reboot [adres van app-1]', 'ssh deploy@[adres van app-1], then reboot.', 'Done on [adres van app-1].'], [$found['title'], $found['plan'], $found['report']]);
+        $this->assertSame('Reboot [adres van app-1]', $this->callToolSuccessfully($this->token, 'list_maintenance')['maintenance'][0]['title']);
+    }
+
     public function test_a_long_plan_is_cut_and_says_so(): void
     {
         $maintenance = Maintenance::factory()->create(['plan' => str_repeat('é', Serializer::MAX_TEXT + 1), 'report' => null]);

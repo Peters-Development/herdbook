@@ -5,7 +5,9 @@ namespace App\Mcp\Tools\Concerns;
 use App\Models\Project;
 use App\Models\Server;
 use Closure;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -35,7 +37,8 @@ trait ValidatesArguments
     protected function validated(Request $request, array $rules, ?Closure $after = null): array
     {
         $arguments = collect($request->all())
-            ->reject(fn (mixed $value): bool => is_string($value) && trim($value) === '')
+            // Blank in any script: a title of no-break spaces would be squished to nothing.
+            ->reject(fn (mixed $value): bool => is_string($value) && Str::squish($value) === '')
             ->all();
 
         $known = array_values(array_filter(array_keys($rules), fn (string $key): bool => ! str_contains($key, '.')));
@@ -83,6 +86,14 @@ trait ValidatesArguments
         });
 
         return ValidationException::withMessages($errors->all());
+    }
+
+    /**
+     * The schema of a list of server or project ids, as linkRules() takes it.
+     */
+    protected function linkSchema(JsonSchema $schema, string $description): Type
+    {
+        return $schema->array()->items($schema->integer())->max(self::MAX_LINKS)->description($description);
     }
 
     /**

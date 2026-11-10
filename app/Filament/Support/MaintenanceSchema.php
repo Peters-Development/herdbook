@@ -5,6 +5,7 @@ namespace App\Filament\Support;
 use App\Enums\MaintenanceStatus;
 use App\Enums\MaintenanceTask;
 use App\Models\Maintenance;
+use App\Rules\Moment;
 use App\Rules\NoSecretMaterial;
 use Carbon\CarbonImmutable;
 use Closure;
@@ -49,8 +50,8 @@ final class MaintenanceSchema
     }
 
     /**
-     * Between the moments a timestamp column holds (Maintenance::earliestMoment(),
-     * latestMoment()): a year typed as "26" is 0026, which MySQL refuses.
+     * Between the moments a timestamp column holds (Moment::earliest(),
+     * latest()): a year typed as "26" is 0026, which MySQL refuses.
      */
     public static function moment(string $name, string $label): DateTimePicker
     {
@@ -59,7 +60,7 @@ final class MaintenanceSchema
         return DateTimePicker::make($name)
             ->label($label)
             ->seconds(false)
-            ->minDate(fn () => Maintenance::earliestMoment()->timezone(config('herdbook.display_timezone')))
+            ->minDate(fn () => Moment::earliest()->timezone(config('herdbook.display_timezone')))
             ->maxDate(fn () => self::latestShown())
             ->validationMessages(['after_or_equal' => self::outOfRange(), 'before_or_equal' => self::outOfRange()]);
     }
@@ -107,20 +108,6 @@ final class MaintenanceSchema
         return MarkdownEditor::make('report')
             ->label(__('What was done'))
             ->rules([new NoSecretMaterial]);
-    }
-
-    /**
-     * Who wrote it down, and through which agent. Named after user.name, so
-     * Filament loads the user with the table.
-     */
-    public static function byColumn(): TextColumn
-    {
-        return TextColumn::make('user.name')->label(__('By'))->state(fn (Maintenance $record): ?string => $record->recordedBy())->placeholder('—')->toggleable();
-    }
-
-    public static function byEntry(): TextEntry
-    {
-        return TextEntry::make('user.name')->label(__('By'))->state(fn (Maintenance $record): ?string => $record->recordedBy())->placeholder('—');
     }
 
     public static function tasksColumn(): TextColumn
@@ -205,12 +192,7 @@ final class MaintenanceSchema
      */
     public static function changedMeanwhile(): void
     {
-        Notification::make()
-            ->warning()
-            ->title(__('This maintenance was changed meanwhile.'))
-            ->body(__('Reload the page to see the change; yours was not saved.'))
-            ->persistent()
-            ->send();
+        ChangedMeanwhile::notify(__('This maintenance was changed meanwhile.'));
     }
 
     /**
@@ -316,10 +298,10 @@ final class MaintenanceSchema
     }
 
     /**
-     * Maintenance::latestMoment() in the display timezone, as the pickers compare.
+     * Moment::latest() in the display timezone, as the pickers compare.
      */
     private static function latestShown(): CarbonImmutable
     {
-        return Maintenance::latestMoment()->timezone(config('herdbook.display_timezone'));
+        return Moment::latest()->timezone(config('herdbook.display_timezone'));
     }
 }

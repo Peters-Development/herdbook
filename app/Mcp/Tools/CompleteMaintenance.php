@@ -7,9 +7,9 @@ use App\Mcp\Tools\Concerns\ChangesMaintenance;
 use App\Models\Maintenance;
 use App\Rules\Moment;
 use Carbon\CarbonImmutable;
-use Carbon\CarbonInterface;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Validator;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -37,8 +37,8 @@ class CompleteMaintenance extends Tool
         return 'Complete planned maintenance: it becomes done, with when it was done and what was done. '
             .'Left out, starts_at is the planned start, or now if that is still to come; ends_at is the planned end if that has passed, else none; the report stays. '
             .'A report given replaces the one there is (null clears it), so it needs the "version" you read: refused when someone changed it since. '
-            .self::cutTextsSentence()
-            .'Called again on maintenance that is done (by anyone) with only its id, or with what is stored, it returns it with "unchanged": true (it may have been done by someone else); anything else is refused: change done work with update_maintenance. Cancelled maintenance can\'t be completed: write the work down with log_maintenance instead. '
+            .self::cutTextsSentence('A report', 'get_maintenance')
+            .'Called again on maintenance that is done (by anyone) with only its id, or with the same arguments within '.self::REPEAT_MINUTES.' minutes (its answer lost), it returns it with "unchanged": true (it may have been done by someone else); anything else is refused: change done work with update_maintenance. Cancelled maintenance can\'t be completed: write the work down with log_maintenance instead. '
             .self::textsSentence('The report').self::answerSentence();
     }
 
@@ -77,42 +77,27 @@ class CompleteMaintenance extends Tool
         }
 
         $given = Arr::except($this->parseWork($input), ['id', 'version']);
+        $call = self::callKey('complete_maintenance', Arr::except($input, ['version']));
 
-        $completed = $maintenance->complete($given, function (array $attributes) use ($maintenance, $given): void {
-            $this->checkTexts($maintenance, $given);
+        $completed = $maintenance->complete($given, function (array $attributes) use ($maintenance, $given, $call): void {
+            $this->checkPlanAndReport($maintenance, $given);
             $this->assertWork([
                 'starts_at' => CarbonImmutable::make($attributes['starts_at']),
                 'ends_at' => CarbonImmutable::make($attributes['ends_at']),
             ], MaintenanceStatus::Done);
+            // Rolled back, it isn't done: what is remembered then counts for nothing.
+            self::rememberCall($call);
         }, $input['version'] ?? null);
 
         return match (true) {
             $completed => $this->answer($maintenance),
             ! $maintenance->exists => $this->notFound($maintenance->getKey()),
-            // Done already: called again (its answer lost), it gets the same answer.
-            $maintenance->status === MaintenanceStatus::Done && $this->asStored($maintenance, $given) => $this->answer($maintenance, unchanged: true),
+            // Done already: the same call tried again (its answer lost), or
+            // one that gives nothing to change, gets the same answer.
+            $maintenance->status === MaintenanceStatus::Done && ($given === [] || Cache::get($call) === true) => $this->answer($maintenance, unchanged: true),
             $maintenance->status === MaintenanceStatus::Done => Response::error(__('This maintenance is done already. Change it with update_maintenance.')),
             $maintenance->status === MaintenanceStatus::Cancelled => Response::error(__('This maintenance was called off. Write the work down with log_maintenance, or ask a person to set it back to planned in Herdbook.')),
             default => $this->changedSince($maintenance),
         };
-    }
-
-    /**
-     * Whether what a call gives is what is stored: nothing, or a repeat.
-     *
-     * @param  array<string, mixed>  $given
-     */
-    private function asStored(Maintenance $maintenance, array $given): bool
-    {
-        foreach ($given as $field => $value) {
-            $stored = $maintenance->{$field};
-            $same = $value instanceof CarbonInterface ? $stored instanceof CarbonInterface && $value->eq($stored) : $value === $stored;
-
-            if (! $same) {
-                return false;
-            }
-        }
-
-        return true;
     }
 }

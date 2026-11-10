@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Incidents\Schemas;
 
 use App\Filament\Support\LinkSchema;
+use App\Filament\Support\RecordedBy;
 use App\Models\Incident;
 use Carbon\CarbonInterval;
 use Filament\Infolists\Components\TextEntry;
@@ -30,6 +31,8 @@ class IncidentInfolist
                             ->label(__('Duration'))
                             ->state(fn (Incident $record): ?string => self::describeDurations($record))
                             ->placeholder('—'),
+                        // Its own row: the two above are what and when.
+                        RecordedBy::entry(),
                     ]),
                 Section::make(__('Impact and root cause'))
                     ->schema([

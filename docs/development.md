@@ -122,7 +122,7 @@ docker compose exec app ./vendor/bin/pint --dirty
 
 | Path | Contents |
 |---|---|
-| `app/Models` | Eloquent models. `Concerns/` holds the shared behavior: `HasRenewal`, `HasCost`, `Linkable` and `LinksToInventory` (the "related to" links), `RecordsActivity` (the activity log; `attributesNotLogged()` keeps long texts out, and a change to one is logged by name, labelled in `ActivityPresenter::textLabels()`; a change made through an agent stores `via` and `agent_token_id`, shown by `ActivityPresenter::causer()`, and, for a model that opts in with `keepsReplacedTexts()`, the long texts it replaced, `previous_texts`, shown by the activity table's **Previous text**). `Contracts/Renewable` is the interface of everything that renews. |
+| `app/Models` | Eloquent models. `Concerns/` holds the shared behavior: `HasRenewal`, `HasCost`, `Linkable` and `LinksToInventory` (the "related to" links), `GuardsChanges` (no lost updates: `version()`, `locked()`, `saveWhile()`), `RecordsAuthor` (who wrote it down, and through which agent; what monitoring writes goes through `Authorship::without()`, so it has no author), `RecordsActivity` (the activity log; `attributesNotLogged()` keeps long texts out, and a change to one is logged by name, labelled in `ActivityPresenter::textLabels()`; a change made through an agent stores `via` and `agent_token_id`, shown by `ActivityPresenter::causer()`, and, for a model that opts in with `keepsReplacedTexts()`, the long texts it replaced, `previous_texts`, shown by the activity table's **Previous text**). `Contracts/Renewable` is the interface of everything that renews. |
 | `app/Enums` | Backed enums (mostly strings) with a label (`HasLabel`) and often a color (`HasColor`). |
 | `app/Services/Checks` | The monitoring engine: `CheckRunner`, `CheckStateMachine`, `ConnectivityGuard`, `DefaultChecks`, `DnsExpectation`, `NetworkProbe` and its real implementation `SocketProbe`, `CheckHistory`, `CheckIncidents`, `MonitoringPulse`, `Uptime`. |
 | `app/Services/Alerts` | `AlertChannels`, the Pushover, ntfy and mail channels, `CheckAlerts` (alerts for check events), `AlertMessage`. |
@@ -131,14 +131,14 @@ docker compose exec app ./vendor/bin/pint --dirty
 | `app/Services/…` | `Impact/ImpactAnalyzer`, `Map/InfrastructureMap`, `Screen/StatusScreenPayload`, `IncidentImport/`, `RenewalAttention`, `BackupFreshness`. |
 | `app/Jobs/RunChecks.php` | Runs a batch of checks on the `checks` queue. |
 | `app/Console/Commands` | Every Artisan command (see [Commands](commands.md)). |
-| `app/Filament/Resources` | One resource per model, each with `Schemas/` (form, infolist), `Tables/`, `Pages/` and `RelationManagers/`. |
+| `app/Filament/Resources` | One resource per model, each with `Schemas/` (form, infolist), `Tables/`, `Pages/` and `RelationManagers/`. `Concerns/GuardsConcurrentEdits` keeps an edit page from undoing a change made since it was filled. |
 | `app/Filament/Pages` | The map, the costs page and the profile page. |
 | `app/Filament/Widgets` | The dashboard. |
-| `app/Filament/Support` | Schemas and actions shared between resources: `RenewalSchema`, `CostSchema`, `LinkSchema`, `MaintenanceSchema`, `CheckActions`, `ImpactSchema`, `DeleteConsequences`, `ActivityPresenter`. |
+| `app/Filament/Support` | Schemas and actions shared between resources: `RenewalSchema`, `CostSchema`, `LinkSchema`, `MaintenanceSchema`, `ChangedMeanwhile`, `CheckActions`, `ImpactSchema`, `DeleteConsequences`, `ActivityPresenter`. |
 | `app/Filament/RelationManagers` | Relation managers shared between resources (incidents, documents, credentials, maintenance, checks, activity). |
 | `app/Http` | `SecurityHeaders`, `SetUserLocale`, the status screen's controller and token middleware, and `AuthenticateAgent` (the MCP server's tokens). |
-| `app/Mcp` | The MCP server for agents ([The MCP Server](#the-mcp-server)): `Servers/HerdbookServer`, `Tools/` with their shared `Concerns/`, and `Serializer`, what a tool shows. |
-| `app/Rules` | `NoSecretMaterial`, `DistinctItems`, `Subnet`; for what agents write, also `NoCredentials` (token shapes, passwords), `NoImagesOrHtml` (markdown without images or HTML), `NoNewLinks` (no links to other sites but those of the text it replaces) and `Moment` (an ISO 8601 time). |
+| `app/Mcp` | The MCP server for agents ([The MCP Server](#the-mcp-server)): `Servers/HerdbookServer`, `Tools/` with their shared `Concerns/`, `Serializer`, what a tool shows, and `HiddenValues`, which masks addresses in text an agent reads. |
+| `app/Rules` | `NoSecretMaterial`, `DistinctItems`, `Subnet`; for what agents write, also `NoCredentials` (token shapes, passwords), `NoImagesOrHtml` (markdown without images or HTML), `NoNewLinks` (no links to other sites but those of the text it replaces), `NoAddressMasks` (no masks of addresses) and `Moment` (an ISO 8601 time). |
 | `routes/` | `web.php`, `screen.php` (the status screen and its API, outside the `web` group: no session), `ai.php` (the MCP server, also outside it), `console.php` (the schedule). |
 | `config/herdbook.php` | Herdbook's own settings. |
 | `lang/` | `nl.json`, and the formats and Laravel messages per language. |
@@ -154,7 +154,7 @@ A few questions are answered in exactly one place. Everything that needs the ans
 | Question | Answered by |
 |---|---|
 | How is a project, environment, server or hostname doing? | `Services\Health\ProjectHealth` (with `HealthState`): tiles, projects list, status page, map, status screen. |
-| Which incidents belong to a project? | `Services\Health\ProjectIncidents`: linked to the project, to a server its production needs, or to such a server's network. |
+| Which incidents belong to a project? | `Services\Health\ProjectIncidents`: linked to the project, to a server its production needs, or to such a server's network. `reach()` says what that is for any status (`list_incidents`). |
 | What does something cost, per year, per month, per group? | `Services\Costs\RecurringCosts`: the costs page, the cost section on project and client pages, and any other total. |
 | Which renewals need attention? | `Services\RenewalAttention`: dashboard, filters, digest. |
 | What goes down when a server (or network) does? | `Services\Impact\ImpactAnalyzer`: the server and network pages, the map, health, draft incidents. |
@@ -162,9 +162,9 @@ A few questions are answered in exactly one place. Everything that needs the ans
 | How do checks reach the network? | `Services\Checks\NetworkProbe` (TCP, TLS, DNS, ping, reachability) and the `Http` facade. Nothing else opens connections, so tests can fake all of it. |
 | Do the checks still run? Is the backup recent? | `MonitoringPulse` and `BackupFreshness`: the dashboard, the heartbeat, the status screen and `backups:check` use the same rules. |
 | What does an agent see? | `Mcp\Serializer`, field by field: every tool answers through it. |
-| Did a maintenance change since it was read? | `Maintenance::version()`, compared under `Maintenance::locked()`: the MCP tools, the edit form and the **Complete** modal. |
+| Did a maintenance or an incident change since it was read? | `version()`, compared under `locked()` (`Models\Concerns\GuardsChanges`): the MCP tools, the edit forms (`Resources\Concerns\GuardsConcurrentEdits`) and the **Complete** modal. |
 
-`ProjectHealth`, `ProjectIncidents`, `RecurringCosts` and `RenewalAttention` load what they need once and are bound as **scoped** singletons in `AppServiceProvider`: one instance per request or queue job, so a dashboard asks the database once, not once per tile.
+`ProjectHealth`, `ProjectIncidents`, `RecurringCosts`, `RenewalAttention` and `Mcp\HiddenValues` load what they need once and are bound as **scoped** singletons in `AppServiceProvider`: one instance per request or queue job, so a dashboard asks the database once, not once per tile.
 
 <a name="rules-of-the-codebase"></a>
 ## Rules of the Codebase
@@ -180,7 +180,7 @@ Never add a field that stores a password, private key or token. A credential is 
 - Timestamps are stored in **UTC** and shown in `config('herdbook.display_timezone')`, which Filament is told about in `AppServiceProvider`. A local zone would make the repeated hour at the end of daylight saving time ambiguous.
 - Dates that count in **calendar days** (expiry dates, due dates) are `date` columns, not `datetime`, and "today" for them is taken in the display timezone, not in UTC.
 - Dates are `CarbonImmutable` (`Date::use()` in `AppServiceProvider`), so a shared instance can never be shifted by accident.
-- A `timestamp` column holds 1970-01-01 to 2038-01-19 03:14:07 UTC on MySQL, and the SQLite tests don't notice. A moment that can lie further ahead is a `dateTime` (`agent_tokens.expires_at`); the maintenance pickers stay within `Maintenance::earliestMoment()` and `latestMoment()`.
+- A `timestamp` column holds 1970-01-01 to 2038-01-19 03:14:07 UTC on MySQL, and the SQLite tests don't notice. A moment that can lie further ahead is a `dateTime` (`agent_tokens.expires_at`); the maintenance pickers and the agent tools stay within `Moment::earliest()` and `latest()`.
 - Format dates with the formats of the language (`__('formats.date')` and friends), never with a hard-coded pattern. Date inputs are the browser's own (native `DatePicker`/`DateTimePicker`, never `->native(false)`): Filament's calendar cannot be typed in. Their format follows the browser.
 
 <a name="money"></a>
@@ -271,9 +271,9 @@ Agents reach Herdbook through an MCP server ([laravel/mcp](https://github.com/la
 
 - **Authentication.** `AuthenticateAgent` answers 404 while the server is off, refuses browsers (an `Origin` header), finds the token by its hash (`AgentToken::findByToken()`), limits the rate, refuses an expired token or an account without two-factor authentication, and signs the account in for the request without a session (`Auth::setUser()`). `SetUserLocale` runs after it, so a tool's errors come in the account's language; the middleware's own refusals come in `APP_LOCALE`. The account knows its agent for that request (`User::currentAgentToken()`): that is how `RecordsActivity` logs `via` and `agent_token_id`, how `recorded_via` is filled, and how `RequiresWriteAccess` decides.
 - **One class per tool** in `app/Mcp/Tools`, listed in `HerdbookServer::$tools`, with its annotations (`IsReadOnly`, `IsDestructive`, `IsIdempotent`, `IsOpenWorld`) on the class itself: the package doesn't inherit them. The server's instructions are set in `HerdbookServer::boot()`, as they name the display timezone.
-- **Arguments** go through `ValidatesArguments`: a blank string counts as absent, an argument the tool doesn't take is refused, and a `ValidationException` becomes an error the agent reads. The rules are the forms' rules; text an agent writes also gets `NoCredentials`, `NoImagesOrHtml` and `NoNewLinks` (`WritesMaintenance::textRules()`; for a text that replaces one, `ChangesMaintenance::checkTexts()` on the locked row), and times `Moment`.
-- **Answers** are built by `Serializer`, field by field: a new column never reaches an agent by itself. Add a field there only if an agent needs it and it may leave your network. A field an agent never gets may be searched on only when compared whole (`SearchInventory`; a provider hostname's first label counts as whole), never in part: a match on part of it would spell it out.
-- **Saving over a change.** A tool that changes existing maintenance takes the `version` the agent read, and saves through `Maintenance::updateWhileStill()`, `complete()` or `cancel()`: they lock the row (`Maintenance::locked()`), compare its status and `version()`, and only then save. A form in the panel that saves over maintenance does the same (`EditMaintenance::beforeSave()`, the **Complete** modal), so neither undoes what the other did meanwhile. A plan or report longer than `Serializer::MAX_TEXT` is never overwritten by an agent, which couldn't read it whole.
+- **Arguments** go through `ValidatesArguments`: a blank string counts as absent, an argument the tool doesn't take is refused, and a `ValidationException` becomes an error the agent reads. The rules are the forms' rules; text an agent writes also gets `NoCredentials`, `NoAddressMasks`, `NoImagesOrHtml` and `NoNewLinks` (`WritesTexts::textRules()`, `plainTextRules()` for text the panel shows as text; for a text that replaces one, `WritesTexts::checkTexts()` on the locked row), and times `Moment`.
+- **Answers** are built by `Serializer`, field by field: a new column never reaches an agent by itself. Add a field there only if an agent needs it and it may leave your network. Text people or monitoring write (a plan, an incident: a check is named after its target) goes through `HiddenValues`, which masks the addresses and provider hostnames an agent never gets; `NoAddressMasks` keeps an agent from writing a mask back where the address was. A field an agent never gets may be searched on only when compared whole (`SearchInventory`; a provider hostname's first label counts as whole), never in part: a match on part of it would spell it out.
+- **Saving over a change.** A tool that changes existing maintenance or an incident takes the `version` the agent read, and saves through `GuardsChanges::saveWhile()` (for maintenance `updateWhileStill()`, `complete()` or `cancel()`): it locks the row (`locked()`), compares its status and `version()`, and only then saves. A form in the panel that saves over maintenance or an incident does the same (`GuardsConcurrentEdits` on their edit pages, the **Complete** modal), so neither undoes what the other did meanwhile. A text longer than `Serializer::MAX_TEXT`, as an agent reads it, is never overwritten by an agent, which couldn't read it whole.
 - **Language.** Tool names, descriptions, the server's instructions and the argument names are English, and not translated: they are written for a model. What an agent passes on to a person (errors and validation messages) is translated.
 
 Tests call the tools over HTTP with `Tests\Concerns\ActsAsAgent` (`agentToken()`, `callToolSuccessfully()`, `callToolError()`, `mcp()`), so the middleware, the routes and the package's JSON-RPC are part of every test.
@@ -282,8 +282,8 @@ Tests call the tools over HTTP with `Tests\Concerns\ActsAsAgent` (`agentToken()`
 ### Adding a Tool
 
 1. A class in `app/Mcp/Tools` with its `Name` and its annotations, listed in `HerdbookServer::$tools`.
-2. A tool that writes uses `RequiresWriteAccess`, and deletes nothing. Text it writes gets `WritesMaintenance::textRules()`, and it doesn't overwrite a text longer than `Serializer::MAX_TEXT` (`refuseCutTexts()`).
-3. A tool that changes existing maintenance takes its `version` and saves through `updateWhileStill()`, `complete()` or `cancel()`.
+2. A tool that writes uses `RequiresWriteAccess`, and deletes nothing. Text it writes gets `WritesTexts::textRules()` (or `plainTextRules()`), and it doesn't overwrite a text longer than `Serializer::MAX_TEXT` or one it read hidden, and adds no links to other sites but those of the text it replaces (`WritesTexts::checkTexts()` on the locked row).
+3. A tool that changes existing maintenance or an incident takes its `version` and saves through `GuardsChanges::saveWhile()` (maintenance: `updateWhileStill()`, `complete()` or `cancel()`). A tool that adds to an incident, or opens one, writes through `WritesIncidents::once()`, so a call tried again writes nothing twice.
 4. Its arguments through `ValidatesArguments`, its answer through `Serializer`, with a test that it returns no field an agent never gets. New kinds of data also go into the lists in [Agents](agents.md#what-it-gets) and [Security](security.md#agents).
 5. Its errors in `__()`, with their Dutch in `lang/nl.json`.
 6. A feature test through `ActsAsAgent`.
@@ -299,7 +299,7 @@ The project is the center; see [Inventory](inventory.md#the-model-at-a-glance) f
 | Accounts | `users` (with two-factor columns, `locale`, `pushover_user_key`, `receives_critical_alerts`, `receives_alert_mail`), `sessions`, `agent_tokens` (an agent of an account: only a SHA-256 hash of its token, `access`, `expires_at` as a `dateTime`) |
 | Inventory | `clients`, `providers` (`kinds` as JSON), `projects`, `environments`, `servers`, `environment_server` (with `role`), `server_dependencies` (`server_id` needs `depends_on_id`, with a `kind`), `networks`, `network_addresses`, `domains`, `domain_prices` (a registrar's price per extension, unique on `provider_id` + `extension`), `hostnames`, `subscriptions` |
 | Monitoring | `checks` (on a hostname or a server; `settings` as JSON), `check_results` (raw), `check_stats` (`hour` and `day`), `check_events` (switches between up and down, with notification and incident bookkeeping) |
-| Knowledge | `incidents`, `incident_timeline_entries`, `incident_actions`, `documents`, `document_revisions`, `credential_references`, `maintenances` (`recorded_via`: the agent it was written through) |
+| Knowledge | `incidents` (`user_id`: who wrote it down, null for monitoring, imports and incidents from before it was recorded; `recorded_via`), `incident_timeline_entries` (`recorded_via`), `incident_actions` (`user_id`, `recorded_via`; `completed_by_id` and `completed_via`: who completed it, through which agent), `documents`, `document_revisions`, `credential_references`, `maintenances` (`recorded_via`: the agent it was written through) |
 | Links | `incidentables`, `documentables`, `credentialables`, `maintainables`: one pivot per kind, polymorphic on the inventory side |
 | Other | `status_screens` (only a SHA-256 hash of each token), `activity_log` (spatie/laravel-activitylog), and Laravel's own tables for the cache, the queue and failed jobs |
 

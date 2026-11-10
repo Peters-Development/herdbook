@@ -9,6 +9,7 @@
 - [Action Items](#action-items)
 - [Linking an Incident](#linking-an-incident)
 - [Draft Incidents From Checks](#draft-incidents-from-checks)
+- [From an Agent](#from-an-agent)
 - [Importing Existing Reports](#importing-existing-reports)
     - [What the Importer Reads](#what-the-importer-reads)
     - [Running the Import](#running-the-import)
@@ -24,6 +25,8 @@ Incidents live under **Knowledge → Incidents**. You write them yourself, Herdb
 ## Writing an Incident Report
 
 Create an incident from **Knowledge → Incidents**, or from the incidents tab of a project, server, domain, network or client: then it is linked to that record from the start.
+
+Who wrote an incident down is recorded with it (**By**), and the agent if it came through one; the same goes for timeline entries and action items. Monitoring changes incidents too (see [Draft Incidents From Checks](#draft-incidents-from-checks)). If an incident changed since you opened its edit form, its links included, saving says so and changes nothing: reload the page to see the change.
 
 <a name="severity-and-status"></a>
 ### Severity and Status
@@ -65,12 +68,12 @@ Markdown is never rendered as raw HTML, so a pasted or imported report cannot in
 
 The **Timeline** tab of an incident is a list of events: when, what, and who wrote it down. Use it during an incident to keep track of what you tried, and afterwards to reconstruct what happened. Entries are sorted by time, so you can add one you forgot later. The time defaults to now.
 
-Monitoring adds entries by itself to the draft incidents it opens, for example "Check HTTP shop.example.com went down: HTTP 503" and "Up again: HTTP shop.example.com".
+Monitoring adds entries by itself to the draft incidents it opens, and to the incidents it joins, for example "Check HTTP shop.example.com went down: HTTP 503", "Also down: HTTP shop.example.com" and "Up again: HTTP shop.example.com".
 
 <a name="action-items"></a>
 ## Action Items
 
-The **Action items** tab holds the follow-ups: what has to change so this does not happen again ("alert on NFS latency", "move backups off the app server"). Each has a description and an optional due date. **Complete** marks one as done; **Reopen** takes that back.
+The **Action items** tab holds the follow-ups: what has to change so this does not happen again ("alert on NFS latency", "move backups off the app server"). Each has a description and an optional due date. **Complete** marks one as done, here or on the dashboard, and keeps who did it (**Completed by**, one of the columns you can show, with the agent if it came through one); **Reopen** takes that back.
 
 Open action items of all incidents are listed on the dashboard, dated ones first, the earliest at the top. An item past its due date (counted in calendar days, in the display timezone) is shown in red, and can be completed from there.
 
@@ -100,13 +103,18 @@ When a **critical** check that watches **production** has been down for five min
 
 A check watches production when its hostname points to a production environment, or when it is a server check on a server that a production environment runs on (or that carries the [mail](inventory.md#mail-server) or [DNS](inventory.md#dns-server) of its domains), directly or through a [dependency](inventory.md#dependencies-and-impact). A failing storage server therefore opens an incident for the project on the app server that mounts it. Archived projects do not count.
 
-**One incident per outage, not one per check.** If an unresolved check incident of the same project was detected within the last twelve hours, a new outage joins it instead: it gets a timeline entry ("Also down: …"), its projects and servers are added to the links, and an incident that was *Watching* goes back to *Open*. An incident nobody closed does not swallow next week's outage.
+**One incident per outage, not one per check.** If an unresolved incident of the same project was detected within the last twelve hours (for a check on a server, also one of that server; one linked to servers only, of a server the check reaches), a new outage joins it instead, also when a person or an agent opened it as SEV1 or SEV2 (a SEV3 is a smaller problem than an outage; one monitoring already added to comes first): it gets a timeline entry ("Also down: …"), its projects and servers are added to the links, an incident that was *Watching* goes back to *Open*, and one of a lower severity becomes SEV1, with a timeline entry that says so. An incident nobody closed does not swallow next week's outage.
 
-**Recovery.** When a check of the incident comes back up, a timeline entry says so. Once none of its checks is down any more, the incident moves to *Watching*. Closing it is up to you: fill in the root cause and what you learned, and set it to *Resolved*.
+**Recovery.** When a check of the incident comes back up, a timeline entry says so. Once none of its checks is down any more, a draft from monitoring moves to *Watching*; an incident a person or an agent opened stays as it is, as it may be about more than the checks. Closing it is up to you: fill in the root cause and what you learned, and set it to *Resolved*.
 
 Each outage is considered once. A draft you delete does not come back, a check that recovered within the five minutes opens nothing, and paused checks never open incidents. The five minutes are `checks.incident_after_minutes` in `config/herdbook.php`.
 
 The title and timeline entries are written in the default language of the installation (`APP_LOCALE`), since they are created by the scheduler, not by a person. See [Translations](translations.md#generated-text).
+
+<a name="from-an-agent"></a>
+## From an Agent
+
+An agent such as Claude Code can keep incidents through Herdbook's MCP server ([Agents](agents.md)). It lists the incidents of a project (the way the overviews count them) or a server, unresolved ones by default, and reads one incident with its report, timeline and action items. During an outage it looks for an unresolved incident first (a draft from a check, for instance) and writes on its timeline what it tries and finds; it opens an incident only when there is none. It can add action items and mark them done, change an incident, and resolve it once it is over, with its root cause. A change it makes over what monitoring or a person changed meanwhile is refused, as is an edit form of yours over its change; the activity log keeps a root cause or report it replaced. What it writes shows the account it acts for, and through which agent: "Ada via deploy-agent" under **By**; an incident it opens has the source *By hand*. Monitoring joins an incident it opened as it joins any other. Addresses in what it reads are masked.
 
 <a name="importing-existing-reports"></a>
 ## Importing Existing Reports

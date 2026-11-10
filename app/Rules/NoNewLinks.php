@@ -13,8 +13,9 @@ use League\CommonMark\Node\Inline\Text;
  * link that leads somewhere else than it says, or carries data along in its
  * address. Links into Herdbook pass: relative, or to the origin of APP_URL
  * (never the host a request names: a client chooses that). So do the links
- * of the text it replaces ($replaced), so an agent can add a step to a plan
- * a person wrote without breaking that person's links, and an email address
+ * of the text it replaces ($replaced; those $keeps lets through), so an
+ * agent can add a step to a plan a person wrote without breaking that
+ * person's links, and an email address
  * shown as itself ("ssh deploy@app-1.example.com" autolinks as one): it
  * opens a mail program, no more. Checked on the parsed document, other
  * autolinks included. Parsing takes time and memory: put a length rule
@@ -24,7 +25,10 @@ class NoNewLinks implements ValidationRule
 {
     use ParsesMarkdown;
 
-    public function __construct(private readonly ?string $replaced = null) {}
+    /**
+     * @param  (Closure(string): bool)|null  $keeps  which links of $replaced may stay, by their URL
+     */
+    public function __construct(private readonly ?string $replaced = null, private readonly ?Closure $keeps = null) {}
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
@@ -33,6 +37,7 @@ class NoNewLinks implements ValidationRule
         }
 
         $kept = $this->replaced === null ? [] : array_map(fn (Link $link): string => $link->getUrl(), self::linksIn($this->replaced));
+        $kept = $this->keeps === null ? $kept : array_values(array_filter($kept, $this->keeps));
 
         foreach (self::linksIn($value) as $link) {
             if (! in_array($link->getUrl(), $kept, true) && ! self::intoHerdbook($link->getUrl()) && ! self::showsItsAddress($link)) {

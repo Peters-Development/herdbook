@@ -4,6 +4,7 @@ namespace App\Models\Concerns;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use Spatie\Activitylog\Models\Activity;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
@@ -60,6 +61,31 @@ trait RecordsActivity
     }
 
     /**
+     * The last logged change to each long text (attributesNotLogged(); null:
+     * none), from the activity log, which records who changed a text and
+     * through which agent: so a plan or report someone rewrote doesn't pass
+     * for its author's. Changes from before Herdbook logged them ("texts")
+     * aren't there.
+     *
+     * @return array<string, ?Activity>
+     */
+    public function lastTextChanges(): array
+    {
+        $changes = [];
+
+        foreach ($this->attributesNotLogged() as $text) {
+            $changes[$text] = $this->activitiesAsSubject()
+                ->where('event', 'updated')
+                ->whereJsonContains('properties->texts', $text)
+                ->with('causer')
+                ->latest('id')
+                ->first();
+        }
+
+        return $changes;
+    }
+
+    /**
      * Also when only a long text changed: the text stays out of the log, but
      * that it changed, and who changed it, goes in ("texts").
      *
@@ -95,7 +121,7 @@ trait RecordsActivity
     /**
      * Whether the log keeps the long texts an agent replaced: only for a
      * model whose agent tools refuse to write over a text longer than they
-     * read (ChangesMaintenance::checkTexts()).
+     * read (WritesTexts::checkTexts()).
      */
     protected function keepsReplacedTexts(): bool
     {

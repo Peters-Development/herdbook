@@ -49,7 +49,7 @@ The answers usually live in five places: a spreadsheet, the registrar's dashboar
 
 **Seeing it at a glance.** The dashboard puts the worst first. Every project has a status page with uptime and response time over 24 hours up to 90 days, with incidents and maintenance on the same timeline. The map draws providers, servers, environments, hostnames and domains with the lines between them. And a wall display for a TV or a Raspberry Pi shows how production is doing without ever showing a hostname or an address.
 
-**Agents.** An agent such as Claude Code can look up a server by its hostname, see when it was last updated, plan maintenance with a work plan, and write down what it did, through Herdbook's MCP server. Each agent has a token of its own, sees less than a person, deletes nothing, and is named in the activity log.
+**Agents.** An agent such as Claude Code can look up a server by its hostname, see when it was last updated, plan maintenance with a work plan, write down what it did, and open an incident and keep its timeline during an outage, through Herdbook's MCP server. Each agent has a token of its own, sees less than a person, deletes nothing, and is named in the activity log.
 
 <p align="center">
   <picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/costs-dark.png"><img src="docs/images/costs-light.png" width="49%" alt="The costs page: totals per year and per month, a 12-month chart, and costs per provider, project and client"></picture>

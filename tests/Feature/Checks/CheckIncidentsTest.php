@@ -5,6 +5,7 @@ namespace Tests\Feature\Checks;
 use App\Enums\AlertLevel;
 use App\Enums\CheckState;
 use App\Enums\CheckType;
+use App\Enums\IncidentSeverity;
 use App\Enums\IncidentSource;
 use App\Enums\IncidentStatus;
 use App\Enums\ProjectStatus;
@@ -18,9 +19,12 @@ use App\Models\Hostname;
 use App\Models\Incident;
 use App\Models\Server;
 use App\Models\ServerDependency;
+use App\Models\User;
 use App\Services\Checks\CheckIncidents;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class CheckIncidentsTest extends TestCase
@@ -167,6 +171,56 @@ class CheckIncidentsTest extends TestCase
         $this->assertSame(2, $incident->timelineEntries()->count());
     }
 
+    public function test_an_incident_resolved_while_a_check_was_about_to_join_it_is_not_joined(): void
+    {
+        $environment = Environment::factory()->create();
+        $this->downCheck($environment);
+        $this->downCheck($environment);
+
+        // Someone resolves the incident right after the second check found it
+        // (the query for an open check incident), before it locked it.
+        $resolved = false;
+        DB::listen(function (QueryExecuted $query) use (&$resolved): void {
+            if (! $resolved && str_starts_with(strtolower($query->sql), 'select') && str_contains($query->sql, 'detected_at') && Incident::query()->exists()) {
+                $resolved = true;
+                DB::table('incidents')->update(['status' => IncidentStatus::Resolved->value]);
+            }
+        });
+
+        Date::setTestNow('2026-10-22 13:20:00');
+        $this->artisan('checks:incidents')->assertSuccessful();
+
+        $incidents = Incident::query()->orderBy('id')->get();
+        $this->assertSame([IncidentStatus::Resolved, IncidentStatus::Open], $incidents->pluck('status')->all());
+        $this->assertSame([1, 1], $incidents->map(fn (Incident $incident): int => $incident->timelineEntries()->count())->all());
+    }
+
+    public function test_an_incident_from_monitoring_was_written_down_by_nobody(): void
+    {
+        $this->downCheck(Environment::factory()->create());
+        Date::setTestNow('2026-10-22 13:20:00');
+
+        $this->artisan('checks:incidents')->assertSuccessful();
+
+        $this->assertNull(Incident::query()->sole()->recordedBy());
+    }
+
+    public function test_what_monitoring_writes_has_no_author_even_when_a_person_set_it_off(): void
+    {
+        // As "Check now" in the panel runs the checks in a person's request.
+        $this->actingAs(User::factory()->create());
+        $check = $this->downCheck(Environment::factory()->create());
+        Date::setTestNow('2026-10-22 13:20:00');
+
+        app(CheckIncidents::class)->openForLongOutages(now()->toImmutable());
+        $check->forceFill(['state' => CheckState::Up])->save();
+        app(CheckIncidents::class)->recovered($check->events()->create(['from_state' => CheckState::Down, 'to_state' => CheckState::Up, 'occurred_at' => '2026-10-22 13:25:00']));
+
+        $incident = Incident::query()->sole();
+        $this->assertNull($incident->user_id);
+        $this->assertSame([null, null], $incident->timelineEntries()->pluck('user_id')->all());
+    }
+
     public function test_staging_and_normal_checks_open_no_incident(): void
     {
         $this->downCheck(Environment::factory()->staging()->create());
@@ -237,6 +291,108 @@ class CheckIncidentsTest extends TestCase
 
         $this->assertSame(IncidentStatus::Open, $incident->fresh()->status);
         $this->assertSame($incident->id, $check->events()->sole()->incident_id);
+    }
+
+    public function test_an_outage_joins_the_incident_a_person_or_an_agent_opened_first(): void
+    {
+        [$check, $environment] = $this->criticalProductionOutage();
+        $server = Server::factory()->create();
+        EnvironmentServer::create(['environment_id' => $environment->id, 'server_id' => $server->id, 'role' => ServerRole::App]);
+        $opened = Incident::factory()->create(['user_id' => User::factory()->create()->id, 'recorded_via' => 'deploy-agent', 'detected_at' => now()->subMinutes(30)]);
+        // Linked to the server only, as an agent may: the outage is the same.
+        $opened->servers()->attach($server->id);
+
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+
+        $incident = Incident::query()->sole();
+        $this->assertSame(IncidentSource::Manual, $incident->source);
+        $this->assertSame($incident->id, $check->events()->sole()->incident_id);
+        $this->assertTrue($incident->projects()->sole()->is($environment->project));
+        // Written down as SEV2, it is a critical production outage now.
+        $this->assertSame(IncidentSeverity::Sev1, $incident->severity);
+        $notes = $incident->timelineEntries()->orderBy('id')->pluck('note')->all();
+        $this->assertStringStartsWith('Ook down:', $notes[0]);
+        $this->assertSame('Verhoogd naar SEV1: een kritieke productiecheck is down.', $notes[1]);
+
+        // Back up, it stays open: what they wrote down may be about more than the check.
+        $check->forceFill(['state' => CheckState::Up])->save();
+        app(CheckIncidents::class)->recovered($check->events()->create(['from_state' => CheckState::Down, 'to_state' => CheckState::Up, 'occurred_at' => now()]));
+        $this->assertSame(IncidentStatus::Open, $incident->fresh()->status);
+        $this->assertSame(3, $incident->timelineEntries()->count());
+    }
+
+    public function test_an_outage_joins_monitorings_own_incident_before_a_later_one_and_no_smaller_problem(): void
+    {
+        [$first, $environment] = $this->criticalProductionOutage();
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+        $outage = Incident::query()->sole();
+
+        // Later, a person writes down a problem of the same project; and a smaller one.
+        $billing = Incident::factory()->create(['title' => 'Billing export wrong', 'severity' => IncidentSeverity::Sev2, 'detected_at' => now()]);
+        $billing->projects()->attach($environment->project_id);
+        $typo = Incident::factory()->create(['title' => 'Typo on the about page', 'severity' => IncidentSeverity::Sev3, 'detected_at' => now()]);
+        $typo->projects()->attach($environment->project_id);
+
+        [$second] = $this->criticalProductionOutage($environment);
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+
+        $this->assertSame($outage->id, $second->events()->sole()->incident_id);
+        $this->assertSame([IncidentSeverity::Sev2, IncidentSeverity::Sev3], [$billing->fresh()->severity, $typo->fresh()->severity]);
+        $this->assertSame(0, $billing->timelineEntries()->count() + $typo->timelineEntries()->count());
+
+        // A SEV3 alone is not joined either: the outage gets its own.
+        $billing->update(['status' => IncidentStatus::Resolved, 'resolved_at' => now()]);
+        $outage->update(['status' => IncidentStatus::Resolved, 'resolved_at' => now()]);
+        [$third] = $this->criticalProductionOutage($environment);
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+
+        $this->assertNotContains($third->events()->sole()->incident_id, [$outage->id, $billing->id, $typo->id]);
+    }
+
+    public function test_the_outage_of_another_project_on_a_shared_server_gets_its_own_incident(): void
+    {
+        [, $shop] = $this->criticalProductionOutage();
+        $database = Server::factory()->create(['name' => 'db-shared']);
+        EnvironmentServer::create(['environment_id' => $shop->id, 'server_id' => $database->id, 'role' => ServerRole::Database]);
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+
+        $blog = Environment::factory()->create();
+        EnvironmentServer::create(['environment_id' => $blog->id, 'server_id' => $database->id, 'role' => ServerRole::Database]);
+        [$down] = $this->criticalProductionOutage($blog);
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+
+        $this->assertSame(2, Incident::count());
+        $this->assertTrue(Incident::query()->findOrFail($down->events()->sole()->incident_id)->projects()->sole()->is($blog->project));
+    }
+
+    public function test_an_imported_incident_is_not_joined(): void
+    {
+        [, $environment] = $this->criticalProductionOutage();
+        $imported = Incident::factory()->create(['source' => IncidentSource::Import, 'detected_at' => null]);
+        $imported->projects()->attach($environment->project_id);
+
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+
+        $this->assertSame(2, Incident::count());
+    }
+
+    public function test_an_incident_without_a_detection_time_is_joined_while_it_was_written_down_recently(): void
+    {
+        [, $environment] = $this->criticalProductionOutage();
+        $recent = Incident::factory()->create(['detected_at' => null]);
+        $recent->projects()->attach($environment->project_id);
+
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+
+        $this->assertSame(1, Incident::count());
+
+        [, $other] = $this->criticalProductionOutage();
+        $old = Incident::factory()->create(['detected_at' => null, 'created_at' => now()->subDays(3)]);
+        $old->projects()->attach($other->project_id);
+
+        app(CheckIncidents::class)->openForLongOutages(Date::now()->addMinutes(10));
+
+        $this->assertSame(3, Incident::count());
     }
 
     public function test_an_old_unresolved_incident_is_not_joined(): void

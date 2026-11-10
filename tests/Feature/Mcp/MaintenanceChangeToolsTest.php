@@ -8,9 +8,11 @@ use App\Filament\RelationManagers\ActivityRelationManager;
 use App\Filament\Resources\Maintenances\Pages\EditMaintenance;
 use App\Filament\Resources\Maintenances\Pages\ViewMaintenance;
 use App\Filament\Support\ActivityPresenter;
+use App\Mcp\HiddenValues;
 use App\Mcp\Serializer;
+use App\Mcp\Servers\HerdbookServer;
 use App\Models\AgentToken;
-use App\Models\Incident;
+use App\Models\Document;
 use App\Models\Maintenance;
 use App\Models\Project;
 use App\Models\Server;
@@ -302,6 +304,18 @@ class MaintenanceChangeToolsTest extends TestCase
         $this->assertSame('All done.', $maintenance->refresh()->report);
     }
 
+    public function test_completing_again_tells_nothing_about_the_stored_report(): void
+    {
+        Server::factory()->create(['name' => 'app-1', 'public_ipv4' => '192.0.2.10']);
+        $maintenance = $this->planned(['status' => MaintenanceStatus::Done, 'ends_at' => '2026-11-08 23:00:00', 'report' => 'Rebooted 192.0.2.10.']);
+        $this->assertSame('Rebooted [adres van app-1].', $this->callToolSuccessfully($this->token, 'get_maintenance', ['id' => $maintenance->id])['report']);
+
+        // A guess of what the mask hides is refused, right or wrong: the answer would confirm it.
+        foreach (['Rebooted 192.0.2.10.', 'Rebooted 192.0.2.11.'] as $guess) {
+            $this->assertSame('Dit onderhoud is al gedaan. Wijzig het met update_maintenance.', $this->callToolError($this->token, 'complete_maintenance', ['id' => $maintenance->id, 'version' => 'anything', 'report' => $guess]));
+        }
+    }
+
     public function test_completing_refuses_a_long_report_and_a_version_that_changed(): void
     {
         $long = $this->planned(['report' => str_repeat('a', Serializer::MAX_TEXT + 1)]);
@@ -369,6 +383,50 @@ class MaintenanceChangeToolsTest extends TestCase
             ->assertSee('Ada via deploy-agent');
     }
 
+    public function test_a_plan_read_masked_is_not_written_back_with_its_masks_but_may_be_replaced(): void
+    {
+        Server::factory()->create(['name' => 'app-1', 'public_ipv4' => '192.0.2.10']);
+        $maintenance = $this->planned(['plan' => '1. ssh deploy@192.0.2.10']);
+        $read = $this->callToolSuccessfully($this->token, 'get_maintenance', ['id' => $maintenance->id]);
+
+        // Adding a step to the plan it read would put the mask where the address was.
+        $this->assertStringStartsWith('plan: Dit bevat een masker', $this->callToolError($this->token, 'update_maintenance', ['id' => $maintenance->id, 'version' => $read['version'], 'plan' => $read['plan']."\n2. Reboot."]));
+        $this->assertSame('1. ssh deploy@192.0.2.10', $maintenance->refresh()->plan);
+
+        // A plan of its own replaces it, and the activity log keeps the one with the address.
+        $this->update($maintenance, ['plan' => 'Reboot app-1.']);
+        $this->assertSame(['plan' => '1. ssh deploy@192.0.2.10'], Activity::query()->where('subject_type', 'maintenance')->where('subject_id', $maintenance->id)->where('event', 'updated')->sole()->properties['previous_texts']);
+    }
+
+    public function test_a_text_longer_than_an_agent_reads_once_masked_is_not_overwritten(): void
+    {
+        Server::factory()->create(['name' => 'app-1', 'public_ipv4' => '192.0.2.10']);
+        // Exactly MAX_TEXT long, longer once the address is masked: the agent read it cut.
+        $maintenance = $this->planned(['plan' => str_repeat('a', Serializer::MAX_TEXT - 11).' 192.0.2.10']);
+
+        $this->assertSame(['plan'], $this->callToolSuccessfully($this->token, 'get_maintenance', ['id' => $maintenance->id])['truncated']);
+        $this->assertStringStartsWith('plan: Deze tekst is langer', $this->callToolError($this->token, 'update_maintenance', ['id' => $maintenance->id, 'version' => $maintenance->version(), 'plan' => 'Short']));
+    }
+
+    public function test_a_text_that_could_not_be_masked_counts_as_unread_and_is_not_overwritten(): void
+    {
+        $maintenance = $this->planned(['plan' => 'Reboot 192.0.2.10.']);
+        // As when a pattern fails: the whole text is hidden.
+        $this->app->scoped(HiddenValues::class, fn (): HiddenValues => new class extends HiddenValues
+        {
+            public function mask(?string $text): ?string
+            {
+                return blank($text) ? $text : $this->hiddenText();
+            }
+        });
+
+        $read = $this->callToolSuccessfully($this->token, 'get_maintenance', ['id' => $maintenance->id]);
+
+        $this->assertSame(['[tekst verborgen]', ['plan']], [$read['plan'], $read['truncated']]);
+        $this->assertSame('plan: Herdbook kon deze tekst niet maskeren voor agents, dus hij las als [tekst verborgen]: wijzig hem in Herdbook zelf.', $this->callToolError($this->token, 'update_maintenance', ['id' => $maintenance->id, 'version' => $maintenance->version(), 'plan' => 'Short']));
+        $this->assertSame('Reboot 192.0.2.10.', $maintenance->refresh()->plan);
+    }
+
     public function test_an_agent_keeps_the_links_a_person_wrote_but_adds_none(): void
     {
         $person = '1. Read [the changelog](https://elsewhere.example/changelog).';
@@ -416,13 +474,21 @@ class MaintenanceChangeToolsTest extends TestCase
     public function test_only_a_model_that_opts_in_keeps_the_texts_an_agent_replaced(): void
     {
         $this->actingAs($this->user->withAgentToken($this->agent));
-        $incident = Incident::factory()->create(['body' => 'The report Bob wrote.']);
+        $document = Document::factory()->create(['body' => 'The runbook Bob wrote.']);
 
-        $incident->update(['body' => 'Rewritten.']);
+        $document->update(['body' => 'Rewritten.']);
 
-        $activity = Activity::query()->where('subject_type', 'incident')->where('subject_id', $incident->id)->where('event', 'updated')->sole();
+        $activity = Activity::query()->where('subject_type', 'document')->where('subject_id', $document->id)->where('event', 'updated')->sole();
         $this->assertSame(['body'], $activity->properties['texts']);
         $this->assertArrayNotHasKey('previous_texts', $activity->properties->all());
+    }
+
+    public function test_every_tool_comes_in_one_page_of_the_list(): void
+    {
+        $listed = $this->mcp($this->token, 'tools/list');
+
+        $this->assertCount(count((new \ReflectionProperty(HerdbookServer::class, 'tools'))->getDefaultValue()), $listed->json('result.tools'));
+        $this->assertNull($listed->json('result.nextCursor'));
     }
 
     public function test_a_change_by_hand_names_no_agent(): void
@@ -530,7 +596,7 @@ class MaintenanceChangeToolsTest extends TestCase
         $names = $tools->pluck('name')->all();
         $texts = $tools->pluck('description')->push($initialize->json('result.instructions'))->implode(' ');
 
-        preg_match_all('/\b[a-z]+_(?:maintenance|inventory)\b/', $texts, $mentioned);
+        preg_match_all('/\b(?:[a-z]+_)+(?:maintenance|inventory|incidents?|action|entry)\b/', $texts, $mentioned);
 
         $this->assertNotEmpty($mentioned[0]);
         $this->assertSame([], array_values(array_diff(array_unique($mentioned[0]), $names)));
@@ -553,7 +619,7 @@ class MaintenanceChangeToolsTest extends TestCase
         [, $reader] = $this->agentToken(access: AgentAccess::Read);
         $maintenance = $this->planned();
 
-        $this->assertEqualsCanonicalizing(['search_inventory', 'list_maintenance', 'get_maintenance'], array_column($this->mcp($reader, 'tools/list')->json('result.tools'), 'name'));
+        $this->assertEqualsCanonicalizing(['search_inventory', 'list_maintenance', 'get_maintenance', 'list_incidents', 'get_incident'], array_column($this->mcp($reader, 'tools/list')->json('result.tools'), 'name'));
 
         foreach (['update_maintenance', 'complete_maintenance', 'cancel_maintenance'] as $tool) {
             $this->callTool($reader, $tool, ['id' => $maintenance->id])->assertJsonPath('error.code', -32602);

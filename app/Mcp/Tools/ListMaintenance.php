@@ -46,8 +46,8 @@ class ListMaintenance extends Tool
         return [
             'status' => $schema->string()->enum(self::statuses())->description('Leave it out for everything.'),
             'task' => $schema->string()->enum(MaintenanceTask::class)->description('Only maintenance that includes this work.'),
-            'server_ids' => $schema->array()->items($schema->integer())->max(self::MAX_LINKS)->description('Server ids from search_inventory: maintenance linked to any of them.'),
-            'project_ids' => $schema->array()->items($schema->integer())->max(self::MAX_LINKS)->description('Project ids from search_inventory: maintenance linked to any of them (not to their servers).'),
+            'server_ids' => $this->linkSchema($schema, 'Server ids from search_inventory: maintenance linked to any of them.'),
+            'project_ids' => $this->linkSchema($schema, 'Project ids from search_inventory: maintenance linked to any of them (not to their servers).'),
             'limit' => $schema->integer()->min(1)->max(self::MAX_LIMIT)->default(self::DEFAULT_LIMIT),
         ];
     }
